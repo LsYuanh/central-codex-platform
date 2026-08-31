@@ -1,0 +1,43 @@
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+secrets/
+
+# Rust
+target/
+
+# Node
+node_modules/
+dist/
+.turbo/
+
+# Tauri and installers
+src-tauri/target/
+artifacts/
+release/
+
+# Logs, databases and runtime data
+*.log
+*.db
+*.db-shm
+*.db-wal
+data/
+runtime/
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+
