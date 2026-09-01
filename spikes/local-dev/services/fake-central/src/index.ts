@@ -1,10 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 import { createServer } from "node:http";
+import { loadEnvFile } from "node:process";
 import { WebSocket, WebSocketServer } from "ws";
 
-const host = "127.0.0.1";
-const port = 4310;
+try {
+  loadEnvFile(".env");
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    throw error;
+  }
+}
+
+const host = process.env.CENTRAL_HOST ?? "127.0.0.1";
+if (host !== "127.0.0.1" && host !== "localhost") {
+  throw new Error("CENTRAL_HOST must be 127.0.0.1 or localhost for this local Spike");
+}
+const configuredPort = Number(process.env.CENTRAL_PORT ?? "4310");
+if (!Number.isInteger(configuredPort) || configuredPort < 1 || configuredPort > 65_535) {
+  throw new Error("CENTRAL_PORT must be an integer between 1 and 65535");
+}
+const port = configuredPort;
 const uiClients = new Set<WebSocket>();
 const pendingRequests = new Map<string, WebSocket>();
 

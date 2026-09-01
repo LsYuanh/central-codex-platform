@@ -18,6 +18,8 @@
     "dev:gateway": "npm run dev --workspace @central-codex-spike/fake-central",
     "dev:agent": "cargo run -p local-agent -- --workspace-root ./fixtures/workspace --gateway-url ws://127.0.0.1:4310/ws/agent",
     "dev:desktop": "npm run tauri:dev --workspace @central-codex-spike/desktop",
+    "setup:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-env.ps1",
+    "db:init": "node scripts/init-sqlite.mjs",
     "check": "npm run check --workspaces --if-present && cargo check --workspace",
     "smoke": "node scripts/integration-smoke.mjs",
     "test": "cargo test --workspace",

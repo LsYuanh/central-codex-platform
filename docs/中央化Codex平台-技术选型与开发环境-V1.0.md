@@ -97,7 +97,7 @@ PostgreSQL / Audit         Codex App Server
 | 客户端执行代理 | Rust 独立进程 | 文件、Git、PTY、进程、凭据和工作区权限 | 已确定 |
 | 中央控制面 | Rust + Axum + Tokio | 登录、RBAC、对话 API、Worker、Broker 和 Bridge | 已确定 |
 | 数据库 | PostgreSQL | 用户、设备、会话映射、任务、审批和审计索引 | 已确定 |
-| 开发数据库 | 容器化 PostgreSQL 或本机 PostgreSQL | 允许开发人员根据系统选择 | 已确定 |
+| 开发数据库 | SQLite（PoC 默认），PostgreSQL（多人/集成测试） | 本地纵向 Spike 使用仓库内 SQLite 文件；多人长期运行和生产仍使用 PostgreSQL | 已确定 |
 | 桌面业务 API | HTTPS JSON API | 登录、对话、设备和管理请求 | 已确定 |
 | 事件传输 | WSS 事件流 | 对话流式输出、任务、审批和设备状态 | 已确定 |
 | AgentRPC V1 | 强类型 JSON over mTLS WSS | 客户端主动连接、路由、审批和流式执行 | 已确定 |
@@ -167,8 +167,9 @@ PostgreSQL / Audit         Codex App Server
 | Clippy | Rust Lint | 跟随锁定的 Rust toolchain |
 | Node.js | React/TypeScript 构建 | 使用 LTS，工程初始化时锁定具体版本 |
 | Corepack | 前端包管理器管理 | 工程初始化时启用 |
-| PostgreSQL | 数据库 | 工程初始化时锁定主版本 |
-| Docker Desktop、OrbStack 或本机 PostgreSQL | 本地数据库运行方式 | 三选一 |
+| SQLite | 单机 PoC 数据库 | 使用 Node.js 24 `node:sqlite`，无需单独服务 |
+| PostgreSQL | 多人/集成测试数据库 | 需要时锁定主版本 |
+| Docker Desktop、OrbStack 或本机 PostgreSQL | PostgreSQL 本地运行方式 | 需要 PostgreSQL 时三选一 |
 | IDE | Rust/TypeScript 开发 | VS Code、RustRover/WebStorm 等均可 |
 
 当前 GitHub 远程仓库使用 SSH：
@@ -341,7 +342,7 @@ node --version
 corepack --version
 ```
 
-如果使用容器化 PostgreSQL，还需确认容器运行时和数据库健康检查通过。
+SQLite PoC 需要确认 `DATABASE_URL=sqlite://./data/central.db` 且初始化迁移成功；如果使用容器化 PostgreSQL，还需确认容器运行时和数据库健康检查通过。
 
 ### 11.2 Windows 检查
 
@@ -457,12 +458,12 @@ Tauri、Named Pipe、Unix Socket、Keychain、DPAPI、代码签名和安装包�
 - [ ] 三类机器可以通过 SSH 拉取 GitHub 仓库。
 - [ ] Windows/macOS 可以构建最小 Tauri v2 应用和 Rust Local Agent。
 - [ ] 中央 macOS 可以运行固定版本 Codex App Server 并生成匹配 Schema。
-- [ ] PostgreSQL 开发实例和 Migration 流程可用。
+- [ ] SQLite PoC Migration 流程可用；需要多人/集成测试时 PostgreSQL 实例和 Migration 流程可用。
 - [ ] 客户端不安装 Codex、不保存 OpenAI 凭据。
 - [ ] 客户端抓包不存在 OpenAI/ChatGPT 直连流量。
 - [ ] 中央 App Server 没有局域网监听入口。
 - [ ] Codexia/Soromi Commit 和许可证台账已固定。
-- [ ] Rust、Node.js、包管理器和 PostgreSQL 版本已写入仓库。
+- [ ] Rust、Node.js、包管理器和数据库（SQLite PoC/可选 PostgreSQL）版本策略已写入仓库。
 - [ ] Windows/macOS/中央 macOS CI 可以构建并运行基础测试。
 - [ ] 技术 Spike 已形成 Go/No-Go 结论。
 

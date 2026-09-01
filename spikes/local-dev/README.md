@@ -34,10 +34,14 @@ workspace/list、read_file、受控版本查询
 
 ```powershell
 npm install
+npm run setup:env
+npm run db:init
 npm run check
 npm run smoke
 npm run dev
 ```
+
+`setup:env` 会创建未纳入版本控制的 `.env` 和 `data/` 目录；本地 PoC 默认使用 `data/central.db` SQLite 文件，不需要启动 PostgreSQL。数据库表由仓库根目录的 `database/migrations/001_initial.sql` 初始化。多人长期运行或生产部署仍需切换到 PostgreSQL，届时替换 `DATABASE_URL` 并使用对应迁移流程。
 
 如果本机 WebView2 被终端安全软件拦截，可先使用浏览器开发模式继续前端、网关与 Local Agent 闭环开发：
 
