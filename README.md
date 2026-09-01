@@ -45,4 +45,4 @@ AGPL-3.0-only OR Commercial License
 
 - `docs/中央化Codex多用户远程工作平台-需求与架构设计-V0.2.md`
 - `docs/中央化Codex平台-总体开发路线-V1.0.md`
-
+- `docs/中央化Codex平台-技术选型与开发环境-V1.0.md`

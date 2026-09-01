@@ -1,0 +1,32 @@
+{
+  "name": "@central-codex-platform/local-dev-spike",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only OR LicenseRef-Commercial",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "workspaces": [
+    "apps/desktop",
+    "services/fake-central"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n gateway,agent,desktop -c cyan,yellow,magenta \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run dev:desktop\"",
+    "dev:browser": "concurrently -k -n gateway,agent,web -c cyan,yellow,green \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "dev:gateway": "npm run dev --workspace @central-codex-spike/fake-central",
+    "dev:agent": "cargo run -p local-agent -- --workspace-root ./fixtures/workspace --gateway-url ws://127.0.0.1:4310/ws/agent",
+    "dev:desktop": "npm run tauri:dev --workspace @central-codex-spike/desktop",
+    "check": "npm run check --workspaces --if-present && cargo check --workspace",
+    "smoke": "node scripts/integration-smoke.mjs",
+    "test": "cargo test --workspace",
+    "build": "npm run build --workspaces --if-present && cargo build --workspace"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

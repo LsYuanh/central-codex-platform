@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+
+[toolchain]
+channel = "stable"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = ["x86_64-pc-windows-msvc"]

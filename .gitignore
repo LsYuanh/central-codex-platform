@@ -40,4 +40,4 @@ runtime/
 coverage/
 test-results/
 playwright-report/
-
+*.tsbuildinfo
