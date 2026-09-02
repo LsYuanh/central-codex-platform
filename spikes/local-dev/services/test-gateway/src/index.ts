@@ -571,7 +571,16 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
           developerInstructions: CLIENT_DEVICE_INSTRUCTIONS,
           dynamicTools: CLIENT_DEVICE_TOOLS,
         }
-      : message.payload ?? {};
+      : message.operation === "session.initialize"
+        ? {
+            ...(message.payload ?? {}),
+            capabilities: {
+              ...(isRecord(message.payload) && isRecord(message.payload.capabilities) ? message.payload.capabilities : {}),
+              // Dynamic client-device tools are an experimental App Server API.
+              experimentalApi: true,
+            },
+          }
+        : message.payload ?? {};
     const result = agentMethod
       ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}))
       : await bridge.request(method as string, appPayload);
