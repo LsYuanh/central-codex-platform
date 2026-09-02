@@ -25,7 +25,9 @@ impl LocalAgentSupervisor {
 
     fn stop(&self) {
         let mut child = self.0.lock().expect("local agent lock poisoned");
-        let Some(mut child_process) = child.take() else { return };
+        let Some(mut child_process) = child.take() else {
+            return;
+        };
         if let Err(error) = child_process.kill() {
             eprintln!("Local Agent stop failed: {error}");
         }
@@ -69,13 +71,18 @@ fn spawn_local_agent() -> Result<Child, String> {
         return Err(format!("workspace not found at {}", workspace.display()));
     }
 
-    let gateway = env::var("CODEXIA_GATEWAY_AGENT_URL").unwrap_or_else(|_| {
-        "ws://192.0.2.10:4510/ws/agent?deviceId=desktop-device".to_string()
-    });
+    let gateway = env::var("CODEXIA_GATEWAY_AGENT_URL")
+        .unwrap_or_else(|_| "ws://192.0.2.10:4510/ws/agent?deviceId=desktop-device".to_string());
     let workspace_text = workspace.to_string_lossy().into_owned();
     let mut command = Command::new(executable);
     command
-        .args(["--workspace-root", workspace_text.as_str(), "--gateway-url", gateway.as_str(), "--allow-insecure-lan"])
+        .args([
+            "--workspace-root",
+            workspace_text.as_str(),
+            "--gateway-url",
+            gateway.as_str(),
+            "--allow-insecure-lan",
+        ])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
