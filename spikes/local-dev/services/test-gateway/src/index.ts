@@ -338,24 +338,36 @@ bridge.subscribe((message) => {
       bridge.respond(message.id, { success: false, contentItems: [{ type: "inputText", text: "No connected desktop client is available for this device operation." }] });
       return;
     }
+    // Execute dynamic tools directly through the broker. The UI receives an
+    // informational event, but is not a required hop in the execution path;
+    // this prevents stale clients from leaving the central turn loading.
+    const toolName = typeof params.tool === "string" ? params.tool : "";
+    const toolMethods: Record<string, AgentRpcMethod> = {
+      device_workspace_list: "workspace/list",
+      device_read_file: "read_file",
+      device_exec: "exec",
+    };
+    const agentMethod = toolMethods[toolName];
+    const toolArgs = isRecord(params.arguments) ? params.arguments : {};
     const requestId = `${client.id}:${String(message.id)}`;
-    const timer = setTimeout(() => {
-      const timedOut = pendingServerRequests.get(requestId);
-      if (!timedOut) return;
-      pendingServerRequests.delete(requestId);
-      bridge.respond(timedOut.upstreamId, { success: false, contentItems: [{ type: "inputText", text: "Local device tool request timed out." }] });
-      audit("device.tool.response", "failed", { userId: timedOut.userId, deviceId: client.deviceId, requestId, errorCode: "DEVICE_TOOL_TIMEOUT" });
-    }, 60_000);
-    pendingServerRequests.set(requestId, { clientId: client.id, upstreamId: message.id, userId: client.userId, method: message.method, data: message.params, timer });
     audit("device.tool.request", "requested", { userId: client.userId, deviceId: client.deviceId, requestId });
-    send(client.socket, {
-      type: "approval.request",
-      requestId,
-      kind: "tool-call",
-      method: message.method,
-      data: message.params,
-      sequence: ++sequence,
-    });
+    send(client.socket, { type: "event", eventType: "device.tool.requested", data: { tool: toolName, requestId }, sequence: ++sequence });
+    void (async () => {
+      if (!agentMethod) {
+        bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text: `Unsupported client device tool: ${toolName}` }] });
+        audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "UNSUPPORTED_DEVICE_TOOL" });
+        return;
+      }
+      try {
+        const result = await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(toolArgs));
+        bridge.respond(message.id!, { success: result.ok, contentItems: [{ type: "inputText", text: JSON.stringify(result) }] });
+        audit("device.tool.response", result.ok ? "succeeded" : "failed", { userId: client.userId, deviceId: client.deviceId, requestId, ...(result.ok ? {} : { errorCode: result.errorCode ?? "AGENT_ERROR" }) });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text }] });
+        audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "DEVICE_TOOL_ERROR" });
+      }
+    })();
     return;
   }
   if (message.id !== undefined && message.method) {
