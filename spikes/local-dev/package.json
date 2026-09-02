@@ -10,19 +10,30 @@
   },
   "workspaces": [
     "apps/desktop",
-    "services/fake-central"
+    "services/fake-central",
+    "services/app-server-proxy",
+    "services/test-gateway",
+    "packages/agentrpc-types"
   ],
   "scripts": {
-    "dev": "concurrently -k -n gateway,agent,desktop -c cyan,yellow,magenta \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run dev:desktop\"",
-    "dev:browser": "concurrently -k -n gateway,agent,web -c cyan,yellow,green \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "dev": "concurrently -k -n app-proxy,desktop -c cyan,magenta \"npm run dev:app-proxy\" \"npm run dev:desktop\"",
+    "dev:central": "concurrently -k -n test-gateway,web -c cyan,green \"npm run dev:test-gateway\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "dev:fake": "concurrently -k -n gateway,agent,desktop -c cyan,yellow,magenta \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run dev:desktop\"",
+    "dev:browser": "concurrently -k -n app-proxy,web -c cyan,green \"npm run dev:app-proxy\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "dev:browser:fake": "concurrently -k -n gateway,agent,web -c cyan,yellow,green \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
     "dev:gateway": "npm run dev --workspace @central-codex-spike/fake-central",
+    "dev:app-proxy": "npm run dev --workspace @central-codex-spike/app-server-proxy",
+    "dev:test-gateway": "npm run dev --workspace @central-codex-spike/test-gateway",
     "dev:agent": "cargo run -p local-agent -- --workspace-root ./fixtures/workspace --gateway-url ws://127.0.0.1:4310/ws/agent",
     "dev:desktop": "npm run tauri:dev --workspace @central-codex-spike/desktop",
     "setup:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-env.ps1",
     "db:init": "node scripts/init-sqlite.mjs",
     "check": "npm run check --workspaces --if-present && cargo check --workspace",
     "smoke": "node scripts/integration-smoke.mjs",
-    "test": "cargo test --workspace",
+    "device:smoke": "node scripts/device-broker-smoke.mjs",
+    "day5:acceptance": "node scripts/day5-acceptance.mjs",
+    "protocol:test": "npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/fake-central && npm run test:protocol --workspace @central-codex-spike/fake-central",
+    "test": "npm run protocol:test && cargo test --workspace",
     "build": "npm run build --workspaces --if-present && cargo build --workspace"
   },
   "devDependencies": {

@@ -12,7 +12,12 @@
 
 ## 当前阶段
 
-项目处于阶段 0–1：固定协议、第三方 Commit、许可证和验收口径，并完成 Codexia/Soromi/App Server 技术 Spike。
+项目已进入阶段 2 第一轮：在保留本机纵向 Spike 的前提下，建立最小 AgentRPC V1 合同、Fake App Server Worker/Remote Workspace Bridge、中央 Device Broker 和可重复的本机/真实中央机协议 smoke。真实中央机测试网关现支持可信局域网临时直连；正式认证、WSS/mTLS 和多用户 Worker 仍在开发中。
+
+桌面端当前已提供 Codexia Workspace 正式版工作台 UI，覆盖 Thread 管理、实时对话、Markdown、工作区文件浏览、文件读取、受控版本命令和活动日志；权限与认证仍按局域网 Spike 边界运行。
+
+Spike 客户端 UI 另提供 `Local Codex App Server` 开发模式：用户自行启动本机
+`codex app-server --listen ws://127.0.0.1:4500`，再由本地开发代理转发到 UI，即可做真实握手、Thread、流式事件和审批测试；该模式不会改变生产中央化边界。
 
 在 Spike 给出 Go/No-Go 之前，不初始化正式 Rust/Node 产品工程，不引入生产依赖。
 
@@ -46,3 +51,5 @@ AGPL-3.0-only OR Commercial License
 - `docs/中央化Codex多用户远程工作平台-需求与架构设计-V0.2.md`
 - `docs/中央化Codex平台-总体开发路线-V1.0.md`
 - `docs/中央化Codex平台-技术选型与开发环境-V1.0.md`
+- `docs/B.3-A0-推荐改造方案启动决策清单.md`
+- `docs/B.3-B6-阶段验收与Go-No-Go-2026-09-01.md`

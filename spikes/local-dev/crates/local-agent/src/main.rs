@@ -5,7 +5,8 @@ use std::{
     error::Error,
     fs,
     path::{Component, Path, PathBuf},
-    time::Duration,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use futures_util::{SinkExt, StreamExt};
@@ -16,6 +17,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
+static NONCE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 type AgentResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -27,17 +29,75 @@ struct Config {
 
 #[derive(Debug, Deserialize)]
 struct RequestEnvelope {
+    #[serde(default)]
+    protocol: Option<String>,
+    #[serde(default)]
+    version: Option<u32>,
     #[serde(rename = "type")]
     message_type: String,
-    request: AgentRequest,
+    #[serde(default)]
+    request: Option<LegacyAgentRequest>,
+    #[serde(default)]
+    payload: Option<Value>,
+    #[serde(default, rename = "requestId", alias = "request_id")]
+    request_id: Option<String>,
+    #[serde(default, rename = "taskId", alias = "task_id")]
+    task_id: Option<String>,
+    #[serde(default, rename = "traceId", alias = "trace_id")]
+    trace_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct AgentRequest {
+struct LegacyAgentRequest {
     id: String,
     method: String,
     #[serde(default)]
     params: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentRequestPayload {
+    method: String,
+    #[serde(default)]
+    params: Value,
+}
+
+#[derive(Debug)]
+struct AgentRequest {
+    id: String,
+    method: String,
+    params: Value,
+    task_id: Option<String>,
+    trace_id: Option<String>,
+}
+
+impl RequestEnvelope {
+    fn into_request(self) -> Result<AgentRequest, String> {
+        if let Some(payload) = self.payload {
+            let payload: AgentRequestPayload = serde_json::from_value(payload)
+                .map_err(|error| format!("invalid agent.request payload: {error}"))?;
+            let id = self
+                .request_id
+                .ok_or_else(|| "versioned agent.request is missing requestId".to_string())?;
+            return Ok(AgentRequest {
+                id,
+                method: payload.method,
+                params: payload.params,
+                task_id: self.task_id,
+                trace_id: self.trace_id,
+            });
+        }
+
+        self.request
+            .map(|request| AgentRequest {
+                id: request.id,
+                method: request.method,
+                params: request.params,
+                task_id: None,
+                trace_id: None,
+            })
+            .ok_or_else(|| "agent.request is missing request or payload".to_string())
+    }
 }
 
 #[tokio::main]
@@ -47,8 +107,8 @@ async fn main() -> AgentResult<()> {
 
     loop {
         match run_connection(&config).await {
-            Ok(()) => eprintln!("Fake Central connection closed"),
-            Err(error) => eprintln!("Fake Central connection failed: {error}"),
+            Ok(()) => eprintln!("Gateway connection closed; retrying"),
+            Err(error) => eprintln!("Gateway connection failed: {error}; retrying"),
         }
         time::sleep(Duration::from_secs(2)).await;
     }
@@ -57,12 +117,14 @@ async fn main() -> AgentResult<()> {
 fn parse_args() -> AgentResult<Config> {
     let mut workspace_root: Option<PathBuf> = None;
     let mut gateway_url: Option<String> = None;
+    let mut allow_insecure_lan = false;
     let mut arguments = env::args().skip(1);
 
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--workspace-root" => workspace_root = arguments.next().map(PathBuf::from),
             "--gateway-url" => gateway_url = arguments.next(),
+            "--allow-insecure-lan" => allow_insecure_lan = true,
             _ => return Err(format!("unknown argument: {argument}").into()),
         }
     }
@@ -74,8 +136,9 @@ fn parse_args() -> AgentResult<Config> {
     }
 
     let gateway_url = gateway_url.ok_or("--gateway-url is required")?;
-    if !gateway_url.starts_with("ws://127.0.0.1:") && !gateway_url.starts_with("ws://localhost:") {
-        return Err("this local Spike only permits a loopback Fake Central URL".into());
+    let loopback = gateway_url.starts_with("ws://127.0.0.1:") || gateway_url.starts_with("ws://localhost:");
+    if !loopback && !allow_insecure_lan {
+        return Err("non-loopback ws:// gateway requires --allow-insecure-lan".into());
     }
 
     Ok(Config {
@@ -87,15 +150,20 @@ fn parse_args() -> AgentResult<Config> {
 async fn run_connection(config: &Config) -> AgentResult<()> {
     let (socket, _) = connect_async(&config.gateway_url).await?;
     let (mut writer, mut reader) = socket.split();
-    let hello = json!({
-        "type": "agent.hello",
-        "agent": {
-            "version": env!("CARGO_PKG_VERSION"),
-            "os": env::consts::OS,
-            "arch": env::consts::ARCH,
-            "capabilities": ["workspace/list", "read_file", "exec:version-only"]
-        }
-    });
+    let hello = versioned_message(
+        "agent.hello",
+        json!({
+            "agent": {
+                "version": env!("CARGO_PKG_VERSION"),
+                "os": env::consts::OS,
+                "arch": env::consts::ARCH,
+                "capabilities": ["workspace/list", "read_file", "exec:version-only"]
+            }
+        }),
+        None,
+        None,
+        None,
+    );
     writer.send(Message::Text(hello.to_string().into())).await?;
 
     let mut heartbeat = time::interval(Duration::from_secs(10));
@@ -104,7 +172,7 @@ async fn run_connection(config: &Config) -> AgentResult<()> {
     loop {
         tokio::select! {
             _ = heartbeat.tick() => {
-                let message = json!({ "type": "agent.heartbeat" });
+                let message = versioned_message("agent.heartbeat", json!({ "state": "idle" }), None, None, None);
                 writer.send(Message::Text(message.to_string().into())).await?;
             }
             incoming = reader.next() => {
@@ -127,11 +195,27 @@ async fn run_connection(config: &Config) -> AgentResult<()> {
                         continue;
                     }
                 };
+                if envelope.message_type == "agent.hello_ack" {
+                    continue;
+                }
                 if envelope.message_type != "agent.request" {
                     continue;
                 }
 
-                let response = handle_request(&config.workspace_root, envelope.request).await;
+                if let Some(protocol) = envelope.protocol.as_deref() {
+                    if protocol != "agentrpc" || envelope.version != Some(1) {
+                        eprintln!("Rejected unsupported AgentRPC protocol version");
+                        continue;
+                    }
+                }
+                let request = match envelope.into_request() {
+                    Ok(request) => request,
+                    Err(error) => {
+                        eprintln!("Rejected malformed agent request: {error}");
+                        continue;
+                    }
+                };
+                let response = handle_request(&config.workspace_root, request).await;
                 writer.send(Message::Text(response.to_string().into())).await?;
             }
         }
@@ -147,16 +231,79 @@ async fn handle_request(workspace_root: &Path, request: AgentRequest) -> Value {
         _ => Err(format!("unsupported method: {}", request.method)),
     };
 
-    match result {
-        Ok(result) => json!({
-            "type": "agent.response",
-            "response": { "id": request_id, "ok": true, "result": result }
-        }),
-        Err(error) => json!({
-            "type": "agent.response",
-            "response": { "id": request_id, "ok": false, "error": error }
-        }),
+    let response = match result {
+        Ok(result) => json!({ "id": request_id, "ok": true, "result": result }),
+        Err(error) => json!({ "id": request_id, "ok": false, "error": error, "errorCode": "AGENT_ERROR" }),
+    };
+    versioned_message(
+        "agent.response",
+        response,
+        Some(request_id.as_str()),
+        request.task_id.as_deref(),
+        request.trace_id.as_deref(),
+    )
+}
+
+fn versioned_message(
+    message_type: &str,
+    payload: Value,
+    request_id: Option<&str>,
+    task_id: Option<&str>,
+    trace_id: Option<&str>,
+) -> Value {
+    let timestamp = iso_timestamp();
+    let nonce = format!(
+        "local-agent-{}-{}",
+        timestamp.replace([':', '.', '-'], ""),
+        NONCE_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let mut message = json!({
+        "protocol": "agentrpc",
+        "version": 1,
+        "type": message_type,
+        "timestamp": timestamp,
+        "nonce": nonce,
+        "payload": payload,
+    });
+    if let Some(request_id) = request_id {
+        message["requestId"] = json!(request_id);
     }
+    if let Some(task_id) = task_id {
+        message["taskId"] = json!(task_id);
+    }
+    if let Some(trace_id) = trace_id {
+        message["traceId"] = json!(trace_id);
+    }
+    message
+}
+
+fn iso_timestamp() -> String {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0));
+    let seconds = duration.as_secs() as i64;
+    let days = seconds.div_euclid(86_400);
+    let day_seconds = seconds.rem_euclid(86_400);
+
+    // Civil date conversion from Unix days (UTC), avoiding another runtime
+    // dependency in the small Local Agent binary.
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 }.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe.div_euclid(1_460) + doe.div_euclid(36_524) - doe.div_euclid(146_096)).div_euclid(365);
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe.div_euclid(4) - yoe.div_euclid(100));
+    let mp = (5 * doy + 2).div_euclid(153);
+    let day = doy - (153 * mp + 2).div_euclid(5) + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    let year = year + if month <= 2 { 1 } else { 0 };
+    let hours = day_seconds / 3_600;
+    let minutes = (day_seconds % 3_600) / 60;
+    let secs = day_seconds % 60;
+    format!(
+        "{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{secs:02}.{:03}Z",
+        duration.subsec_millis()
+    )
 }
 
 fn list_workspace(workspace_root: &Path, params: &Value) -> Result<Value, String> {

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://central-codex-platform.local/schema/agentrpc-v1.schema.json",
+  "title": "Central Codex Platform AgentRPC V1",
+  "description": "Versioned device-bound protocol. This is not the Codex App Server protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "version", "type", "timestamp", "nonce", "payload"],
+  "properties": {
+    "protocol": { "const": "agentrpc" },
+    "version": { "const": 1 },
+    "type": {
+      "enum": [
+        "agent.hello", "agent.hello_ack", "agent.heartbeat", "agent.request", "agent.response", "agent.event",
+        "job.offer", "job.accept", "job.reject", "job.cancel", "job.cancel_ack", "approval.required",
+        "approval.result", "workspace.changed", "certificate.rotate_required", "upgrade.required"
+      ]
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "nonce": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "agent.request" } } },
+      "then": {
+        "required": ["requestId"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "params"],
+            "properties": {
+              "method": { "type": "string", "enum": ["workspace/list", "workspace/stat", "read_file", "exec", "fs/list_dir", "fs/read_file", "process/exec", "process/cancel", "git/status", "git/diff"] },
+              "params": { "type": "object" },
+              "operationId": { "type": "string", "minLength": 1 },
+              "idempotencyKey": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "agent.response" } } },
+      "then": {
+        "required": ["requestId"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ok"],
+            "properties": {
+              "ok": { "type": "boolean" },
+              "result": {},
+              "error": { "type": "string" },
+              "errorCode": { "type": "string" },
+              "retryable": { "type": "boolean" },
+              "id": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "helloPayload": {
+      "type": "object",
+      "required": ["agent"],
+      "properties": {
+        "deviceId": { "type": "string" },
+        "agent": {
+          "type": "object",
+          "required": ["version", "os", "arch", "capabilities"],
+          "properties": {
+            "version": { "type": "string" },
+            "os": { "type": "string" },
+            "arch": { "type": "string" },
+            "capabilities": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

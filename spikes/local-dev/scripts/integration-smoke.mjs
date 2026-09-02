@@ -4,17 +4,22 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import net from "node:net";
 
 const spikeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const gatewayEntry = path.join(spikeRoot, "services", "fake-central", "dist", "index.js");
 const agentExecutable = path.join(spikeRoot, "target", "debug", "local-agent.exe");
 const workspaceRoot = path.join(spikeRoot, "fixtures", "workspace");
 const children = [];
+const port = await findFreePort(Number(process.env.SMOKE_PORT ?? "4310"));
+const gatewayUrl = `ws://127.0.0.1:${port}/ws/agent`;
+const healthUrl = `http://127.0.0.1:${port}/health`;
+const uiUrl = `ws://127.0.0.1:${port}/ws/ui`;
 
 function start(command, args) {
   const child = spawn(command, args, {
     cwd: spikeRoot,
-    env: process.env,
+    env: { ...process.env, CENTRAL_PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -28,7 +33,7 @@ async function waitForAgent() {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch("http://127.0.0.1:4310/health");
+      const response = await fetch(healthUrl);
       const status = await response.json();
       if (status.agent === "online") return;
     } catch {
@@ -40,7 +45,7 @@ async function waitForAgent() {
 }
 
 async function openUiSocket() {
-  const socket = new WebSocket("ws://127.0.0.1:4310/ws/ui");
+  const socket = new WebSocket(uiUrl);
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("UI WebSocket timed out")), 5_000);
     socket.addEventListener("open", () => {
@@ -52,7 +57,7 @@ async function openUiSocket() {
   return socket;
 }
 
-function request(socket, method, params) {
+function request(socket, method, params, envelopeType = "agent.request", responseType = "agent.response") {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -62,14 +67,14 @@ function request(socket, method, params) {
 
     const onMessage = (event) => {
       const message = JSON.parse(String(event.data));
-      if (message.type !== "agent.response" || message.response?.id !== id) return;
+      if (message.type !== responseType || message.response?.id !== id) return;
       clearTimeout(timeout);
       socket.removeEventListener("message", onMessage);
       resolve(message.response);
     };
 
     socket.addEventListener("message", onMessage);
-    socket.send(JSON.stringify({ type: "agent.request", request: { id, method, params } }));
+    socket.send(JSON.stringify({ type: envelopeType, request: { id, method, params } }));
   });
 }
 
@@ -79,12 +84,31 @@ try {
     "--workspace-root",
     workspaceRoot,
     "--gateway-url",
-    "ws://127.0.0.1:4310/ws/agent",
+    gatewayUrl,
   ]);
   await waitForAgent();
 
   const socket = await openUiSocket();
-  const listing = await request(socket, "workspace/list", { path: "." });
+  const initialized = await request(socket, "initialize", {}, "app.request", "app.response");
+  assert.equal(initialized.ok, true);
+  assert.equal(initialized.result.protocol, "fake-app-server");
+
+  const thread = await request(socket, "thread/start", {}, "app.request", "app.response");
+  assert.equal(thread.ok, true);
+  assert.match(thread.result.threadId, /^thread_/);
+
+  const bridgedFile = await request(
+    socket,
+    "turn/start",
+    { threadId: thread.result.threadId, tool: "fs/read_file", arguments: { path: "README.md" } },
+    "app.request",
+    "app.response",
+  );
+  assert.equal(bridgedFile.ok, true);
+  assert.equal(bridgedFile.result.response.ok, true);
+  assert.match(bridgedFile.result.response.result.content, /安全测试工作区/);
+
+  const listing = await request(socket, "workspace/list", { path: "." }, "app.request", "app.response");
   assert.equal(listing.ok, true);
   assert.ok(listing.result.entries.some((entry) => entry.name === "README.md"));
 
@@ -115,4 +139,16 @@ try {
   for (const child of children.reverse()) {
     child.kill();
   }
+}
+
+async function findFreePort(preferredPort) {
+  for (let candidate = preferredPort; candidate < preferredPort + 100; candidate += 1) {
+    const available = await new Promise((resolve) => {
+      const probe = net.createServer();
+      probe.once("error", () => resolve(false));
+      probe.listen(candidate, "127.0.0.1", () => probe.close(() => resolve(true)));
+    });
+    if (available) return candidate;
+  }
+  throw new Error(`no free smoke port in ${preferredPort}-${preferredPort + 99}`);
 }
