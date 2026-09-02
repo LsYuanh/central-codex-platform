@@ -36,7 +36,7 @@ interface ApprovalRequest {
   id: JsonRpcId;
   method: string;
   params: unknown;
-  kind: "approval" | "user-input" | "other";
+  kind: "approval" | "user-input" | "tool-call" | "other";
 }
 
 interface WorkspaceEntry {
@@ -165,6 +165,40 @@ export default function App() {
     });
   }, []);
 
+  const handleDynamicToolCall = useCallback(async (message: AppServerMessage) => {
+    const toolParams = asRecord(message.params);
+    const tool = typeof toolParams?.tool === "string" ? toolParams.tool : "";
+    const args = asRecord(toolParams?.arguments) ?? {};
+    const client = appClientRef.current;
+    const codexia = codexiaRef.current;
+    if (!client?.requestDevice || !codexia || message.id === undefined) return;
+
+    const toolMap: Record<string, "workspace/list" | "read_file" | "exec"> = {
+      device_workspace_list: "workspace/list",
+      device_read_file: "read_file",
+      device_exec: "exec",
+    };
+    const method = toolMap[tool];
+    if (!method) {
+      codexia.respond(message.id, { success: false, contentItems: [{ type: "inputText", text: `Unsupported client device tool: ${tool}` }] });
+      return;
+    }
+
+    try {
+      const response = await client.requestDevice(method, args);
+      const result = response.result ?? {};
+      setGatewayOutput(JSON.stringify(result, null, 2));
+      codexia.respond(message.id, {
+        success: asRecord(result)?.ok !== false,
+        contentItems: [{ type: "inputText", text: JSON.stringify(result) }],
+      });
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      codexia.respond(message.id, { success: false, contentItems: [{ type: "inputText", text }] });
+      setGatewayOutput(text);
+    }
+  }, []);
+
   const handleAppServerMessage = useCallback(
     (message: AppServerMessage) => {
       addEvent(message);
@@ -220,6 +254,11 @@ export default function App() {
         return;
       }
 
+      if (message.id !== undefined && message.method === "item/tool/call") {
+        void handleDynamicToolCall(message);
+        return;
+      }
+
       if (message.id !== undefined && message.method) {
         const kind = message.requestKind ?? (message.method.includes("requestApproval")
           ? "approval"
@@ -256,7 +295,7 @@ export default function App() {
         ]);
       }
     },
-    [addEvent, appendAssistantDelta, mode],
+    [addEvent, appendAssistantDelta, handleDynamicToolCall, mode],
   );
 
   const disconnectAppServer = useCallback(() => {

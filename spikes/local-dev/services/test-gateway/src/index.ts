@@ -102,6 +102,52 @@ const listenPort = Number(process.env.TEST_GATEWAY_PORT ?? 4510);
 const codexCommand = process.env.CODEX_BIN ?? "codex";
 const stateFile = resolve(process.env.TEST_GATEWAY_STATE_FILE ?? "data/test-gateway-state.json");
 
+// The central worker is for reasoning only. System operations are exposed as
+// dynamic tools so app-server asks the connected desktop client to execute
+// them through its Local Agent instead of touching the Mac worker filesystem.
+const CLIENT_DEVICE_TOOLS = [
+  {
+    type: "function",
+    name: "device_workspace_list",
+    description: "List entries in the user's approved local workspace.",
+    inputSchema: { type: "object", properties: { path: { type: "string", description: "Relative workspace path; defaults to the workspace root." } } },
+  },
+  {
+    type: "function",
+    name: "device_read_file",
+    description: "Read a UTF-8 text file from the user's approved local workspace.",
+    inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+  },
+  {
+    type: "function",
+    name: "device_exec",
+    description: "Run an approved, non-shell command on the user's local device. Never use this for arbitrary shell syntax.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        program: { type: "string" },
+        args: { type: "array", items: { type: "string" } },
+        cwd: { type: "string" },
+      },
+      required: ["program"],
+    },
+  },
+] as const;
+
+const CLIENT_DEVICE_INSTRUCTIONS = [
+  "You are the central reasoning worker for a remote desktop client.",
+  "The central machine is never the user's computer.",
+  "Never use built-in shell, filesystem, process, git, or other host-system tools for user-device work.",
+  "For files, Git, commands, disk, or other system information, use the provided device_* dynamic tools; they execute on the connected user's device through Local Agent.",
+  "If a required device_* tool is unavailable or rejects an operation, explain that limitation instead of inspecting the central worker.",
+].join(" ");
+
+const BLOCKED_CENTRAL_OPERATION_REQUESTS = new Set([
+  "item/commandExecution/requestApproval",
+  "item/fileChange/requestApproval",
+  "item/permissions/requestApproval",
+]);
+
 class CodexStdioBridge {
   private readonly child: ChildProcessWithoutNullStreams;
   private nextId = 1;
@@ -272,6 +318,46 @@ function audit(action: string, status: AuditEvent["status"], fields: Omit<AuditE
 }
 
 bridge.subscribe((message) => {
+  if (message.id !== undefined && message.method && BLOCKED_CENTRAL_OPERATION_REQUESTS.has(message.method)) {
+    // A central worker must never receive permission to mutate or inspect the
+    // user's device. The model should use a device_* dynamic tool instead.
+    bridge.respond(message.id, { decision: "decline", reason: "central_system_operations_disabled" });
+    const params = isRecord(message.params) ? message.params : {};
+    const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
+    const ownerUserId = threadId ? threadOwnerById.get(threadId) : undefined;
+    audit("central.operation.blocked", "failed", { userId: ownerUserId, errorCode: "CENTRAL_SYSTEM_OPERATION_DISABLED" });
+    return;
+  }
+  if (message.id !== undefined && message.method === "item/tool/call") {
+    const params = isRecord(message.params) ? message.params : {};
+    const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
+    const ownerUserId = threadId ? threadOwnerById.get(threadId) : undefined;
+    const client = [...clients.values()].find((candidate) => ownerUserId && candidate.userId === ownerUserId)
+      ?? (lastAppClientId ? clients.get(lastAppClientId) : undefined);
+    if (!client) {
+      bridge.respond(message.id, { success: false, contentItems: [{ type: "inputText", text: "No connected desktop client is available for this device operation." }] });
+      return;
+    }
+    const requestId = `${client.id}:${String(message.id)}`;
+    const timer = setTimeout(() => {
+      const timedOut = pendingServerRequests.get(requestId);
+      if (!timedOut) return;
+      pendingServerRequests.delete(requestId);
+      bridge.respond(timedOut.upstreamId, { success: false, contentItems: [{ type: "inputText", text: "Local device tool request timed out." }] });
+      audit("device.tool.response", "failed", { userId: timedOut.userId, deviceId: client.deviceId, requestId, errorCode: "DEVICE_TOOL_TIMEOUT" });
+    }, 60_000);
+    pendingServerRequests.set(requestId, { clientId: client.id, upstreamId: message.id, userId: client.userId, method: message.method, data: message.params, timer });
+    audit("device.tool.request", "requested", { userId: client.userId, deviceId: client.deviceId, requestId });
+    send(client.socket, {
+      type: "approval.request",
+      requestId,
+      kind: "tool-call",
+      method: message.method,
+      data: message.params,
+      sequence: ++sequence,
+    });
+    return;
+  }
   if (message.id !== undefined && message.method) {
     const params = isRecord(message.params) ? message.params : {};
     const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
@@ -478,9 +564,17 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
     if (["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.cancel"].includes(message.operation)) {
       assertOwnedThread(client, message.payload ?? {});
     }
+    const appPayload = message.operation === "conversation.create"
+      ? {
+          ...(message.payload ?? {}),
+          approvalPolicy: "untrusted",
+          developerInstructions: CLIENT_DEVICE_INSTRUCTIONS,
+          dynamicTools: CLIENT_DEVICE_TOOLS,
+        }
+      : message.payload ?? {};
     const result = agentMethod
       ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}))
-      : await bridge.request(method as string, message.payload ?? {});
+      : await bridge.request(method as string, appPayload);
     if (message.operation === "conversation.list") rememberListedThreads(client.userId, result);
     const visibleResult = message.operation === "conversation.list"
       ? filterOwnedThreads(result, ownedThreadIdsByUser.get(client.userId) ?? new Set(), client.userId)

@@ -11,7 +11,7 @@ type GatewayEnvelope = {
   eventType?: string;
   name?: string;
   method?: string;
-  kind?: "approval" | "user-input";
+  kind?: "approval" | "user-input" | "tool-call";
   sequence?: number;
   agent?: string;
   agentInfo?: unknown;
@@ -37,6 +37,7 @@ export interface RpcClient {
   subscribe(listener: MessageListener): () => void;
   connect(): Promise<AppServerMessage>;
   request(method: string, params?: Record<string, unknown>): Promise<AppServerMessage>;
+  requestDevice?(method: "workspace/list" | "read_file" | "exec", params?: Record<string, unknown>): Promise<AppServerMessage>;
   respond(id: JsonRpcId, result: unknown): void;
   close(): void;
 }

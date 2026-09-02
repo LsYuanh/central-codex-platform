@@ -59,6 +59,11 @@ export class CodexiaGatewayAdapter {
     return this.transport.request("turn/interrupt", params);
   }
 
+  public async requestDevice(method: "workspace/list" | "read_file" | "exec", params: Record<string, unknown> = {}): Promise<AppServerMessage> {
+    if (!this.transport.requestDevice) throw new Error("当前传输不支持客户端设备操作");
+    return this.transport.requestDevice(method, params);
+  }
+
   public respond(id: JsonRpcId, result: unknown): void {
     this.transport.respond(id, result);
   }

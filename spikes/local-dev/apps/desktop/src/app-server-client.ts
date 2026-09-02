@@ -16,7 +16,7 @@ export interface AppServerMessage {
   error?: JsonRpcError;
   /** Central gateway metadata; never sent to a local App Server. */
   sequence?: number;
-  requestKind?: "approval" | "user-input";
+  requestKind?: "approval" | "user-input" | "tool-call";
 }
 
 export interface AppServerClientInfo {
