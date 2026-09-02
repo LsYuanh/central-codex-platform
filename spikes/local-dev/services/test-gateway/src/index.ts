@@ -585,15 +585,17 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
       ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}))
       : await bridge.request(method as string, appPayload);
     if (message.operation === "conversation.list") rememberListedThreads(client.userId, result);
-    const visibleResult = message.operation === "conversation.list"
-      ? filterOwnedThreads(result, ownedThreadIdsByUser.get(client.userId) ?? new Set(), client.userId)
+    const visibleResult = ["conversation.create", "conversation.resume", "conversation.read", "conversation.list"].includes(message.operation)
+      ? sanitizeThreadMetadata(message.operation === "conversation.list"
+        ? filterOwnedThreads(result, ownedThreadIdsByUser.get(client.userId) ?? new Set(), client.userId)
+        : result)
       : result;
     if (message.operation === "conversation.create") {
       const createdId = threadIdFromResult(result);
       if (createdId) {
         ownedThreadIdsByUser.get(client.userId)?.add(createdId);
         threadOwnerById.set(createdId, client.userId);
-        const createdRecord = isRecord(result) && isRecord(result.thread) ? result.thread : undefined;
+        const createdRecord = isRecord(result) && isRecord(result.thread) ? sanitizeThreadMetadata(result.thread) as JsonObject : undefined;
         threadSummaryById.set(createdId, createdRecord ?? { id: createdId });
         persistState();
       }
@@ -834,6 +836,18 @@ function filterOwnedThreads(result: unknown, ownedThreadIds: Set<string>, userId
   return result;
 }
 
+/** Never expose the central worker's filesystem metadata as a client workspace. */
+function sanitizeThreadMetadata(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeThreadMetadata);
+  if (!isRecord(value)) return value;
+  const sanitized: JsonObject = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath"].includes(key)) continue;
+    sanitized[key] = sanitizeThreadMetadata(nested);
+  }
+  return sanitized;
+}
+
 function rememberListedThreads(userId: string, result: unknown): void {
   if (!isRecord(result)) return;
   const values = Array.isArray(result.data) ? result.data : Array.isArray(result.threads) ? result.threads : [];
@@ -841,7 +855,7 @@ function rememberListedThreads(userId: string, result: unknown): void {
   for (const value of values) {
     if (!isRecord(value) || typeof value.id !== "string") continue;
     if (threadOwnerById.get(value.id) !== userId) continue;
-    threadSummaryById.set(value.id, value);
+    threadSummaryById.set(value.id, sanitizeThreadMetadata(value) as JsonObject);
     changed = true;
   }
   if (changed) persistState();
