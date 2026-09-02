@@ -157,7 +157,7 @@ async fn run_connection(config: &Config) -> AgentResult<()> {
                 "version": env!("CARGO_PKG_VERSION"),
                 "os": env::consts::OS,
                 "arch": env::consts::ARCH,
-                "capabilities": ["workspace/list", "read_file", "exec:version-only"]
+                "capabilities": ["workspace/list", "read_file", "exec"]
             }
         }),
         None,
@@ -227,7 +227,7 @@ async fn handle_request(workspace_root: &Path, request: AgentRequest) -> Value {
     let result = match request.method.as_str() {
         "workspace/list" => list_workspace(workspace_root, &request.params),
         "read_file" => read_file(workspace_root, &request.params),
-        "exec" => execute_version_command(workspace_root, &request.params).await,
+        "exec" => execute_command(workspace_root, &request.params).await,
         _ => Err(format!("unsupported method: {}", request.method)),
     };
 
@@ -346,7 +346,7 @@ fn read_file(workspace_root: &Path, params: &Value) -> Result<Value, String> {
     Ok(json!({ "path": requested_path, "bytes": metadata.len(), "content": content }))
 }
 
-async fn execute_version_command(workspace_root: &Path, params: &Value) -> Result<Value, String> {
+async fn execute_command(workspace_root: &Path, params: &Value) -> Result<Value, String> {
     let program = required_string(params, "program")?;
     let args = params
         .get("args")
@@ -361,16 +361,15 @@ async fn execute_version_command(workspace_root: &Path, params: &Value) -> Resul
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    if !matches!(program, "git" | "node") || args != ["--version"] {
-        return Err("Spike exec only permits `git --version` or `node --version`".into());
-    }
-
     let requested_cwd = params.get("cwd").and_then(Value::as_str).unwrap_or(".");
     let cwd = resolve_existing_path(workspace_root, requested_cwd)?;
     if !cwd.is_dir() {
         return Err("cwd must be a directory".into());
     }
 
+    // The command runs on the client, never on the central worker. PowerShell
+    // is supported explicitly (`powershell -NoProfile -Command ...`) while
+    // the working directory remains inside the client-approved workspace.
     let mut command = Command::new(program);
     command.args(&args).current_dir(cwd).kill_on_drop(true);
     let output = time::timeout(Duration::from_secs(10), command.output())

@@ -121,7 +121,7 @@ const CLIENT_DEVICE_TOOLS = [
   {
     type: "function",
     name: "device_exec",
-    description: "Run an approved, non-shell command on the user's local device. Never use this for arbitrary shell syntax.",
+    description: "Run a command on the user's local device. For shell operations, invoke PowerShell explicitly with powershell -NoProfile -Command. The command executes only on the client.",
     inputSchema: {
       type: "object",
       properties: {

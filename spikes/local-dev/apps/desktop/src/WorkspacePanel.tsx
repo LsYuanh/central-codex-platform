@@ -82,7 +82,7 @@ export function WorkspacePanel({
         ))}
       </div>
       <div className="workspace-command-card">
-        <div className="workspace-section-label"><span>受控命令</span><small>仅允许白名单命令</small></div>
+        <div className="workspace-section-label"><span>客户端命令</span><small>命令在本机 Local Agent 执行（含 PowerShell）</small></div>
         <div className="workspace-command-row">
           <select aria-label="允许的版本命令" value={command} onChange={(event) => onCommandChange(event.target.value as "git" | "node")} disabled={!available || loading}><option value="git">git --version</option><option value="node">node --version</option></select>
           <button className="button-secondary" disabled={!available || loading} onClick={onRunCommand}>运行命令</button>
