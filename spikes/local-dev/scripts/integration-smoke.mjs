@@ -5,10 +5,11 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import net from "node:net";
+import { localAgentExecutable, locationCommand, streamingCommand } from "./client-smoke-platform.mjs";
 
 const spikeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const gatewayEntry = path.join(spikeRoot, "services", "fake-central", "dist", "index.js");
-const agentExecutable = path.join(spikeRoot, "target", "debug", "local-agent.exe");
+const agentExecutable = localAgentExecutable(spikeRoot);
 const workspaceRoot = path.join(spikeRoot, "fixtures", "workspace");
 const children = [];
 const port = await findFreePort(Number(process.env.SMOKE_PORT ?? "4310"));
@@ -121,20 +122,41 @@ try {
   assert.equal(command.result.exitCode, 0);
   assert.match(command.result.stdout, /git version/i);
 
+  const streamEvents = [];
+  const captureStream = (event) => {
+    const message = JSON.parse(String(event.data));
+    if (message.type === "agent.event") streamEvents.push(message.event);
+  };
+  socket.addEventListener("message", captureStream);
+  const streamed = await request(socket, "exec", { ...streamingCommand, cwd: ".", timeoutMs: 5_000 });
+  socket.removeEventListener("message", captureStream);
+  assert.equal(streamed.ok, true);
+  const streamedText = streamEvents.map((event) => event.chunk ?? "").join("");
+  assert.match(streamedText, /stream-first/);
+  assert.match(streamedText, /stream-error/);
+  assert.match(streamedText, /stream-second/);
+  assert.ok(streamEvents.some((event) => event.stream === "stderr"));
+  assert.ok(streamEvents.some((event) => event.done === true));
+  assert.deepEqual(streamEvents.map((event) => event.sequence), [...streamEvents.map((event) => event.sequence)].sort((left, right) => left - right));
+
   const traversal = await request(socket, "read_file", { path: "../README.md" });
   assert.equal(traversal.ok, false);
   assert.match(traversal.error, /forbidden/);
 
-  const deniedCommand = await request(socket, "exec", {
-    program: "powershell",
-    args: ["-Command", "Get-Location"],
+  const clientCommand = await request(socket, "exec", {
+    ...locationCommand,
     cwd: ".",
   });
-  assert.equal(deniedCommand.ok, false);
-  assert.match(deniedCommand.error, /only permits/);
+  // Exercise the native client's shell, while cwd remains workspace-bound.
+  assert.equal(clientCommand.ok, true);
+  assert.equal(clientCommand.result.exitCode, 0);
+  assert.match(clientCommand.result.stdout, /fixtures[\\/]workspace/);
+  const deniedCwd = await request(socket, "exec", { ...locationCommand, cwd: ".." });
+  assert.equal(deniedCwd.ok, false);
+  assert.match(deniedCwd.error, /forbidden/);
 
   socket.close();
-  console.log("Integration smoke passed: list, read, exec, traversal denial, command denial");
+  console.log("Integration smoke passed: list, read, streamed client shell, file/cwd traversal denial");
 } finally {
   for (const child of children.reverse()) {
     child.kill();

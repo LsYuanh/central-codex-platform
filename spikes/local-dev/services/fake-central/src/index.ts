@@ -32,6 +32,8 @@ if (!Number.isInteger(configuredPort) || configuredPort < 1 || configuredPort > 
   throw new Error("CENTRAL_PORT must be an integer between 1 and 65535");
 }
 const port = configuredPort;
+const defaultCommandTimeoutMs = 30 * 60 * 1000;
+const maxCommandTimeoutMs = 2 * 60 * 60 * 1000;
 const uiClients = new Set<WebSocket>();
 const pendingRequests = new Map<
   string,
@@ -86,10 +88,12 @@ function sendAgentRequest(
   );
 
   return new Promise((resolve) => {
+    const requestedTimeout = typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs) ? Math.trunc(params.timeoutMs) : defaultCommandTimeoutMs;
+    const timeoutMs = method === "exec" ? Math.min(maxCommandTimeoutMs, Math.max(1_000, requestedTimeout)) + 10_000 : 10_000;
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
       resolve({ ok: false, error: "Local Agent request timed out", errorCode: "TIMEOUT", retryable: true });
-    }, 10_000);
+    }, timeoutMs);
     pendingRequests.set(requestId, { socket, resolve, timer });
     send(socket, envelope);
   });
@@ -186,7 +190,7 @@ function acceptHello(socket: WebSocket, payload: AgentHelloPayload): void {
     createEnvelope("agent.hello_ack", {
       accepted: true,
       server: "fake-central",
-      capabilities: ["agent.request", "agent.response", "agent.heartbeat"],
+      capabilities: ["agent.request", "agent.response", "agent.event", "job.cancel", "agent.heartbeat"],
       heartbeatIntervalMs: 10_000,
       protocolVersion: AGENTRPC_VERSION,
     }),

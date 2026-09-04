@@ -1,1 +1,1 @@
-{}
+{"main-capability":{"identifier":"main-capability","description":"Desktop events and application metadata; file operations use Local Agent IPC commands.","local":true,"windows":["main"],"permissions":["core:default",{"identifier":"opener:allow-open-url","allow":[{"url":"http://*"},{"url":"https://*"}]}]}}

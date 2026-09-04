@@ -31,6 +31,19 @@ export const AGENTRPC_MESSAGE_TYPES = [
 export type AgentRpcMessageType = (typeof AGENTRPC_MESSAGE_TYPES)[number];
 
 export type AgentRpcMethod =
+  | "file/write_text"
+  | "file/write_begin"
+  | "file/write_chunk"
+  | "file/write_commit"
+  | "file/write_abort"
+  | "file/copy"
+  | "file/publish"
+  | "file/output_paths"
+  | "file/stat"
+  | "file/read_text"
+  | "file/read_image"
+  | "file/read_chunk"
+  | "file/close_transfer"
   | "workspace/list"
   | "workspace/stat"
   | "read_file"
@@ -58,6 +71,7 @@ export interface AgentRpcEnvelope<TPayload = unknown> {
 export interface AgentHelloPayload {
   deviceId?: string;
   agent: {
+    deviceKey?: string;
     version: string;
     os: string;
     arch: string;
@@ -103,10 +117,15 @@ export interface AgentEventPayload {
   chunk?: string;
   progress?: number;
   done?: boolean;
+  /** Monotonic within one request, including the final done event. */
+  sequence: number;
+  /** The Agent stopped forwarding output after reaching its bounded stream budget. */
+  truncated?: boolean;
 }
 
 export type AgentRpcRequest = AgentRpcEnvelope<AgentRequestPayload> & { type: "agent.request" };
 export type AgentRpcResponse = AgentRpcEnvelope<AgentResponsePayload> & { type: "agent.response" };
+export type AgentRpcEvent = AgentRpcEnvelope<AgentEventPayload> & { type: "agent.event"; requestId: string };
 
 export type LegacyAgentRequest = {
   id: string;
@@ -185,6 +204,28 @@ export function validateEnvelope(value: unknown): ProtocolError | undefined {
   if (value.type === "agent.response" && typeof value.payload.ok !== "boolean") {
     return { code: "invalid_envelope", message: "agent.response payload requires boolean ok" };
   }
+  if (value.type === "agent.event") {
+    if (typeof value.requestId !== "string") return { code: "missing_field", message: "agent.event requires requestId" };
+    const payload = value.payload;
+    if (!(["stdout", "stderr", "progress"] as const).includes(payload.stream as "stdout" | "stderr" | "progress")) {
+      return { code: "invalid_envelope", message: "agent.event payload has an invalid stream" };
+    }
+    if (!Number.isSafeInteger(payload.sequence) || Number(payload.sequence) < 1) {
+      return { code: "invalid_envelope", message: "agent.event payload requires a positive integer sequence" };
+    }
+    if (payload.chunk !== undefined && typeof payload.chunk !== "string") {
+      return { code: "invalid_envelope", message: "agent.event chunk must be a string" };
+    }
+    if (payload.progress !== undefined && (typeof payload.progress !== "number" || payload.progress < 0 || payload.progress > 1)) {
+      return { code: "invalid_envelope", message: "agent.event progress must be between 0 and 1" };
+    }
+    if (payload.done !== undefined && typeof payload.done !== "boolean") {
+      return { code: "invalid_envelope", message: "agent.event done must be boolean" };
+    }
+    if (payload.truncated !== undefined && typeof payload.truncated !== "boolean") {
+      return { code: "invalid_envelope", message: "agent.event truncated must be boolean" };
+    }
+  }
   return undefined;
 }
 
@@ -220,6 +261,8 @@ export function legacyRequestFrom(value: unknown): LegacyAgentRequest | undefine
 }
 
 export const AGENTRPC_METHODS: readonly AgentRpcMethod[] = [
+  "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths",
+  "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer",
   "workspace/list",
   "workspace/stat",
   "read_file",
@@ -231,3 +274,46 @@ export const AGENTRPC_METHODS: readonly AgentRpcMethod[] = [
   "git/status",
   "git/diff",
 ];
+
+export interface AttachmentRef {
+  id: string;
+  source: "localFile" | "clipboardTemp";
+  path: string;
+  kind: "image" | "text" | "document" | "unknown";
+  name: string;
+  mimeType: string;
+  bytes: number;
+  version: string;
+  modifiedAt?: string;
+}
+export interface MessageAttachment extends AttachmentRef {
+  deviceId: string;
+  state: "referenced" | "read" | "failed" | "unavailable";
+}
+export interface AttachmentSubmission {
+  clientMessageId: string;
+  turnId?: string;
+  content: string;
+  attachments: MessageAttachment[];
+  status: "preparing" | "submitting" | "sent" | "failed" | "unknown";
+  error?: string;
+}
+
+/** Verified output on the originating client; never a path on the central worker. */
+export interface OutputArtifact {
+  id: string;
+  threadId: string;
+  turnId?: string;
+  deviceId: string;
+  deviceKey?: string;
+  source: "generatedImage" | "deviceFile";
+  name: string;
+  kind: "image" | "text" | "document" | "unknown";
+  status: "saving" | "saved" | "failed";
+  path?: string;
+  mimeType?: string;
+  bytes?: number;
+  version?: string;
+  sha256?: string;
+  error?: string;
+}

@@ -19,6 +19,10 @@ export class CodexiaGatewayAdapter {
     return this.transport.connect();
   }
 
+  public async modelList(params: Record<string, unknown> = {}): Promise<AppServerMessage> {
+    return this.transport.request("model/list", params);
+  }
+
   public async threadStart(params: Record<string, unknown>): Promise<AppServerMessage> {
     return this.transport.request("thread/start", params);
   }
@@ -28,7 +32,8 @@ export class CodexiaGatewayAdapter {
   }
 
   public async threadRead(threadId: string): Promise<AppServerMessage> {
-    return this.transport.request("thread/read", { threadId });
+    // App Server omits historical turns unless explicitly requested.
+    return this.transport.request("thread/read", { threadId, includeTurns: true });
   }
 
   public async threadList(params: Record<string, unknown> = {}): Promise<AppServerMessage> {

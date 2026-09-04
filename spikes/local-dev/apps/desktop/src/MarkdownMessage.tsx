@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
-import type { ElementType, ReactNode } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useState, type ElementType, type ReactNode } from "react";
 
 interface MarkdownMessageProps {
   content: string;
@@ -24,9 +26,7 @@ export function MarkdownMessage({ content }: MarkdownMessageProps) {
       {blocks.map((block, index) => {
         if (block.type === "code") {
           return (
-            <pre className="markdown-code-block" key={`code-${index}`}>
-              <code className={block.language ? `language-${block.language}` : undefined}>{block.text}</code>
-            </pre>
+            <CodeBlock key={`code-${index}`} language={block.language} text={block.text} />
           );
         }
         if (block.type === "heading") {
@@ -47,6 +47,37 @@ export function MarkdownMessage({ content }: MarkdownMessageProps) {
           </p>
         );
       })}
+    </div>
+  );
+}
+
+function CodeBlock({ language, text }: { language?: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="markdown-code-wrap">
+      <div className="markdown-code-toolbar"><span>{language || "代码"}</span><button type="button" onClick={() => void copy}>{copied ? "已复制" : "复制"}</button></div>
+      <pre className="markdown-code-block"><code className={language ? `language-${language}` : undefined}>{text}</code></pre>
     </div>
   );
 }
@@ -138,6 +169,47 @@ function renderInline(text: string): ReactNode[] {
 }
 
 function safeLink(label: string, href: string, key: number): ReactNode {
-  if (!/^(?:https?:|mailto:)/i.test(href)) return label;
-  return <a className="markdown-link" key={`link-${key}`} href={href} target="_blank" rel="noreferrer">{label}</a>;
+  const externalUrl = normalizeExternalUrl(href);
+  if (!externalUrl) return label;
+  return <ExternalLink href={externalUrl} key={`link-${key}`} label={label} />;
+}
+
+function normalizeExternalUrl(href: string): string | null {
+  try {
+    const url = new URL(href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function ExternalLink({ href, label }: { href: string; label: string }) {
+  const [error, setError] = useState("");
+  const desktopRuntime = isTauri();
+
+  const openExternal = async () => {
+    if (!desktopRuntime) return;
+    setError("");
+    try {
+      await openUrl(href);
+    } catch {
+      setError("无法使用系统浏览器打开");
+    }
+  };
+
+  return (
+    <span className="markdown-external-link">
+      <a
+        className="markdown-link"
+        href={href}
+        target={desktopRuntime ? undefined : "_blank"}
+        rel="noopener noreferrer"
+        onClick={desktopRuntime ? (event) => { event.preventDefault(); void openExternal(); } : undefined}
+        onAuxClick={desktopRuntime ? (event) => { event.preventDefault(); void openExternal(); } : undefined}
+      >
+        {label}
+      </a>
+      {error && <span className="markdown-link-error" role="alert">{error}</span>}
+    </span>
+  );
 }

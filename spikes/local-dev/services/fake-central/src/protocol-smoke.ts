@@ -15,6 +15,15 @@ assert.equal(validateEnvelope({ ...request, version: 2 })?.code, "unsupported_ve
 assert.equal(validateEnvelope({ ...request, requestId: undefined })?.code, "missing_field");
 assert.equal(validateEnvelope({ ...request, payload: { method: "not-allowed", params: {} } })?.code, "invalid_envelope");
 
+const streamEvent = createEnvelope(
+  "agent.event",
+  { stream: "stdout", sequence: 1, chunk: "building…\n", done: false },
+  { requestId: "req-1", taskId: "task-1" },
+);
+assert.equal(validateEnvelope(streamEvent), undefined);
+assert.equal(validateEnvelope({ ...streamEvent, requestId: undefined })?.code, "missing_field");
+assert.equal(validateEnvelope({ ...streamEvent, payload: { stream: "stdout", sequence: 0 } })?.code, "invalid_envelope");
+
 const bridge = new RemoteWorkspaceBridge(async (method, params) => ({
   ok: true,
   result: { method, params, fixture: true },

@@ -15,6 +15,7 @@ export interface WorkspacePanelProps {
   entries: WorkspaceEntry[];
   loading: boolean;
   output: string;
+  resultStatus?: "idle" | "loading" | "success" | "error";
   content?: string;
   contentPath?: string;
   command: "git" | "node";
@@ -36,6 +37,7 @@ export function WorkspacePanel({
   entries,
   loading,
   output,
+  resultStatus = "idle",
   content,
   contentPath,
   command,
@@ -87,7 +89,7 @@ export function WorkspacePanel({
           <select aria-label="允许的版本命令" value={command} onChange={(event) => onCommandChange(event.target.value as "git" | "node")} disabled={!available || loading}><option value="git">git --version</option><option value="node">node --version</option></select>
           <button className="button-secondary" disabled={!available || loading} onClick={onRunCommand}>运行命令</button>
         </div>
-        <pre className="compact-output">{output}</pre>
+        <div className={`workspace-result-card result-${resultStatus}`}><div className="workspace-result-heading"><span>{resultStatus === "loading" ? "执行中" : resultStatus === "success" ? "已完成" : resultStatus === "error" ? "执行失败" : "最近结果"}</span>{resultStatus === "loading" && <span className="spinner" />}</div><pre className="compact-output">{output}</pre></div>
       </div>
       {contentPath && <div className="workspace-file-view"><div className="workspace-file-heading"><span><i>FILE</i>{contentPath}</span><button className="button-quiet" onClick={onCloseContent}>关闭</button></div><pre>{content}</pre></div>}
     </section>

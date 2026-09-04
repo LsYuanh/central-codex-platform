@@ -34,7 +34,7 @@
             "additionalProperties": false,
             "required": ["method", "params"],
             "properties": {
-              "method": { "type": "string", "enum": ["workspace/list", "workspace/stat", "read_file", "exec", "fs/list_dir", "fs/read_file", "process/exec", "process/cancel", "git/status", "git/diff"] },
+              "method": { "type": "string", "enum": ["file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths", "workspace/list", "workspace/stat", "read_file", "exec", "fs/list_dir", "fs/read_file", "process/exec", "process/cancel", "git/status", "git/diff"] },
               "params": { "type": "object" },
               "operationId": { "type": "string", "minLength": 1 },
               "idempotencyKey": { "type": "string", "minLength": 1 }
@@ -59,6 +59,27 @@
               "errorCode": { "type": "string" },
               "retryable": { "type": "boolean" },
               "id": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "agent.event" } } },
+      "then": {
+        "required": ["requestId"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stream", "sequence"],
+            "properties": {
+              "stream": { "enum": ["stdout", "stderr", "progress"] },
+              "chunk": { "type": "string" },
+              "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+              "done": { "type": "boolean" },
+              "sequence": { "type": "integer", "minimum": 1 },
+              "truncated": { "type": "boolean" }
             }
           }
         }

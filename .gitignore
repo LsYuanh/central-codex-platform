@@ -25,6 +25,7 @@ dist/
 
 # Tauri and installers
 src-tauri/target/
+/spikes/local-dev/apps/desktop/src-tauri/binaries/
 artifacts/
 release/
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 import type { AppServerClientInfo, AppServerMessage, JsonRpcId } from "./app-server-client";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
 type GatewayEnvelope = {
   type?: string;
@@ -15,6 +16,7 @@ type GatewayEnvelope = {
   sequence?: number;
   agent?: string;
   agentInfo?: unknown;
+  deviceId?: string;
   lastHeartbeatAt?: string;
 };
 
@@ -84,7 +86,14 @@ export class PlatformGatewayClient implements RpcClient {
   }
 
   private async connectInternal(): Promise<AppServerMessage> {
-    const socket = new WebSocket(this.url);
+    const target = new URL(this.url);
+    if (isTauri()) {
+      const identity = await invoke<{deviceId:string}>("attachment_request", {method:"attachment/identity",params:{}});
+      if (!target.searchParams.get("deviceId") || target.searchParams.get("deviceId") === "desktop-device") target.searchParams.set("deviceId",identity.deviceId);
+      if (target.searchParams.get("deviceId") !== identity.deviceId) throw new Error("中央连接设备 ID 与本机 Local Agent 不一致，请检查连接设置");
+    }
+    if (this.closedByUser) throw new Error("中央连接已取消");
+    const socket = new WebSocket(target);
     this.socket = socket;
     // Install all handlers before awaiting `open`: gateway.ready and device
     // status may be sent immediately after the WebSocket handshake.
@@ -144,7 +153,7 @@ export class PlatformGatewayClient implements RpcClient {
       const timer = window.setTimeout(() => {
         this.pending.delete(requestId);
         reject(new Error(`${operation} 请求超时`));
-      }, 60_000);
+      }, operation === "conversation.turn.create" ? 110_000 : 60_000);
       this.pending.set(requestId, { resolve, reject, timer });
       socket.send(JSON.stringify({ type: "request", requestId, operation, payload: params }));
     });
@@ -168,8 +177,8 @@ export class PlatformGatewayClient implements RpcClient {
   }
 
   private handleClose(socket: WebSocket): void {
-    this.rejectPending(new Error("中央测试网关连接已关闭"));
     if (this.socket !== socket) return;
+    this.rejectPending(new Error("中央测试网关连接已关闭"));
     this.socket = undefined;
     this.emit({ method: "gateway/disconnected", params: { url: this.url } });
     if (this.options.autoReconnect !== false && this.everConnected && !this.closedByUser) {
@@ -218,21 +227,21 @@ export class PlatformGatewayClient implements RpcClient {
       return;
     }
     if (message.type === "gateway.ready") {
-      this.emit({ method: "device/status", params: { agent: message.agent ?? "offline" } });
+      this.lastSequence = 0;
+      this.emit({ method: "device/status", params: { agent: message.agent ?? "offline", deviceId:message.deviceId } });
       return;
     }
     if (message.type === "event") {
       if (this.acceptSequence(message.sequence)) this.emit(normalizeEvent(message));
     }
-    if (message.type === "device.status") this.emit({ method: "device/status", params: { agent: message.agent, agentInfo: message.agentInfo, lastHeartbeatAt: message.lastHeartbeatAt } });
+    if (message.type === "device.status") this.emit({ method: "device/status", params: { agent: message.agent, deviceId:message.deviceId, agentInfo: message.agentInfo, lastHeartbeatAt: message.lastHeartbeatAt } });
   }
 
   private acceptSequence(sequence: number | undefined): boolean {
     if (sequence === undefined) return true;
     if (sequence <= this.lastSequence) return false;
-    if (this.lastSequence > 0 && sequence > this.lastSequence + 1) {
-      this.emit({ method: "gateway/sequenceGap", params: { expected: this.lastSequence + 1, received: sequence } });
-    }
+    // The gateway sequence is global, while events are filtered per owner.
+    // Gaps caused by other clients are expected and are not transport failures.
     this.lastSequence = sequence;
     return true;
   }
@@ -253,6 +262,7 @@ export class PlatformGatewayClient implements RpcClient {
 function operationForMethod(method: string): string | undefined {
   return {
     initialize: "session.initialize",
+    "model/list": "model.list",
     "thread/start": "conversation.create",
     "thread/resume": "conversation.resume",
     "thread/read": "conversation.read",
@@ -262,6 +272,9 @@ function operationForMethod(method: string): string | undefined {
     "thread/name/set": "conversation.rename",
     "turn/start": "conversation.turn.create",
     "turn/interrupt": "conversation.turn.cancel",
+    "message/status": "conversation.message.status",
+    "message/cancel": "conversation.message.cancel",
+    "output/retry": "conversation.output.retry",
     "thread/list": "conversation.list",
   }[method];
 }

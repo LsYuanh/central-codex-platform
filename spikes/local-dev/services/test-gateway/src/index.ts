@@ -11,10 +11,14 @@ import {
   AGENTRPC_VERSION,
   createEnvelope,
   parseEnvelope,
+  type AgentEventPayload,
   type AgentHelloPayload,
   type AgentRpcMethod,
   type AgentRpcResponsePayload,
+  type AttachmentSubmission,
 } from "@central-codex-spike/agentrpc-types";
+import { parseAttachments, prepareAttachments } from "./attachments.js";
+import { OutputBroker } from "./outputs.js";
 
 type JsonObject = Record<string, unknown>;
 type JsonRpcMessage = JsonObject & { id?: number | string; method?: string; params?: unknown; result?: unknown; error?: unknown };
@@ -24,6 +28,7 @@ type GatewayRequest = {
   requestId: string;
   operation:
     | "session.initialize"
+    | "model.list"
     | "conversation.create"
     | "conversation.resume"
     | "conversation.read"
@@ -32,11 +37,16 @@ type GatewayRequest = {
     | "conversation.delete"
     | "conversation.rename"
     | "conversation.turn.create"
+    | "conversation.message.status"
+    | "conversation.message.cancel"
     | "conversation.turn.cancel"
     | "conversation.list"
+    | "conversation.output.retry"
     | "device.workspace.list"
     | "device.read_file"
     | "device.exec"
+    | "device.file.stat"
+    | "device.file.read_text"
     | "test.approval.inject";
   payload?: JsonObject;
 };
@@ -69,6 +79,24 @@ type PendingAgentRequest = {
   resolve: (payload: AgentRpcResponsePayload) => void;
   timer: NodeJS.Timeout;
   deviceId: string;
+  lastEventSequence: number;
+  onEvent?: (event: AgentEventPayload) => void;
+};
+
+type AgentRequestOptions = {
+  taskId?: string;
+  traceId?: string;
+  timeoutMs?: number;
+  onRegistered?: (requestId: string) => void;
+  onEvent?: (event: AgentEventPayload) => void;
+};
+
+type ActiveDeviceTool = {
+  agentRequestId: string;
+  clientId: string;
+  deviceId: string;
+  threadId?: string;
+  turnId?: string;
 };
 
 type PendingSyntheticApproval = {
@@ -101,11 +129,33 @@ const listenHost = process.env.TEST_GATEWAY_HOST ?? "127.0.0.1";
 const listenPort = Number(process.env.TEST_GATEWAY_PORT ?? 4510);
 const codexCommand = process.env.CODEX_BIN ?? "codex";
 const stateFile = resolve(process.env.TEST_GATEWAY_STATE_FILE ?? "data/test-gateway-state.json");
+const DEFAULT_COMMAND_TIMEOUT_MS = 30 * 60 * 1000;
+const MAX_COMMAND_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 // The central worker is for reasoning only. System operations are exposed as
 // dynamic tools so app-server asks the connected desktop client to execute
 // them through its Local Agent instead of touching the Mac worker filesystem.
 const CLIENT_DEVICE_TOOLS = [
+  {
+    type:"function", name:"device_write_file",
+    description:"Write UTF-8 text to the client and return verified saved-file metadata. path is a client absolute path (or workspace-relative); omit path and set name to save in client Downloads/Codexia. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Never use a central path.",
+    inputSchema:{type:"object",properties:{path:{type:"string"},name:{type:"string"},content:{type:"string"},overwrite:{type:"boolean"},expectedVersion:{type:"string"}},required:["content"]},
+  },
+  {
+    type:"function",name:"device_publish_file",description:"Verify a file actually exists on the client and show it in chat as an output image/file card. Call after using device_exec to create a file. path must be a client path; maximum 20 MiB.",
+    inputSchema:{type:"object",properties:{path:{type:"string"}},required:["path"]},
+  },
+  {
+    type:"function",name:"device_copy_file",description:"Copy an existing client file to a client destination and show the verified output in chat. Omit path and provide name for Downloads/Codexia. Existing destinations require overwrite=true and expectedVersion.",
+    inputSchema:{type:"object",properties:{sourcePath:{type:"string"},path:{type:"string"},name:{type:"string"},overwrite:{type:"boolean"},expectedVersion:{type:"string"}},required:["sourcePath"]},
+  },
+  {type:"function",name:"device_output_paths",description:"Return the actual client Downloads/Codexia and workspace directories. Do not guess home or Downloads paths.",inputSchema:{type:"object",properties:{}}},
+  {type:"function",name:"device_list_outputs",description:"Wait for generated images to finish saving to the client and list verified output paths and any save errors for this thread. Call before claiming a generated image was saved.",inputSchema:{type:"object",properties:{}}},
+  {
+    type: "function", name: "device_read_text",
+    description: "Read UTF-8 text/code from the client's absolute attachment path or workspace-relative path, in 64 KiB pages. Pass version to detect changes; nextOffset and truncated describe remaining data. PDF/Office/binary parsing is not available.",
+    inputSchema: { type: "object", properties: { path: { type: "string" }, offset: { type: "integer", minimum: 0 }, version: { type: "string" } }, required: ["path"] },
+  },
   {
     type: "function",
     name: "device_workspace_list",
@@ -121,13 +171,14 @@ const CLIENT_DEVICE_TOOLS = [
   {
     type: "function",
     name: "device_exec",
-    description: "Run a command on the user's local device. For shell operations, invoke PowerShell explicitly with powershell -NoProfile -Command. The command executes only on the client.",
+    description: "Run a command on the user's local device with live stdout/stderr. Use PowerShell explicitly for shell operations. cwd may be a client absolute path in trusted LAN mode. timeoutMs defaults to 30 minutes and is capped at 2 hours. After creating output files use device_publish_file to verify/show them. The command executes only on the client.",
     inputSchema: {
       type: "object",
       properties: {
         program: { type: "string" },
         args: { type: "array", items: { type: "string" } },
         cwd: { type: "string" },
+        timeoutMs: { type: "integer", minimum: 1000, maximum: MAX_COMMAND_TIMEOUT_MS },
       },
       required: ["program"],
     },
@@ -140,6 +191,9 @@ const CLIENT_DEVICE_INSTRUCTIONS = [
   "Never use built-in shell, filesystem, process, git, or other host-system tools for user-device work.",
   "For files, Git, commands, disk, or other system information, use the provided device_* dynamic tools; they execute on the connected user's device through Local Agent.",
   "If a required device_* tool is unavailable or rejects an operation, explain that limitation instead of inspecting the central worker.",
+  "Generated imageGeneration outputs are automatically saved by the platform to the CLIENT Downloads/Codexia folder and displayed as image cards. The savedPath in a native image-generation tool result is CENTRAL ONLY; never pass that path to a client tool. Use device_list_outputs to obtain the real client file path and status before claiming a save succeeded.",
+  "Use device_write_file for text, device_copy_file to save an existing output to a requested client path, and device_publish_file after creating files with device_exec. Only claim a file exists or was modified after a successful tool result. Prefer a new file when editing images unless the user explicitly requests overwriting.",
+  "Compatibility for existing threads without the new tool names: device_exec accepts the reserved broker operation program='codexia.files', args=[operation, JSON.stringify(parameters)]. Supported operations: paths, list_outputs, write_text, publish, copy. This is a broker RPC routed to Local Agent, not a shell executable. Use it when new device tools are absent.",
 ].join(" ");
 
 const BLOCKED_CENTRAL_OPERATION_REQUESTS = new Set([
@@ -259,6 +313,7 @@ const bridge = new CodexStdioBridge();
 const clients = new Map<string, ConnectedClient>();
 const pendingServerRequests = new Map<string, PendingServerRequest>();
 const pendingAgentRequests = new Map<string, PendingAgentRequest>();
+const activeDeviceTools = new Map<string, ActiveDeviceTool>();
 const pendingSyntheticApprovals = new Map<string, PendingSyntheticApproval>();
 // Durable-for-process ownership fence: reconnects using the same userId retain
 // their Thread ownership, while a different user cannot enumerate or mutate it.
@@ -270,6 +325,7 @@ const auditEvents: AuditEvent[] = [];
 let lastAppClientId: string | undefined;
 let sequence = 0;
 const controlsEnabled = process.env.TEST_GATEWAY_ENABLE_CONTROLS === "1";
+let activeAttachmentSubmissions = 0;
 
 type GatewayState = {
   version: 1;
@@ -288,6 +344,13 @@ function loadState(): void {
         owned.add(entry.id);
         threadOwnerById.set(entry.id, userId);
         threadSummaryById.set(entry.id, entry.summary);
+        if(Array.isArray(entry.summary.outputs)) for(const output of entry.summary.outputs) {
+          if(isRecord(output)&&output.status==="saving"){output.status="failed";output.error="保存过程中网关重启，请重试并核对本机文件";}
+        }
+        for (const submission of submissionsFor(entry.id)) {
+          if (submission.status === "preparing") { submission.status = "failed"; submission.error = "网关重启，图片尚未提交，可重试"; }
+          if (submission.status === "submitting") submission.status = "unknown";
+        }
       }
       ownedThreadIdsByUser.set(userId, owned);
     }
@@ -312,12 +375,29 @@ function persistState(): void {
 
 loadState();
 
+const outputs = new OutputBroker({
+  summary:threadId=>threadSummaryById.get(threadId),
+  call:sendAgentRequest,
+  deviceKey:deviceId=>agents.get(deviceId)?.hello?.agent.deviceKey,
+  changed:(threadId,output)=>{
+    persistState();
+    for(const client of clients.values()) if(threadOwnerById.get(threadId)===client.userId) send(client.socket,{type:"event",eventType:"output.state",name:"output/state",data:{threadId,output},sequence:++sequence});
+  },
+});
+
 function audit(action: string, status: AuditEvent["status"], fields: Omit<AuditEvent, "id" | "at" | "action" | "status"> = {}): void {
   auditEvents.push({ id: randomUUID(), at: new Date().toISOString(), action, status, ...fields });
   if (auditEvents.length > 1000) auditEvents.splice(0, auditEvents.length - 1000);
 }
 
 bridge.subscribe((message) => {
+  const notification = isRecord(message.params) ? message.params : {};
+  if (typeof notification.threadId === "string" && isRecord(notification.item) && notification.item.type === "imageGeneration") {
+    void outputs.image(notification.threadId, typeof notification.turnId === "string" ? notification.turnId : undefined, notification.item);
+  }
+  if (message.method === "turn/completed" && typeof notification.threadId === "string" && isRecord(notification.turn)) {
+    void outputs.collect(notification.threadId,{turns:[notification.turn]});
+  }
   if (message.id !== undefined && message.method && BLOCKED_CENTRAL_OPERATION_REQUESTS.has(message.method)) {
     // A central worker must never receive permission to mutate or inspect the
     // user's device. The model should use a device_* dynamic tool instead.
@@ -332,8 +412,8 @@ bridge.subscribe((message) => {
     const params = isRecord(message.params) ? message.params : {};
     const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
     const ownerUserId = threadId ? threadOwnerById.get(threadId) : undefined;
-    const client = [...clients.values()].find((candidate) => ownerUserId && candidate.userId === ownerUserId)
-      ?? (lastAppClientId ? clients.get(lastAppClientId) : undefined);
+    const boundDevice = threadId ? threadSummaryById.get(threadId)?.deviceId : undefined;
+    const client = [...clients.values()].find((candidate) => ownerUserId && candidate.userId === ownerUserId && (!boundDevice || candidate.deviceId === boundDevice));
     if (!client) {
       bridge.respond(message.id, { success: false, contentItems: [{ type: "inputText", text: "No connected desktop client is available for this device operation." }] });
       return;
@@ -345,27 +425,118 @@ bridge.subscribe((message) => {
     const toolMethods: Record<string, AgentRpcMethod> = {
       device_workspace_list: "workspace/list",
       device_read_file: "read_file",
+      device_read_text: "file/read_text",
       device_exec: "exec",
+      device_write_file:"file/write_text",
+      device_publish_file:"file/publish",
+      device_copy_file:"file/copy",
+      device_output_paths:"file/output_paths",
     };
-    const agentMethod = toolMethods[toolName];
-    const toolArgs = isRecord(params.arguments) ? params.arguments : {};
+    let agentMethod = toolMethods[toolName];
+    let toolArgs = isRecord(params.arguments) ? params.arguments : {};
+    let listOutputs = toolName === "device_list_outputs";
+    let displayToolName = toolName;
+    if (toolName === "device_exec" && toolArgs.program === "codexia.files") {
+      try {
+        const args=toolArgs.args;
+        if(!Array.isArray(args)||typeof args[0]!=="string")throw new Error("Invalid file operation");
+        const method=({paths:"file/output_paths",write_text:"file/write_text",publish:"file/publish",copy:"file/copy"} as Record<string,AgentRpcMethod>)[args[0]];
+        listOutputs=args[0]==="list_outputs";
+        const parsed=JSON.parse(typeof args[1]==="string"?args[1]:"{}");
+        if(!isRecord(parsed)||(!method&&!listOutputs))throw new Error("Unsupported file operation");
+        displayToolName=({paths:"device_output_paths",list_outputs:"device_list_outputs",write_text:"device_write_file",publish:"device_publish_file",copy:"device_copy_file"} as Record<string,string>)[args[0]]??toolName;
+        agentMethod=method;toolArgs=parsed;
+      }catch(error){bridge.respond(message.id,{success:false,contentItems:[{type:"inputText",text:String(error)}]});return;}
+    }
     const requestId = `${client.id}:${String(message.id)}`;
+    const turnId = typeof params.turnId === "string" ? params.turnId : undefined;
+    const startedAt = Date.now();
+    const eventBase = {
+      threadId,
+      turnId,
+      requestId,
+      tool: displayToolName,
+      ...(agentMethod === "exec" && typeof toolArgs.program === "string" ? { program: toolArgs.program } : {}),
+      ...(typeof toolArgs.cwd === "string" ? { cwd: toolArgs.cwd } : {}),
+    };
+    const emitTool = (phase: "started" | "output" | "completed", data: JsonObject = {}) => {
+      for (const target of clients.values()) {
+        if (target.userId !== client.userId || target.deviceId !== client.deviceId) continue;
+        send(target.socket, {
+          type: "event",
+          eventType: `device.tool.${phase}`,
+          name: `device/tool/${phase}`,
+          data: { ...eventBase, ...data },
+          sequence: ++sequence,
+        });
+      }
+    };
     audit("device.tool.request", "requested", { userId: client.userId, deviceId: client.deviceId, requestId });
-    send(client.socket, { type: "event", eventType: "device.tool.requested", data: { tool: toolName, requestId }, sequence: ++sequence });
+    emitTool("started", {
+      startedAt: new Date(startedAt).toISOString(),
+      streaming: agentMethod === "exec" && agents.get(client.deviceId)?.hello?.agent.capabilities.includes("exec-stream/v1") === true,
+    });
     void (async () => {
-      if (!agentMethod) {
+      if (!agentMethod && !listOutputs) {
         bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text: `Unsupported client device tool: ${toolName}` }] });
         audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "UNSUPPORTED_DEVICE_TOOL" });
+        emitTool("completed", { status: "failed", durationMs: Date.now() - startedAt, error: `Unsupported client device tool: ${toolName}` });
         return;
       }
+      let agentRequestId: string | undefined;
       try {
-        const result = await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(toolArgs));
+        if (threadId && threadSummaryById.get(threadId)?.deviceKey && threadSummaryById.get(threadId)?.deviceKey !== agents.get(client.deviceId)?.hello?.agent.deviceKey) throw new Error("来源设备身份不一致，拒绝读取同名路径");
+        if(listOutputs){
+          const result=await outputs.settled(threadId!);
+          bridge.respond(message.id!,{success:true,contentItems:[{type:"inputText",text:JSON.stringify({outputs:result})}]});
+          emitTool("completed", {status:"succeeded",durationMs:Date.now()-startedAt});return;
+        }
+        if(!agentMethod)throw new Error("Unsupported device operation");
+        const result = await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(toolArgs), {
+          taskId: turnId,
+          traceId: typeof params.callId === "string" ? params.callId : undefined,
+          onRegistered: (id) => {
+            agentRequestId = id;
+            activeDeviceTools.set(id, {agentRequestId:id,clientId:client.id,deviceId:client.deviceId,threadId,turnId});
+          },
+          onEvent: (event) => emitTool("output", {
+            stream:event.stream,
+            eventSequence:event.sequence,
+            ...(event.chunk !== undefined ? {chunk:event.chunk} : {}),
+            ...(event.progress !== undefined ? {progress:event.progress} : {}),
+            ...(event.done !== undefined ? {done:event.done} : {}),
+            ...(event.truncated !== undefined ? {truncated:event.truncated} : {}),
+          }),
+        }).finally(() => { if (agentRequestId) activeDeviceTools.delete(agentRequestId); });
+        if(threadId && result.ok && isRecord(result.result) && ["file/write_text","file/publish","file/copy"].includes(agentMethod)) {
+          const output=outputs.recordFile(threadId,typeof params.turnId==="string"?params.turnId:undefined,typeof params.callId==="string"?params.callId:String(message.id),client.deviceId,result.result);
+          Object.assign(result,{output});
+        }
+        if (threadId && ["file/read_text", "read_file"].includes(agentMethod)) {
+          for (const submission of submissionsFor(threadId)) {
+            for (const attachment of submission.attachments) {
+              if (attachment.path === toolArgs.path && attachment.deviceId === client.deviceId) attachment.state = result.ok ? "read" : "failed";
+            }
+          }
+          persistState();
+          send(client.socket, {type:"event", eventType:"attachment.state", name:"attachment/state", data:{threadId, submissions:submissionsFor(threadId)}, sequence:++sequence});
+        }
         bridge.respond(message.id!, { success: result.ok, contentItems: [{ type: "inputText", text: JSON.stringify(result) }] });
         audit("device.tool.response", result.ok ? "succeeded" : "failed", { userId: client.userId, deviceId: client.deviceId, requestId, ...(result.ok ? {} : { errorCode: result.errorCode ?? "AGENT_ERROR" }) });
+        const resultRecord = isRecord(result.result) ? result.result : {};
+        emitTool("completed", {
+          status: result.ok ? "succeeded" : /CANCELLED/.test(result.error ?? "") ? "cancelled" : "failed",
+          durationMs: Date.now() - startedAt,
+          ...(typeof resultRecord.exitCode === "number" ? {exitCode:resultRecord.exitCode} : {}),
+          ...(resultRecord.truncated === true ? {truncated:true} : {}),
+          ...(!result.ok && result.error ? {error:result.error} : {}),
+        });
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
+        if (agentRequestId) activeDeviceTools.delete(agentRequestId);
         bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text }] });
         audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "DEVICE_TOOL_ERROR" });
+        emitTool("completed", { status:/CANCELLED/.test(text)?"cancelled":"failed", durationMs:Date.now()-startedAt, error:text });
       }
     })();
     return;
@@ -430,7 +601,7 @@ const httpServer = createServer((request, response) => {
   response.end();
 });
 
-const websocketServer = new WebSocketServer({ noServer: true });
+const websocketServer = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 httpServer.on("upgrade", (request, socket, head) => {
   const path = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`).pathname;
   if (path !== "/ws" && path !== "/ws/agent") {
@@ -565,6 +736,27 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
 
   const method = operationMethod(message.operation);
   const agentMethod = deviceOperationMethod(message.operation);
+  if(message.operation==="conversation.output.retry") {
+    try {
+      const payload=message.payload??{};assertOwnedThread(client,payload);
+      const tid=String(payload.threadId);
+      if(threadSummaryById.get(tid)?.deviceId!==client.deviceId)throw new Error("请在来源设备重新保存");
+      const history=await bridge.request("thread/read",{threadId:tid,includeTurns:true});
+      const output=await outputs.retry(tid,String(payload.outputId),history);
+      send(client.socket,{type:"response",requestId:message.requestId,ok:true,data:{output}});
+    }catch(error){send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:String(error)});}
+    return;
+  }
+  if (["conversation.message.status", "conversation.message.cancel"].includes(message.operation)) {
+    try {
+      const payload = message.payload ?? {};
+      assertOwnedThread(client, payload);
+      const entry = submissionsFor(String(payload.threadId)).find((s) => s.clientMessageId === payload.clientMessageId);
+      if (message.operation === "conversation.message.cancel" && entry?.status === "preparing") { entry.status = "failed"; entry.error = "用户取消附件准备"; persistState(); }
+      send(client.socket, {type:"response", requestId:message.requestId, ok:true, data:entry ?? {status:"absent"}});
+    } catch(error) { send(client.socket, {type:"response", requestId:message.requestId, ok:false, error:String(error)}); }
+    return;
+  }
   if (!method && !agentMethod) {
     audit(message.operation, "failed", { userId: client.userId, deviceId: client.deviceId, requestId: message.requestId, errorCode: "UNSUPPORTED_OPERATION" });
     send(client.socket, { type: "response", requestId: message.requestId, ok: false, error: "unsupported operation" });
@@ -576,6 +768,14 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
     if (["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.cancel"].includes(message.operation)) {
       assertOwnedThread(client, message.payload ?? {});
     }
+    if (message.operation === "conversation.turn.cancel" && typeof message.payload?.threadId === "string") {
+      cancelDeviceTools(message.payload.threadId, typeof message.payload.turnId === "string" ? message.payload.turnId : undefined);
+    }
+    if (message.operation === "conversation.turn.create" && (message.payload?.clientMessageId !== undefined || message.payload?.attachments !== undefined)) {
+      const result = await submitAttachmentTurn(client, message.payload ?? {});
+      send(client.socket, {type:"response", requestId:message.requestId, ok:true, data:result});
+      return;
+    }
     const appPayload = message.operation === "conversation.create"
       ? {
           ...(message.payload ?? {}),
@@ -583,6 +783,8 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
           developerInstructions: CLIENT_DEVICE_INSTRUCTIONS,
           dynamicTools: CLIENT_DEVICE_TOOLS,
         }
+      : message.operation === "conversation.resume"
+      ? {...(message.payload??{}), developerInstructions:CLIENT_DEVICE_INSTRUCTIONS}
       : message.operation === "session.initialize"
         ? {
             ...(message.payload ?? {}),
@@ -593,13 +795,35 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
             },
           }
         : message.payload ?? {};
-    const result = agentMethod
-      ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}))
-      : await bridge.request(method as string, appPayload);
+    let metadataOnlyMutation = false;
+    let result: unknown;
+    try {
+      result = agentMethod
+        ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}))
+        : await bridge.request(method as string, appPayload);
+    } catch (error) {
+      // Older/archived sessions may no longer have a live rollout in the
+      // central App Server. Archive state is platform metadata, so an absent
+      // rollout must not make the user's archive/delete action fail.
+      if (["conversation.archive", "conversation.unarchive", "conversation.delete"].includes(message.operation) && isMissingRolloutError(error)) {
+        metadataOnlyMutation = true;
+        result = { thread: { id: message.payload?.threadId } };
+      } else if (message.operation === "conversation.read" && /list_turns is not supported yet/.test(String(error)) && !submissionsFor(String(message.payload?.threadId)).some(s=>s.status==="sent")) {
+        result = {thread:{id:message.payload?.threadId,turns:[]}};
+      } else {
+        throw error;
+      }
+    }
+    if (["conversation.read","conversation.resume"].includes(message.operation)) await outputs.collect(String(message.payload?.threadId),result);
     if (message.operation === "conversation.list") rememberListedThreads(client.userId, result);
-    const visibleResult = ["conversation.create", "conversation.resume", "conversation.read", "conversation.list"].includes(message.operation)
+    let visibleResult = ["conversation.create", "conversation.resume", "conversation.read", "conversation.list"].includes(message.operation)
       ? sanitizeThreadMetadata(message.operation === "conversation.list"
-        ? filterOwnedThreads(result, ownedThreadIdsByUser.get(client.userId) ?? new Set(), client.userId)
+        ? filterOwnedThreads(
+            result,
+            ownedThreadIdsByUser.get(client.userId) ?? new Set(),
+            client.userId,
+            message.payload?.archived === true,
+          )
         : result)
       : result;
     if (message.operation === "conversation.create") {
@@ -608,9 +832,14 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
         ownedThreadIdsByUser.get(client.userId)?.add(createdId);
         threadOwnerById.set(createdId, client.userId);
         const createdRecord = isRecord(result) && isRecord(result.thread) ? sanitizeThreadMetadata(result.thread) as JsonObject : undefined;
-        threadSummaryById.set(createdId, createdRecord ?? { id: createdId });
+        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId });
         persistState();
       }
+    }
+    if (["conversation.read", "conversation.resume"].includes(message.operation) && isRecord(visibleResult)) {
+      const tid = String(message.payload?.threadId);
+      reconcileSubmissions(tid, visibleResult);
+      visibleResult = { ...visibleResult, attachmentSubmissions: submissionsFor(tid), outputs:outputs.list(tid) };
     }
     if (["conversation.rename", "conversation.archive", "conversation.unarchive"].includes(message.operation)) {
       const changedId = typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined;
@@ -641,11 +870,13 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
       }
     }
     const operationFailed = agentMethod && isRecord(result) && result.ok === false;
+    const operationErrorCode = isRecord(result) && typeof result.errorCode === "string" ? result.errorCode : undefined;
     audit(message.operation, operationFailed ? "failed" : "succeeded", {
       userId: client.userId,
       deviceId: client.deviceId,
       requestId: message.requestId,
-      ...(operationFailed && typeof result.errorCode === "string" ? { errorCode: result.errorCode } : {}),
+      ...(metadataOnlyMutation ? { errorCode: "APP_SERVER_ROLLOUT_MISSING_METADATA_ONLY" } : {}),
+      ...(operationFailed && operationErrorCode ? { errorCode: operationErrorCode } : {}),
     });
     send(client.socket, { type: "response", requestId: message.requestId, ok: true, data: visibleResult });
   } catch (error) {
@@ -657,6 +888,7 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
 function operationMethod(operation: GatewayRequest["operation"]): string | undefined {
   const methods: Partial<Record<GatewayRequest["operation"], string>> = {
     "session.initialize": "initialize",
+    "model.list": "model/list",
     "conversation.create": "thread/start",
     "conversation.resume": "thread/resume",
     "conversation.read": "thread/read",
@@ -671,11 +903,100 @@ function operationMethod(operation: GatewayRequest["operation"]): string | undef
   return methods[operation];
 }
 
+function submissionsFor(threadId: string): AttachmentSubmission[] {
+  const summary = threadSummaryById.get(threadId);
+  if (!summary) return [];
+  if (!Array.isArray(summary.attachmentSubmissions)) summary.attachmentSubmissions = [];
+  return summary.attachmentSubmissions as AttachmentSubmission[];
+}
+
+function reconcileSubmissions(threadId: string, result: JsonObject): void {
+  const thread = isRecord(result.thread) ? result.thread : result;
+  if (!Array.isArray(thread.turns)) return;
+  for (const turn of thread.turns) {
+    if (!isRecord(turn) || typeof turn.id !== "string" || !Array.isArray(turn.items)) continue;
+    for (const entry of submissionsFor(threadId)) {
+      if (entry.status === "sent") continue;
+      if (turn.items.some((item) => JSON.stringify(item).includes(`[platform-message:${entry.clientMessageId}]`))) {
+        entry.turnId = turn.id; entry.status = "sent"; delete entry.error;
+      }
+    }
+  }
+  persistState();
+}
+
+async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject): Promise<unknown> {
+  const threadId = String(payload.threadId);
+  const summary = threadSummaryById.get(threadId)!;
+  if (summary.deviceId && summary.deviceId !== client.deviceId) throw new Error("此 Thread 绑定另一台设备，请连接原设备或新建对话");
+  const id = payload.clientMessageId;
+  if (typeof id !== "string" || !/^[a-zA-Z0-9-]{8,128}$/.test(id)) throw new Error("clientMessageId 无效");
+  const entries = submissionsFor(threadId);
+  const existing = entries.find((entry) => entry.clientMessageId === id);
+  if (existing?.status === "sent") return {turn:{id:existing.turnId}, submission:existing};
+  if (existing && existing.status !== "failed") throw new Error("提交结果尚未确认，请先核对历史，勿重复发送");
+  if (entries.some((entry) => ["preparing", "submitting", "unknown"].includes(entry.status))) throw new Error("该 Thread 仍有提交待确认，请先核对历史");
+  const refs = parseAttachments(payload.attachments);
+  if (!Array.isArray(payload.input) || payload.input.some((v) => !isRecord(v) || v.type !== "text" || typeof v.text !== "string")) throw new Error("平台仅接受正文和附件引用");
+  const content = payload.input.map((v: {text:string}) => v.text).join("");
+  if (content.length > 128_000) throw new Error("正文过长");
+  if (refs.length && !agents.get(client.deviceId)?.hello?.agent.capabilities.includes("attachments/v1")) throw new Error("Local Agent 离线或需要升级附件能力");
+  const deviceKey = agents.get(client.deviceId)?.hello?.agent.deviceKey;
+  if (payload.deviceKey !== undefined && payload.deviceKey !== deviceKey) throw new Error("连接的是另一台同名设备，拒绝发送本机附件");
+  if (summary.deviceKey && summary.deviceKey !== deviceKey) throw new Error("Thread 来源设备身份不一致");
+  if (deviceKey) summary.deviceKey = deviceKey;
+  if (activeAttachmentSubmissions >= 4) throw new Error("图片提交繁忙，请稍后重试");
+  activeAttachmentSubmissions += 1;
+  let released = false;
+  const release = () => { if (!released) { released = true; activeAttachmentSubmissions -= 1; } };
+  summary.deviceId = client.deviceId;
+  const entry: AttachmentSubmission = {clientMessageId:id, content, attachments:[], status:"preparing"};
+  if (existing) entries.splice(entries.indexOf(existing),1,entry); else entries.push(entry);
+  persistState();
+  const progress = (stage: string) => send(client.socket, {type:"event", eventType:"attachment.progress", name:"attachment/progress", data:{threadId, clientMessageId:id, stage}, sequence:++sequence});
+  try {
+    const prepared = await prepareAttachments(refs, client.deviceId, (method, params) => sendAgentRequest(client.deviceId, method, params), () => client.socket.readyState === WebSocket.OPEN && entry.status === "preparing" && agents.get(client.deviceId)?.hello?.agent.deviceKey === deviceKey, progress);
+    entry.attachments = prepared.attachments;
+    entry.status = "submitting";
+    persistState();
+    progress("正在提交中央模型");
+    // Platform fields are consumed here. Client paths never become localImage.path.
+    const { attachments: _attachments, clientMessageId: _id, deviceKey: _deviceKey, ...upstream } = payload;
+    const task = bridge.request("turn/start", {...upstream, input:[...payload.input, {type:"text",text:`[platform-message:${id}]`}, ...prepared.input, {type:"text",text:"Platform file output support: imageGeneration results are automatically saved to the client's Downloads/Codexia and shown as image cards. Verify real client paths with device_list_outputs before claiming save success. If that tool is absent in this older thread, call device_exec with program='codexia.files' and args=['list_outputs','{}']. The same broker operation supports paths, write_text, publish and copy with a JSON parameters string. Never use a native image-generation savedPath (central path) as a client path."}]}).then((result) => {
+      const turn = isRecord(result) && isRecord(result.turn) ? result.turn : undefined;
+      if (typeof turn?.id !== "string") throw new Error("App Server 未返回 turn.id，需核对历史");
+      entry.status="sent"; entry.turnId=turn.id; delete entry.error; persistState();
+      return {...(isRecord(result)?result:{}),submission:entry};
+    }).catch((error: unknown) => {
+      // A definitive rejection may arrive after the UI's submission deadline.
+      // Persist it so status reconciliation can unlock the retained draft.
+      if (entry.status !== "sent" && error instanceof Error && error.message.startsWith("App Server request failed:")) {
+        entry.status = "failed";
+        entry.error = error.message;
+        persistState();
+      }
+      throw error;
+    }).finally(release);
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([task,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error("Turn 提交超时，结果未知，请核对历史")),50_000);})]);
+    } finally {if(timer) clearTimeout(timer);}
+  } catch (error) {
+    if (entry.status === "preparing" || entry.status === "failed") release();
+    const explicitRejection = error instanceof Error && error.message.startsWith("App Server request failed:");
+    if (entry.status !== "sent") entry.status = entry.status === "submitting" && !explicitRejection ? "unknown" : "failed";
+    entry.error = error instanceof Error ? error.message : String(error);
+    persistState(); throw error;
+  }
+}
+
 function deviceOperationMethod(operation: GatewayRequest["operation"]): AgentRpcMethod | undefined {
   const methods: Partial<Record<GatewayRequest["operation"], AgentRpcMethod>> = {
     "device.workspace.list": "workspace/list",
     "device.read_file": "read_file",
     "device.exec": "exec",
+    "device.file.stat": "file/stat",
+    "device.file.read_text": "file/read_text",
   };
   return methods[operation];
 }
@@ -692,27 +1013,56 @@ function agentState(deviceId: string): "online" | "offline" {
   return agent?.ready && agent.socket.readyState === WebSocket.OPEN ? "online" : "offline";
 }
 
-function sendAgentRequest(deviceId: string, method: AgentRpcMethod, params: JsonObject): Promise<AgentRpcResponsePayload> {
+function commandTimeoutMs(params: JsonObject): number {
+  const requested = typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+    ? Math.trunc(params.timeoutMs)
+    : DEFAULT_COMMAND_TIMEOUT_MS;
+  return Math.min(MAX_COMMAND_TIMEOUT_MS, Math.max(1_000, requested));
+}
+
+function sendAgentRequest(
+  deviceId: string,
+  method: AgentRpcMethod,
+  params: JsonObject,
+  options: AgentRequestOptions = {},
+): Promise<AgentRpcResponsePayload> {
   const session = agents.get(deviceId);
   const socket = session?.socket;
   if (!socket || socket.readyState !== WebSocket.OPEN || !session.ready) {
     return Promise.resolve({ ok: false, error: "Local Agent is offline", errorCode: "AGENT_OFFLINE", retryable: true });
+  }
+  if (method.startsWith("file/") && !session.hello?.agent.capabilities.includes(method)) {
+    return Promise.resolve({ok:false, error:"需要升级 Local Agent 才能发送附件", errorCode:"AGENT_UPGRADE_REQUIRED"});
   }
 
   const requestId = randomUUID();
   const envelope = createEnvelope(
     "agent.request",
     { method, params, operationId: requestId, idempotencyKey: requestId },
-    { requestId },
+    { requestId, ...(options.taskId ? { taskId: options.taskId } : {}), ...(options.traceId ? { traceId: options.traceId } : {}) },
   );
+  options.onRegistered?.(requestId);
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pendingAgentRequests.delete(requestId);
       resolve({ ok: false, error: "Local Agent request timed out", errorCode: "TIMEOUT", retryable: true });
-    }, 10_000);
-    pendingAgentRequests.set(requestId, { resolve, timer, deviceId });
+    }, options.timeoutMs ?? (method === "exec" ? commandTimeoutMs(params) + 10_000 : 60_000));
+    pendingAgentRequests.set(requestId, { resolve, timer, deviceId, lastEventSequence: 0, onEvent: options.onEvent });
     send(socket, envelope as unknown as JsonObject);
   });
+}
+
+function cancelAgentRequest(deviceId: string, requestId: string, taskId: string | undefined, reason: string): void {
+  const session = agents.get(deviceId);
+  if (!session?.ready || session.socket.readyState !== WebSocket.OPEN) return;
+  send(session.socket, createEnvelope("job.cancel", { reason }, { requestId, ...(taskId ? { taskId } : {}) }) as unknown as JsonObject);
+}
+
+function cancelDeviceTools(threadId: string, turnId?: string): void {
+  for (const tool of activeDeviceTools.values()) {
+    if (tool.threadId !== threadId || (turnId && tool.turnId && tool.turnId !== turnId)) continue;
+    cancelAgentRequest(tool.deviceId, tool.agentRequestId, tool.turnId, "turn_interrupted");
+  }
 }
 
 function handleAgentConnection(socket: WebSocket, request: IncomingMessage): void {
@@ -765,7 +1115,7 @@ function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requeste
     send(socket, createEnvelope("agent.hello_ack", {
       accepted: true,
       server: "central-test-gateway",
-      capabilities: ["agent.request", "agent.response", "agent.heartbeat"],
+      capabilities: ["agent.request", "agent.response", "agent.event", "job.cancel", "agent.heartbeat"],
       heartbeatIntervalMs: 10_000,
     }) as unknown as JsonObject);
     audit("device.hello", "succeeded", { deviceId: requestedDeviceId });
@@ -778,6 +1128,17 @@ function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requeste
     broadcastDeviceStatus(requestedDeviceId);
     return;
   }
+  if (envelope.type === "agent.event") {
+    if (!session.ready || !envelope.requestId) return;
+    const pending = pendingAgentRequests.get(envelope.requestId);
+    if (!pending || pending.deviceId !== requestedDeviceId) return;
+    const payload = envelope.payload as unknown as AgentEventPayload;
+    if (payload.sequence <= pending.lastEventSequence) return;
+    pending.lastEventSequence = payload.sequence;
+    pending.onEvent?.(payload);
+    return;
+  }
+  if (envelope.type === "job.cancel_ack") return;
   if (envelope.type === "agent.response") {
     const payload = envelope.payload as unknown as AgentRpcResponsePayload;
     if (typeof payload.ok !== "boolean" || !envelope.requestId) return;
@@ -831,17 +1192,30 @@ function assertOwnedThread(client: ConnectedClient, payload: JsonObject): void {
   }
 }
 
-function filterOwnedThreads(result: unknown, ownedThreadIds: Set<string>, userId: string): unknown {
+function filterOwnedThreads(result: unknown, ownedThreadIds: Set<string>, userId: string, archivedOnly = false): unknown {
   if (!isRecord(result)) return result;
   const known = [...threadSummaryById.entries()]
     .filter(([id]) => ownedThreadIds.has(id) && threadOwnerById.get(id) === userId)
     .map(([, summary]) => summary);
   const filter = (value: unknown): unknown[] => {
-    const visible = Array.isArray(value)
+    const visible = (Array.isArray(value)
       ? value.filter((item) => isRecord(item) && typeof item.id === "string" && ownedThreadIds.has(item.id))
-      : [];
+      : []).map((item) => {
+        const current = isRecord(item) && typeof item.id === "string" ? threadSummaryById.get(item.id) : undefined;
+        const merged = { ...(current ?? {}), ...(isRecord(item) ? item : {}) };
+        // Archive state is owned by the gateway mutation path. App Server list
+        // responses do not consistently echo these fields, so a refresh must
+        // not silently resurrect a locally archived conversation.
+        if (current && Object.hasOwn(current, "isArchived")) merged.isArchived = current.isArchived;
+        if (current && Object.hasOwn(current, "archivedAt")) merged.archivedAt = current.archivedAt;
+        return merged;
+      });
     const visibleIds = new Set(visible.map((item) => isRecord(item) && typeof item.id === "string" ? item.id : ""));
-    return [...visible, ...known.filter((item) => typeof item.id === "string" && !visibleIds.has(item.id))];
+    return [...visible, ...known.filter((item) => typeof item.id === "string" && !visibleIds.has(item.id))]
+      .filter((item) => {
+        const archived = item.isArchived === true || typeof item.archivedAt === "string";
+        return archivedOnly ? archived : !archived;
+      });
   };
   if (Array.isArray(result.data)) return { ...result, data: filter(result.data) };
   if (Array.isArray(result.threads)) return { ...result, threads: filter(result.threads) };
@@ -852,10 +1226,24 @@ function filterOwnedThreads(result: unknown, ownedThreadIds: Set<string>, userId
 function sanitizeThreadMetadata(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sanitizeThreadMetadata);
   if (!isRecord(value)) return value;
+  if (value.type === "localImage") return {type:"image", unavailable:true};
+  if(value.type==="imageGeneration") return {type:"imageGeneration",id:value.id,status:value.status,failure:value.failure};
   const sanitized: JsonObject = {};
   for (const [key, nested] of Object.entries(value)) {
     if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath"].includes(key)) continue;
+    if (["url", "image_url", "imageUrl"].includes(key) && typeof nested === "string" && nested.startsWith("data:image/")) continue;
     sanitized[key] = sanitizeThreadMetadata(nested);
+  }
+  if (typeof value.id === "string") {
+    const entries = threadSummaryById.get(value.id)?.attachmentSubmissions as AttachmentSubmission[] | undefined;
+    for (const key of ["preview", "name"]) {
+      const label = sanitized[key];
+      if (typeof label !== "string" || !label.includes("[platform-message:")) continue;
+      const entry = entries?.find(item => label.includes(item.clientMessageId)) ?? entries?.find(item => item.status === "sent");
+      sanitized[key] = entry
+        ? (entry.content.trim() || entry.attachments.map(attachment => attachment.name).join("、") || "附件消息").slice(0, 400)
+        : "附件消息";
+    }
   }
   return sanitized;
 }
@@ -867,10 +1255,19 @@ function rememberListedThreads(userId: string, result: unknown): void {
   for (const value of values) {
     if (!isRecord(value) || typeof value.id !== "string") continue;
     if (threadOwnerById.get(value.id) !== userId) continue;
-    threadSummaryById.set(value.id, sanitizeThreadMetadata(value) as JsonObject);
+    const current = threadSummaryById.get(value.id) ?? {};
+    const next = { ...current, ...(sanitizeThreadMetadata(value) as JsonObject) };
+    if (Object.hasOwn(current, "isArchived")) next.isArchived = current.isArchived;
+    if (Object.hasOwn(current, "archivedAt")) next.archivedAt = current.archivedAt;
+    threadSummaryById.set(value.id, next);
     changed = true;
   }
   if (changed) persistState();
+}
+
+function isMissingRolloutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no rollout found/i.test(message);
 }
 
 function normalizeNotification(message: JsonRpcMessage): JsonObject | undefined {
@@ -880,10 +1277,10 @@ function normalizeNotification(message: JsonRpcMessage): JsonObject | undefined 
     return { type: "event", eventType: "assistant.delta", data: { threadId, delta: params.delta ?? params.text ?? "" }, sequence: ++sequence };
   }
   if (message.method === "turn/completed") {
-    return { type: "event", eventType: "turn.completed", data: { threadId, turn: params.turn }, sequence: ++sequence };
+    return { type: "event", eventType: "turn.completed", data: { threadId, turn: sanitizeThreadMetadata(params.turn) }, sequence: ++sequence };
   }
   if (!message.method) return undefined;
-  return { type: "event", eventType: "codex.notification", name: message.method, data: params, sequence: ++sequence };
+  return { type: "event", eventType: "codex.notification", name: message.method, data: sanitizeThreadMetadata(params), sequence: ++sequence };
 }
 
 function parseMessage(data: WebSocket.RawData): GatewayMessage | undefined {
