@@ -1,0 +1,190 @@
+{
+  "date": "2026-09-09",
+  "host": "central macOS 26.3.1 arm64",
+  "isolatedRoot": "/Users/operator/central-harness-qa-20260909",
+  "productionChanged": false,
+  "commit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "patchSha256": "bad9d4c5f4a73fbce8f61654ef0ec3575dcb908083065ccf071fd73170b1cdfa",
+  "compiler": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "requestedCompiler": "1.95.0 (not tested)",
+  "build": {
+    "command": "cargo build -p codex-app-server --bin codex-app-server --locked",
+    "profile": "dev",
+    "result": "passed",
+    "finalDuration": "1m 27s",
+    "binary": "/Users/operator/central-harness-qa-20260909/codex-3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/target/debug/codex-app-server",
+    "sha256": "673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88",
+    "bytes": 645892096
+  },
+  "checks": [
+    {
+      "name": "cargo check -p codex-app-server --locked",
+      "result": "passed"
+    },
+    {
+      "name": "runtime-smoke",
+      "result": "HARNESS_RUNTIME_BOUNDARY_OK",
+      "realModel": false,
+      "realDevice": false,
+      "credentials": false,
+      "requests": 3,
+      "tools": [
+        "device_workspace_context"
+      ],
+      "dynamicCalls": 1,
+      "runRoot": "/Users/operator/central-harness-qa-20260909/boundary-smoke-89JEbt",
+      "testedBinarySha256": "31d94cc792edb6ce83a396f7197fdeaa36cef410941f9badede473f2cc0b4cfd",
+      "testedPatchSha256": "07323688cd97735ce65a3961ba3c36d1b2e55b19519316c12cb16beeb1ee5c85",
+      "finalDifference": "Only rustfmt and provenance doc comment; final source rebuilt. Tests were not redundantly repeated after formatting."
+    },
+    {
+      "name": "native OS C probe",
+      "result": "HARNESS_OS_BOUNDARY_OK",
+      "allowed": [
+        "worker read",
+        "worker write"
+      ],
+      "denied": [
+        "external central read",
+        "external central write",
+        "/bin/sh exec"
+      ],
+      "testedProfileSha256": "62e703a00d42028001afa16d02b310b2861de44500b6b9661d4b70fb02694774",
+      "finalDifference": "Only SPDX comment added to profile after probe."
+    },
+    {
+      "name": "schema export",
+      "result": "passed",
+      "stableFiles": 1010,
+      "experimentalFiles": 1243,
+      "origin": "Fixed upstream embedded precomputed exports; same export data, no client Codex process"
+    },
+    {
+      "name": "real model + Windows Local Agent live smoke",
+      "result": "passed",
+      "exitCode": 0,
+      "checksPassed": 8,
+      "realModel": true,
+      "realDevice": true,
+      "credentials": true,
+      "threadId": "01a0847f-1785-7022-80f0-c65f866edfce",
+      "turnId": "01a0847f-17a2-7193-8a94-d3dff13ddb5a",
+      "testedBinarySha256": "673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88",
+      "testedProfileSha256": "62e703a00d42028001afa16d02b310b2861de44500b6b9661d4b70fb02694774",
+      "profileChangedForLiveAuth": false,
+      "assertions": [
+        "client rules context",
+        "model search/read/patch",
+        "single invocation actual approval",
+        "CRLF write",
+        "actual Git diff",
+        "client stdout and exit 0",
+        "structured exit 7",
+        "native Turn completion"
+      ],
+      "credentialHandling": "Exact existing auth.json symlink and read-only literal OS permission; no credential content copied or printed",
+      "authenticationScope": "Existing auth.json and real TLS/model requests passed; token refresh and keychain login unverified",
+      "cleanup": "Test Thread archived; test Agent stopped; QA gateway retained for separately authorized native UI test",
+      "evidenceOwner": "Parent agent actual Windows harness live smoke, exit 0"
+    },
+    {
+      "name": "real model + Windows Agent with desktop attachment IPC after command fix",
+      "result": "passed",
+      "checksPassed": 8,
+      "realModel": true,
+      "realDevice": true,
+      "threadId": "01a08488-4163-7d20-bb1d-c9ca0aa968d4",
+      "turnId": "01a08488-41be-7500-b33d-4c6b6a9b04a6",
+      "testedBinarySha256": "673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88",
+      "agentSha256": "c4be11300009b7ff5597cfecfa35d24947bdae2a407254bb694d79fcf0da9c31",
+      "attachmentStdio": true,
+      "stdinPipeHeldOpen": true,
+      "fixture": "C:/Users/developer/AppData/Local/Temp/codex-harness-live-ilroKd",
+      "log": "spikes/local-dev/target/harness-live-acceptance-stdio.log",
+      "cleanup": "Thread archived; Agent stopped; health clients=0/devices=0 before native UI retest"
+    }
+  ],
+  "tooling": [
+    {
+      "path": "worker.sb",
+      "sha256": "077debedd957cd53edc093af130cab70d43b14ea088360ee8d1bbfab0d2e4441"
+    },
+    {
+      "path": "launch-central.sh",
+      "sha256": "dc9e32141ca82899c4d180f4fc81cae149eaa6112a8f1f265b591f8033c04b47"
+    },
+    {
+      "path": "runtime-smoke.mjs",
+      "sha256": "fd2796962b3c60c03d206fae080700c1fb7f574edea78af19bfffafc6d751885"
+    },
+    {
+      "path": "os-boundary-probe.c",
+      "sha256": "b44e237713efc0f8375caf84cd9657789cbabee442ff68060e0cfee22d9bd829"
+    },
+    {
+      "path": "fetch-source.mjs",
+      "sha256": "db467b8241c0c786db15e81f7ee3b94ed4c574818001151bfd6551e46e302135"
+    },
+    {
+      "path": "build-central.sh",
+      "sha256": "92a483edd91470509db8f5e1efb788a1f23c4a23b935965e2e36c32df4a2ecf1"
+    },
+    {
+      "path": "export-schema.mjs",
+      "sha256": "8768ddf87665760b44fb059ff2276b179c28e1fc0b4f1347ea28901e0417d220"
+    }
+  ],
+  "notVerified": [
+    "Real-chain complete disconnect/timeout/cancel/unknown-result matrix",
+    "Dedicated real auth token refresh and keychain login; fake-token Rust refresh is recorded in long-running-qa.json",
+    "Old rollout/history compatibility",
+    "Native image generation (disabled)",
+    "Rust 1.95.0 and release build",
+    "Full upstream nextest/Clippy/Bazel suites",
+    "Release SBOM",
+    "P5 authentication/tenant isolation"
+  ],
+  "liveGateway": {
+    "approvedByUser": true,
+    "packageSha256": "5de68db256e891a3df868463f1dcd02d925ee7c46044f0cebfddbcf2f00fd546",
+    "host": "192.0.2.10",
+    "port": 4529,
+    "pid": 71591,
+    "productionPort4510Pid": 90685,
+    "enforcedRuntimeReady": true,
+    "log": "/Users/operator/central-harness-qa-20260909/live-gateway.log",
+    "pidFile": "/Users/operator/central-harness-qa-20260909/live-gateway.pid",
+    "codexHome": "/Users/operator/central-harness-qa-20260909/live-home",
+    "worker": "/Users/operator/central-harness-qa-20260909/live-data/remote-worker",
+    "dependencyInstall": "npm ci --omit=dev --ignore-scripts --workspace @central-codex-spike/test-gateway --workspace @central-codex-spike/agentrpc-types",
+    "status": "stopped after authorized native UI verification",
+    "shutdown": {
+      "verifiedAtUtc": "2026-09-09T05:09:54Z",
+      "signal": "TERM",
+      "gatewayPid": 71591,
+      "forkPid": 71592,
+      "identitiesAndCwdsRevalidated": true,
+      "qaBeforeStop": {
+        "clients": 0,
+        "devices": 0,
+        "sequence": 416
+      },
+      "gatewayExited": true,
+      "forkExited": true,
+      "port4529Listening": false,
+      "production": {
+        "port": 4510,
+        "pid": 90685,
+        "ok": true,
+        "clients": 1,
+        "devices": 2,
+        "controlsEnabled": true,
+        "sequence": 6620,
+        "unchangedFromBeforeStop": true
+      },
+      "evidenceFilesRetained": true,
+      "authSymlinkRetained": true,
+      "nativeUiResult": "Parent confirmed online, directory listing, Git/diff and window-close lifecycle passed; desktop 19348/Agent 22432/Git exited; production config hash unchanged"
+    }
+  }
+}

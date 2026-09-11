@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-10",
+  "scope": "windows-appcontainer-native-pipe-tls-rust-synthetic-model",
+  "passed": true,
+  "realModelVerified": false,
+  "realDeviceVerified": false,
+  "deployable": false,
+  "checks": [
+    "Real patched App Server initializes inside the native AppContainer launcher",
+    "Host command/filesystem/skills RPCs and workspace override remain denied",
+    "Native pipe/TLS model requests reject builtin escape, round-trip the synthetic dynamic tool, and complete",
+    "Turn interruption closes a silent SSE through Rust, native pipe, TLS broker and upstream without replay",
+    "A new Turn succeeds after interruption with the broker concurrency slot restored",
+    "Positive Worker Job, AppContainer profile and scoped TLS lease close cleanly",
+    "Wrong per-lease CA fails the model Turn before provider dispatch and its Worker cleans up"
+  ],
+  "launcherSha256": "2225c5cd828e75f0e75cd7eb6c4d43ef53bc47b72cdb2be75ecede7d67f95973",
+  "runtimeSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+  "positiveCleanup": {
+    "scope": "model-runtime-transport-verify-separately",
+    "profileCleaned": true,
+    "jobCloseVerified": true,
+    "modelPipeConnections": 5,
+    "modelPipeTailDrains": 3,
+    "modelPipeTailDrainCancels": 0,
+    "terminalStatuses": [
+      "completed",
+      "interrupted",
+      "completed"
+    ],
+    "diagnosticCategories": [
+      "REMOTE_WORKSPACE_UNSUPPORTED",
+      "REMOTE_WORKSPACE_OVERRIDE_DENIED"
+    ],
+    "stderrBytes": 0,
+    "stdoutBytes": 802690,
+    "agentMessages": [
+      {
+        "utf8Bytes": 131123,
+        "sha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b"
+      },
+      {
+        "utf8Bytes": 131123,
+        "sha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b"
+      }
+    ],
+    "cleanup": {
+      "expectedScope": true,
+      "profileCleaned": true,
+      "jobCloseVerified": true,
+      "modelPipeConnections": 5,
+      "modelPipeTailDrains": 3,
+      "modelPipeTailDrainCancels": 0
+    }
+  },
+  "expectedAnswer": {
+    "utf8Bytes": 131123,
+    "sha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b"
+  },
+  "positiveTransportCounts": {
+    "tlsSucceeded": 5,
+    "tlsFailed": 0,
+    "httpRequests": 5,
+    "tlsErrorCategories": {}
+  },
+  "wrongCaCleanup": {
+    "scope": "model-runtime-transport-verify-separately",
+    "profileCleaned": true,
+    "jobCloseVerified": true,
+    "modelPipeConnections": 1,
+    "modelPipeTailDrains": 0,
+    "modelPipeTailDrainCancels": 0,
+    "terminalStatuses": [
+      "failed"
+    ],
+    "diagnosticCategories": [
+      "MODEL_PIPE_TLS_CERTIFICATE_REJECTED",
+      "TLS_CERTIFICATE_REJECTED"
+    ],
+    "stderrBytes": 0,
+    "stdoutBytes": 5267,
+    "agentMessages": [],
+    "cleanup": {
+      "expectedScope": true,
+      "profileCleaned": true,
+      "jobCloseVerified": true,
+      "modelPipeConnections": 1,
+      "modelPipeTailDrains": 0,
+      "modelPipeTailDrainCancels": 0
+    }
+  },
+  "wrongCaTransportCounts": {
+    "tlsSucceeded": 0,
+    "tlsFailed": 1,
+    "httpRequests": 0,
+    "tlsErrorCategories": {
+      "MODEL_PIPE_TLS_HANDSHAKE_FAILED": 1
+    }
+  },
+  "wrongCaTlsEvidence": [
+    "TLS_CERTIFICATE_REJECTED"
+  ],
+  "requests": {
+    "positive": 5,
+    "wrongCa": 0
+  },
+  "dynamicCalls": 1,
+  "syntheticUpstream": true,
+  "syntheticLocalAgent": true,
+  "runtimeObservations": [
+    {
+      "terminalStatuses": [
+        "completed",
+        "interrupted",
+        "completed"
+      ],
+      "diagnosticCategories": [
+        "REMOTE_WORKSPACE_UNSUPPORTED",
+        "REMOTE_WORKSPACE_OVERRIDE_DENIED"
+      ],
+      "stderrBytes": 0,
+      "stdoutBytes": 802690,
+      "agentMessages": [
+        {
+          "utf8Bytes": 131123,
+          "sha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b"
+        },
+        {
+          "utf8Bytes": 131123,
+          "sha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b"
+        }
+      ],
+      "cleanup": {
+        "expectedScope": true,
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 5,
+        "modelPipeTailDrains": 3,
+        "modelPipeTailDrainCancels": 0
+      }
+    },
+    {
+      "terminalStatuses": [
+        "failed"
+      ],
+      "diagnosticCategories": [
+        "MODEL_PIPE_TLS_CERTIFICATE_REJECTED",
+        "TLS_CERTIFICATE_REJECTED"
+      ],
+      "stderrBytes": 0,
+      "stdoutBytes": 5267,
+      "agentMessages": [],
+      "cleanup": {
+        "expectedScope": true,
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 1,
+        "modelPipeTailDrains": 0,
+        "modelPipeTailDrainCancels": 0
+      }
+    }
+  ],
+  "brokerTlsCertificateRejections": 0,
+  "brokerTransportCounts": {
+    "tlsSucceeded": 5,
+    "tlsFailed": 1,
+    "httpRequests": 5,
+    "tlsErrorCategories": {
+      "MODEL_PIPE_TLS_HANDSHAKE_FAILED": 1
+    }
+  },
+  "sourceEvidence": "spikes/local-dev/target/central-p0/model-runtime-2/result.json",
+  "build": {
+    "commit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+    "basePatchSha256": "bad9d4c5f4a73fbce8f61654ef0ec3575dcb908083065ccf071fd73170b1cdfa",
+    "windowsHomePatchSha256": "104ad03dc5db0678b2ceb1250f22079e51d5c3f767e18814e30fab50a47d7981",
+    "windowsModelPatchSha256": "9d22bc3e6456c936831c54dce2f4fe8e1d531efdf07163a05410fa57e0bd38b9",
+    "recordSchema": 4,
+    "compiler": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "modelBuildDuration": "4m 01s",
+    "sourceFilesVerified": 32
+  },
+  "workerStderr": {
+    "positiveBytes": 147,
+    "positiveCategory": "Expected unsupported call: exec_command from the injected builtin-escape negative case",
+    "wrongCaBytes": 0
+  },
+  "realCredentialsUsed": false,
+  "formalServiceModified": false
+}

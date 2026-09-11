@@ -1,0 +1,125 @@
+{
+  "scope": "windows-appcontainer-real-model-same-host-local-agent-qa",
+  "passed": false,
+  "model": "gpt-6-astra",
+  "realCredentialsUsed": true,
+  "realModelVerified": false,
+  "realLocalAgentLoopVerified": false,
+  "realRemoteDeviceVerified": false,
+  "productionDeviceBrokerVerified": false,
+  "productionWindowsWorkerEnabled": false,
+  "deployable": false,
+  "formal4510Modified": false,
+  "checks": [
+    "Actual Local Agent connects with the expected isolated workspace and device binding",
+    "Real AppContainer App Server initializes; central credential file and command RPCs remain denied"
+  ],
+  "launcherSha256": "5357cf20c19de63484313cf50d2d5bb7bd78001d76edec81a91753f9e4118a98",
+  "runtimeSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+  "agentSha256": "700837cc5dba17ed7712005e657ccd5eddfbd9fb806daaf7ec897dd6e94c8e7c",
+  "credentialStatus": {
+    "status": "ready"
+  },
+  "command": {
+    "pid": 8440,
+    "machineSha256": "77d754aedd1e066cf57aae97b911b795dffd589c2486aa74e09236ccef819840",
+    "proofSha256": "8d9b761f7e377f806c36c81d88999dd7cfc7c3f74a2fb022f29d7ba070a7976c",
+    "streamEvents": 4
+  },
+  "failedPhase": "real-model-turn",
+  "failureCode": "ASSERTION_FAILED",
+  "broker": {
+    "counts": {
+      "model.pipe_tls_handshake:succeeded": 5,
+      "model.pipe_http_request:succeeded": 5,
+      "model.request:succeeded": 5,
+      "model.request:failed": 5
+    },
+    "failureCodes": [
+      "MODEL_REQUEST_CANCELLED"
+    ]
+  },
+  "toolCalls": [
+    {
+      "name": "device_workspace_context",
+      "succeeded": true,
+      "streamEvents": 0
+    },
+    {
+      "name": "device_workspace_read_text",
+      "path": "input.txt",
+      "succeeded": true,
+      "streamEvents": 0
+    },
+    {
+      "name": "device_exec",
+      "succeeded": true,
+      "streamEvents": 4
+    },
+    {
+      "name": "device_workspace_read_text",
+      "path": "proof.txt",
+      "succeeded": true,
+      "streamEvents": 0
+    }
+  ],
+  "worker": {
+    "launcherPid": 20408,
+    "stopped": true,
+    "failureCode": null,
+    "stdoutBytes": 35270,
+    "stderrBytes": 0,
+    "toolCalls": 4,
+    "diagnosticCategories": [
+      "REMOTE_WORKSPACE_UNSUPPORTED"
+    ],
+    "terminalStatuses": [
+      "completed"
+    ],
+    "agentMessages": [
+      {
+        "utf8Bytes": 62,
+        "sha256": "ec61ef58af116455e1fd6ca0b8faaf8c5dda9387df569e6c737699182aca861d"
+      },
+      {
+        "utf8Bytes": 98,
+        "sha256": "19a56792c8944d4f7bcb0d927184852520200cf4751c888d6f6d872a798a0a54"
+      }
+    ],
+    "cleanup": {
+      "profileCleaned": true,
+      "jobCloseVerified": true,
+      "modelPipeConnections": 5,
+      "modelPipeTailDrains": 0,
+      "modelPipeTailDrainCancels": 0
+    }
+  },
+  "agent": {
+    "scope": "local-agent-loopback-qa-adapter",
+    "realLocalAgent": true,
+    "productionDeviceBroker": false,
+    "connections": 1,
+    "requests": 4,
+    "responses": 4,
+    "streamEvents": 4,
+    "cancelSent": 0,
+    "cancelAccepted": 0,
+    "rejectedFrames": 0,
+    "duplicateResponses": 0,
+    "unknownResults": 0,
+    "replayedRequests": 0,
+    "stderrBytes": 233,
+    "stdoutBytes": 0,
+    "agentExited": true,
+    "listenerClosed": true,
+    "pendingRequests": 0,
+    "helloChecks": {
+      "firstHello": true,
+      "validKey": true,
+      "workspaceMatches": true,
+      "windows": true,
+      "absolutePathsDisabled": true,
+      "missingCapabilities": []
+    }
+  }
+}

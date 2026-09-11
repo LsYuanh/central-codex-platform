@@ -1,0 +1,17 @@
+{
+  "scope": "temporary-central-host-controlled-lan-echo",
+  "bind": "192.0.2.10",
+  "allowedPeer": "192.0.2.20",
+  "port": 64372,
+  "diagnosticOnly": true,
+  "hostBaselineEchoed": 1,
+  "hostBaselineBytes": 24,
+  "containerEchoed": 0,
+  "rejected": 0,
+  "closed": true,
+  "lifetimeSeconds": 90,
+  "source": "central-host-node-14-diagnostic-output",
+  "productPath": false,
+  "firewallModified": false,
+  "loopbackExemptionsAdded": false
+}

@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": {
+      "../../../target/central-runtime/": "central-runtime/",
+      "../../../target/central-service/windows-x64-node24-qa1-74b3e6f43896219f/": "central-service/windows-x64-node24-qa1-74b3e6f43896219f/"
+    }
+  }
+}

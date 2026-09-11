@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-10",
+  "scope": "synthetic-native-pipe-flush-cancellation",
+  "source": "harness/windows-pipe-flush-probe.cpp",
+  "evidence": "target/central-p0/pipe-flush-cancel-2/summary.json",
+  "binarySha256": "f98aa1eb7c1a1053d4ddd64d08bb5a103a2bec6e0d0cb3fa26bb2acc8fd46174",
+  "passed": true,
+  "payloadBytes": 32768,
+  "normalDrain": { "initiallyBlocked": true, "payloadMatched": true, "flushError": 0, "elapsedMs": 109 },
+  "blockedCancellation": [
+    { "cancelApiSucceeded": true, "flushError": 995, "elapsedMs": 110 },
+    { "cancelApiSucceeded": true, "flushError": 995, "elapsedMs": 109 }
+  ],
+  "beforeCallCancellation": [
+    { "flushError": 995, "elapsedMs": 0 },
+    { "flushError": 995, "elapsedMs": 0 }
+  ],
+  "bridgeNormalEofDrainDeadlineMs": 5000,
+  "bridgeCancellationDeadlineMs": 3000,
+  "bridgeFinalWorkerTerminationWaitMs": 1000,
+  "unrecoverableThreadAction": "terminate QA launcher, releasing its kill-on-close Job",
+  "appContainerUsedInThisProbe": false,
+  "separateBridgeIntegration": {
+    "evidence": "target/central-p0/model-runtime-2/result.json",
+    "scope": "real-patched-app-server-appcontainer-job-synthetic-https-model",
+    "passed": true,
+    "normalEofTailDrains": 3,
+    "tailDrainCancels": 0,
+    "completeAnswers": 2,
+    "answerUtf8Bytes": 131123,
+    "answerSha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b",
+    "answersMatchedExpected": true,
+    "interruptAndRecoveryPassed": true,
+    "wrongCaRejectedBeforeHttp": true,
+    "jobsAndProfilesCleaned": true
+  },
+  "credentialsUsed": false,
+  "realModelVerified": false,
+  "deployable": false
+}

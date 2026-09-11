@@ -1,0 +1,122 @@
+[
+  {
+    "path": "codex-rs/Cargo.lock",
+    "upstreamSha256": "3494b8a78d0f643556a83a9cc184e912bcab9f4c5640288952f4223452ba5dc8",
+    "patchedSha256": "a2cb91dfb2e8112bc81d05158fa00b9698e2df8cc1ae0547b5dc5606a44904d3"
+  },
+  {
+    "path": "codex-rs/core/src/lib.rs",
+    "upstreamSha256": "24134800faba981882f7d0c279a5767643a35517668c4a335ad8090e5c4bbea6",
+    "patchedSha256": "51c5b01f4270e6ccd3d948aa7858380939e892633fa76514579e07b896618e45"
+  },
+  {
+    "path": "codex-rs/core/src/tools/registry.rs",
+    "upstreamSha256": "f90bfac6c021ffa0aadce1208bd7d13679915ac2b1bfcec227e9648e9992343a",
+    "patchedSha256": "571467f6976e819293247bfc75ed90afb2f78169b29f1346b222f402068400a8"
+  },
+  {
+    "path": "codex-rs/core/src/tools/handlers/dynamic.rs",
+    "upstreamSha256": "5e315b42993b4637e5543bcfcc858b82336437f7fb3a367ff5dc911273fa97b4",
+    "patchedSha256": "42d7528ba26c28e8a76a23b15fec8f38bb046b3f17f3b6763f09a23dad6f17b2"
+  },
+  {
+    "path": "codex-rs/core/src/tools/spec_plan.rs",
+    "upstreamSha256": "fef34c2bdc27159e4137321526ce8df3e453d3b6538c9db09425561c2320b43e",
+    "patchedSha256": "a6cbad43f11ebca1e5d0f53d4deb32019caa479cb372aa31cf0e448b6b116097"
+  },
+  {
+    "path": "codex-rs/features/src/lib.rs",
+    "upstreamSha256": "b7ef7bb1bb5517a82ae7c7294f2d7a072cb00f151a3d8f5025aa2e967b036937",
+    "patchedSha256": "ff38ea43e9f995891fae9e3f9dd1ecb82291dd4a2d3d88f285e6be23334c2ea3"
+  },
+  {
+    "path": "codex-rs/core/src/agents_md.rs",
+    "upstreamSha256": "8bbaf068c099fdeeaf4fe49076d398da7671f20c9a962fde5c4eb7653008fed4",
+    "patchedSha256": "0963a64bba4499a1f6a53da7136e994c6e44ec2591099df21ce950218c15a99f"
+  },
+  {
+    "path": "codex-rs/core/src/thread_manager.rs",
+    "upstreamSha256": "8eb3a935ea20ab0686734c4a1155547e9f465ca9e0b7e6d9fec2c072cc8637ea",
+    "patchedSha256": "ebbd97e1d12a5d1a821bb820e7a1f06fc673f91c23464e4c6d76e9179fb790d3"
+  },
+  {
+    "path": "codex-rs/core/src/exec_policy.rs",
+    "upstreamSha256": "e31fa19073d5d9c2f89b12f743f24abd06966ed58e07e3a4f3d61ad275d91836",
+    "patchedSha256": "853d3e855a1051e6fe4c870167b07161dd22f5502bb5f8cb5a4d2ace3dd46d41"
+  },
+  {
+    "path": "codex-rs/config/src/loader/mod.rs",
+    "upstreamSha256": "6fc44b60c64065994c9aa18df248eb521dba6b0e9917a8cf69fc60e0035ac56a",
+    "patchedSha256": "c255a1ab5f7a382ef8b22db335fe0a08233af53e64c93297885c3cea35fef67f"
+  },
+  {
+    "path": "codex-rs/core/src/config/mod.rs",
+    "upstreamSha256": "b3eb0a9751522f7f6f7a7bd1b21253f2fcb4e669955819bfb6d0a7425e1fed9e",
+    "patchedSha256": "1e1293c29e84fbb0e1c85a24dfa978f9a66b6f1dcfbd5fa68173062c9257725f"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "upstreamSha256": "2e4010b30003a0c3f319452c6cf453ca18de43faace9a4753f80bedaebd57075",
+    "patchedSha256": "77c2e8eca067b70e30ecdf3fa06878b93e01c847a88d63636e867cb6b4e675bb"
+  },
+  {
+    "path": "codex-rs/core/src/session/session.rs",
+    "upstreamSha256": "b84a57c59c7db19c5e91a0b08281bb564c2edad77a2403ae167639587d9f521c",
+    "patchedSha256": "882ca808d3382d7c2ee8ef0caa643c70037a3e88d3d7bf050e77ed531f27d82a"
+  },
+  {
+    "path": "codex-rs/core/src/context/world_state/environment.rs",
+    "upstreamSha256": "59b8fa11dd33653b11121d2b4b2376b345e8b62c6c720bf6f90bddc1d378b6f5",
+    "patchedSha256": "3b513297f0cd09d0166b97cf2b4ba5929e367760efc8394567c2d6dae21114d6"
+  },
+  {
+    "path": "codex-rs/codex-mcp/src/connection_manager.rs",
+    "upstreamSha256": "c06a910bf30d362b40511842edb62572ea41b2a5b7979393537e39de1f974a2d",
+    "patchedSha256": "a35515684bf8f9554271fb3c7af67aca0cf686acc28b1ad0e6c62d9525340171"
+  },
+  {
+    "path": "codex-rs/core-plugins/src/manager.rs",
+    "upstreamSha256": "bb3536e18db992785b92c51b8175de785242b095dd514235dfd9b0d25a28936e",
+    "patchedSha256": "de0caf268dfc9e68a68c7a788fd8231444c8bc2667d18071b4b9cdcafc2951ee"
+  },
+  {
+    "path": "codex-rs/ext/skills/src/host_service.rs",
+    "upstreamSha256": "4e73a4d6b97c85e8d9b564411c020f1c3f0ac860fee4da9eaa65a2c39c4eadd6",
+    "patchedSha256": "0423f93ed97849502effb2599348f915f575313a6c3d46903128cb40fe36f96d"
+  },
+  {
+    "path": "codex-rs/exec-server/src/environment.rs",
+    "upstreamSha256": "3b7fceb0502f6bae88c2274a48d4ca33b03f8277f3534127f5fbd1cc079ed0b7",
+    "patchedSha256": "b66510e346a6f1fd827f239914426ddd818d33664946c3ac57b6999474a39b12"
+  },
+  {
+    "path": "codex-rs/git-utils/src/info.rs",
+    "upstreamSha256": "aa3c0b7cf0c0bc074c16bcdd703de11a0add94a43ee9d19c76feca2870f0db23",
+    "patchedSha256": "cca69fee11873d8acaa79f86fbf8c33198c6658e211314e4cba08a45aa401a9d"
+  },
+  {
+    "path": "codex-rs/git-utils/src/git_process.rs",
+    "upstreamSha256": "8961e2748659fca01ea0a4b51baff983b76207e3ca3222f6a637a91360288d06",
+    "patchedSha256": "92122238fc27fb7a06f835f5831ed3ece3634d1472287b58759e1bf733eb6749"
+  },
+  {
+    "path": "codex-rs/app-server/src/extensions.rs",
+    "upstreamSha256": "5e578d25d67d0692c65fb36d8d5c88bf01a0996ce7e9b82f38c5477789abda04",
+    "patchedSha256": "2b31fb7df5cd897fdc46bc1bf12aee8e23b64479da73423b976d2825f51d04cc"
+  },
+  {
+    "path": "codex-rs/app-server/src/lib.rs",
+    "upstreamSha256": "13f10bc2b5f08b24c27cbb77db205d1a35bc8900938112724328298467732665",
+    "patchedSha256": "15c3205a722d093811d792dcaaea499ace96b29f6797b834c315827f61cc6edf"
+  },
+  {
+    "path": "codex-rs/app-server/src/message_processor.rs",
+    "upstreamSha256": "e060124c3cec98dfccc02e73e0622212ffee2989c36e470043393adb966fcdb6",
+    "patchedSha256": "ed8c3a67410a0f2e7f8a787b6d5bfc797b752ef4c84d89dce20057fbe6a41f46"
+  },
+  {
+    "path": "codex-rs/app-server/src/request_processors/initialize_processor.rs",
+    "upstreamSha256": "6e73dce0275c7264b23ee0a312f215fead241ce55dc1a86fa1dbd109ad4278e0",
+    "patchedSha256": "ef948df56a6b75373d0894a986613db1e4b53cfa33eea4c80a984bb79d74ab2f"
+  }
+]

@@ -1,0 +1,48 @@
+; SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+; macOS process profile for the central-only Yuan Zhou harness.
+; Parameters are passed by launch-central.sh, never interpolated into Scheme.
+(version 1)
+(deny default)
+(allow process-fork)
+(allow process-exec (literal (param "HARNESS_BINARY")))
+(allow process-info* (target self))
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow network-outbound)
+(allow system-socket)
+(allow file-read-metadata)
+(allow file-test-existence)
+; Dynamic loader and guarded-vnode primitives, following the pinned upstream
+; sandboxing/seatbelt_read_only_platform_defaults.sbpl (Apache-2.0).
+(allow file-map-executable
+    (literal (param "HARNESS_BINARY"))
+    (subpath "/System")
+    (subpath "/usr/lib")
+    (subpath "/Library/Apple/usr/lib"))
+(allow system-mac-syscall (mac-policy-name "vnguard"))
+(allow system-mac-syscall
+    (require-all (mac-policy-name "Sandbox") (mac-syscall-number 67)))
+(allow file-read-data file-write-data (subpath "/dev/fd"))
+(allow file-read*
+    ; dyld ignition needs the root directory itself, not its descendants.
+    (literal "/")
+    (subpath "/System")
+    (subpath "/usr/lib")
+    (subpath "/usr/share/zoneinfo")
+    (subpath "/Library/Apple")
+    (subpath "/private/var/db/timezone")
+    (subpath "/private/etc/ssl")
+    (literal "/private/etc/hosts")
+    (literal "/private/etc/resolv.conf")
+    (literal "/private/etc/localtime")
+    (literal "/dev/urandom")
+    (literal "/dev/random")
+    (literal (param "HARNESS_BINARY"))
+    (literal (param "AUTH_FILE"))
+    (subpath (param "CODEX_HOME"))
+    (subpath (param "WORKER_DIR")))
+(allow file-write*
+    (literal "/dev/null")
+    (subpath (param "CODEX_HOME"))
+    (subpath (param "WORKER_DIR")))

@@ -4,44 +4,29 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { RuntimeSettings, type ConfigView, type DesktopConfig } from "./runtime-settings";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppServerClient, type AppServerMessage, type JsonRpcId, threadIdFromResult } from "./app-server-client";
+import { AppServerClient, type AppServerMessage, threadIdFromResult } from "./app-server-client";
+import { reduceExecutions, type GatewayUiEvent, type ExecutionActivity, type ExecutionLogChunk, type ExecutionStatus, type ConnectionState, type DeviceState, type ChatMessage, type ThreadSummary, type ApprovalRequest, type PlatformCapabilities, type CentralEngineState } from "./gateway-ui-events";
 import { CodexiaGatewayAdapter } from "./codexia-gateway-adapter";
 import { PlatformGatewayClient, type RpcClient } from "./platform-gateway-client";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { messagesFromThreadRead } from "./thread-history";
+import { recoverInitialThread, threadRecoveryError } from "./thread-recovery";
 import { WorkspacePanel } from "./WorkspacePanel";
-import { useAttachments, MessageAttachments, localAttachment, type DraftAttachment, type MessageAttachment } from "./attachments";
+import { useAttachments, MessageAttachments, localAttachment, type DraftAttachment } from "./attachments";
 import { OutputCard, type OutputArtifact } from "./outputs";
 import { withThreadRunning, withThreadTurn } from "./thread-session-state";
+import { appendStreamDelta } from "./chat-stream";
+import { UiIcon } from "./UiIcon";
+import { ThemePicker } from "./ThemePicker";
+import { TurnTimingStore, timingScope, timingAnchors, formatTurnDuration, type TurnTiming } from "./turn-timing";
+import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
-type ConnectionState = "connecting" | "online" | "reconnecting" | "offline" | "error";
 type TestMode = "central-gateway" | "local-app-server" | "fake-central";
-type ChatRole = "user" | "assistant" | "system";
 type AppPage = "conversation" | "settings";
 type SettingsSection = "connection" | "conversations" | "workspace" | "diagnostics";
 type EventFilter = "all" | "turn" | "tool" | "error";
-type ThemeMode = "dark" | "light";
 type WorkspaceResultStatus = "idle" | "loading" | "success" | "error";
 type ModelPickerSubmenu = "model" | "effort" | "speed";
-
-interface ChatMessage {
-  id: string;
-  role: ChatRole;
-  content: string;
-  createdAt?: string;
-  attachments?: MessageAttachment[];
-  outputs?: OutputArtifact[];
-}
-
-interface ThreadSummary {
-  id: string;
-  name?: string;
-  preview?: string;
-  cwd?: string;
-  updatedAt?: string;
-  archived?: boolean;
-  active?: boolean;
-}
 
 interface ModelReasoningOption {
   reasoningEffort: string;
@@ -73,14 +58,6 @@ interface GatewayStatus {
   worker?: { workerId: string; state: string; threadCount: number };
 }
 
-interface ApprovalRequest {
-  id: JsonRpcId;
-  method: string;
-  params: unknown;
-  kind: "approval" | "user-input" | "tool-call" | "other";
-  threadId?: string;
-}
-
 interface ThreadDraft {
   text: string;
   attachments: DraftAttachment[];
@@ -98,41 +75,13 @@ interface WorkspaceEntry {
   bytes?: number;
 }
 
-type ExecutionStatus = "running" | "succeeded" | "failed" | "cancelled" | "unknown";
-
-interface ExecutionLogChunk {
-  sequence: number;
-  stream: "stdout" | "stderr" | "progress";
-  chunk: string;
-}
-
-interface ExecutionActivity {
-  requestId: string;
-  threadId?: string;
-  turnId?: string;
-  tool: string;
-  program?: string;
-  cwd?: string;
-  streaming: boolean;
-  status: ExecutionStatus;
-  startedAt: number;
-  durationMs?: number;
-  exitCode?: number;
-  error?: string;
-  truncated?: boolean;
-  lastSequence: number;
-  logs: ExecutionLogChunk[];
-}
-
 const gatewayUrl = "ws://127.0.0.1:4310/ws/ui";
 const configuredGatewayUrl = import.meta.env.VITE_PLATFORM_GATEWAY_URL?.trim();
 const defaultCentralHost = import.meta.env.VITE_CENTRAL_HOST?.trim() || "192.0.2.10";
 const defaultGatewayUrl = configuredGatewayUrl || `ws://${defaultCentralHost}:4510/ws`;
 const defaultAppServerUrl = import.meta.env.VITE_CODEX_APP_SERVER_URL ?? "ws://127.0.0.1:4501";
 const defaultAppServerCwd = import.meta.env.VITE_CODEX_APP_SERVER_CWD ?? "";
-const settingsStorageKey = "codexia.desktop.settings.v1";
 const desktopRuntime = isTauri();
-const executionLogBytes = 1024 * 1024;
 
 function loadSavedSettings(): Partial<{ mode: TestMode; appUrl: string; appCwd: string; appModel: string; appEffort: string; appServiceTier: string; theme: ThemeMode }> {
   try {
@@ -144,7 +93,7 @@ function loadSavedSettings(): Partial<{ mode: TestMode; appUrl: string; appCwd: 
       appModel: typeof value?.appModel === "string" ? value.appModel : undefined,
       appEffort: typeof value?.appEffort === "string" ? value.appEffort : undefined,
       appServiceTier: typeof value?.appServiceTier === "string" ? value.appServiceTier : undefined,
-      theme: value?.theme === "dark" || value?.theme === "light" ? value.theme : undefined,
+      theme: value?.theme === "dark" || value?.theme === "light" || value?.theme === "system" ? value.theme : undefined,
     };
   } catch {
     return {};
@@ -163,7 +112,9 @@ export default function App() {
   const codexiaRef = useRef<CodexiaGatewayAdapter | undefined>(undefined);
   const appUnsubscribeRef = useRef<(() => void) | undefined>(undefined);
   const [gateway, setGateway] = useState<GatewayStatus>({ gateway: "connecting", agent: "offline" });
-  const [deviceState, setDeviceState] = useState<ConnectionState>("offline");
+  const [deviceState, setDeviceState] = useState<DeviceState>("offline");
+  const [platformCapabilities, setPlatformCapabilities] = useState<PlatformCapabilities>({});
+  const [engineState, setEngineState] = useState<CentralEngineState>("unknown");
   const [deviceId, setDeviceId] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("browser preview");
   const [activePage, setActivePage] = useState<AppPage>("conversation");
@@ -201,7 +152,12 @@ export default function App() {
   appModelRef.current = appModel;
   appEffortRef.current = appEffort;
   appServiceTierRef.current = appServiceTier;
-  const [theme, setTheme] = useState<ThemeMode>(persisted.theme ?? "dark");
+  const [theme, setTheme] = useState<ThemeMode>(persisted.theme ?? "light");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarWasOpenRef = useRef(false);
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const [compactLayout, setCompactLayout] = useState(() => window.matchMedia("(max-width: 959px)").matches);
   const [appState, setAppState] = useState<ConnectionState>("offline");
   const [appError, setAppError] = useState("");
   const [threadId, setThreadId] = useState<string | undefined>();
@@ -226,7 +182,10 @@ export default function App() {
   const threadDraftsRef = useRef(new Map<string, ThreadDraft>());
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
-  const [composerClearance, setComposerClearance] = useState(204);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const followMessagesRef = useRef(true);
+  const scrollThreadRef = useRef<string | undefined>(undefined);
+  const [showLatest, setShowLatest] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -234,8 +193,16 @@ export default function App() {
   const [approvalResponse, setApprovalResponse] = useState('{"decision":"accept"}');
   const [executions, setExecutions] = useState<ExecutionActivity[]>([]);
   const [executionClock, setExecutionClock] = useState(() => Date.now());
+  const timingStoreRef = useRef<TurnTimingStore | null>(null);
+  if (!timingStoreRef.current) {
+    try { timingStoreRef.current = new TurnTimingStore(window.localStorage); }
+    catch { timingStoreRef.current = new TurnTimingStore(); }
+  }
+  const [timingVersion, setTimingVersion] = useState(0);
+  const refreshTimings = useCallback(() => setTimingVersion(version => version + 1), []);
   const [sending, setSending] = useState(false);
   const sendGuard = useRef(false);
+  const steeringRequestRef = useRef(false);
   const cancelSendRef = useRef(false);
   const pendingMessageRef = useRef<{threadId:string;clientMessageId:string} | undefined>(undefined);
   const [sendStage, setSendStage] = useState("");
@@ -299,11 +266,11 @@ export default function App() {
   }, [attachments]);
 
   useEffect(() => {
-    if (!hasRunningExecution) return;
+    if (!hasRunningExecution && !turnRunning) return;
     setExecutionClock(Date.now());
     const timer = window.setInterval(() => setExecutionClock(Date.now()), 1_000);
     return () => window.clearInterval(timer);
-  }, [hasRunningExecution]);
+  }, [hasRunningExecution, turnRunning]);
 
   useEffect(() => {
     if (threadId) threadMessageCacheRef.current.set(threadId, messages);
@@ -347,6 +314,8 @@ export default function App() {
     const thread = asRecord(asRecord(result)?.thread);
     if (!thread) return;
     const turns = Array.isArray(thread.turns) ? thread.turns : [];
+    for (const turn of turns) timingStoreRef.current?.observe(id, turn, "history");
+    refreshTimings();
     const activeTurn = turns.find(turn => ["inProgress", "in_progress"].includes(String(asRecord(turn)?.status)));
     const active = asRecord(thread.status)?.type === "active" || Boolean(activeTurn);
     if (active) runtimeWorkRef.current.add(`turn:${id}`); else runtimeWorkRef.current.delete(`turn:${id}`);
@@ -354,18 +323,37 @@ export default function App() {
     const restoredTurnId = asRecord(activeTurn)?.id;
     updateThreadTurnId(id, typeof restoredTurnId === "string" ? restoredTurnId : undefined);
     const rows = messagesFromThreadRead(result);
+    const pendingSteer = rows.find(row => row.delivery === "unknown");
+    if (pendingSteer) updateUncertainSubmission(id, {id:pendingSteer.id,threadId:id});
     for (const row of rows) for (const output of row.outputs ?? []) {
       if (output.status === "saving") runtimeWorkRef.current.add(`output:${output.id}`); else runtimeWorkRef.current.delete(`output:${output.id}`);
     }
     setRuntimeWorkCount(runtimeWorkRef.current.size);
-  }, [updateThreadRunning, updateThreadTurnId]);
+  }, [updateThreadRunning, updateThreadTurnId, updateUncertainSubmission, refreshTimings]);
 
   useEffect(() => {
-    const form=composerRef.current;
-    if(!form)return;
-    const observer=new ResizeObserver(()=>setComposerClearance(form.getBoundingClientRect().height+20));
-    observer.observe(form);return()=>observer.disconnect();
-  },[activePage]);
+    const media = window.matchMedia("(max-width: 959px)");
+    const update = () => { setCompactLayout(media.matches); setSidebarOpen(false); };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    const wasOpen = sidebarWasOpenRef.current;
+    sidebarWasOpenRef.current = sidebarOpen;
+    const frame = requestAnimationFrame(() => {
+      if (sidebarOpen && compactLayout) sidebarRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      else if (wasOpen && compactLayout) sidebarToggleRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [sidebarOpen, compactLayout]);
+
+  useEffect(() => {
+    const input = composerInputRef.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${Math.min(180, Math.max(48, input.scrollHeight))}px`;
+  }, [composer, activePage]);
 
   useEffect(() => {
     try {
@@ -376,8 +364,11 @@ export default function App() {
   }, [appCwd, appEffort, appModel, appServiceTier, appUrl, mode, theme]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
+    applyTheme(theme);
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => { if (theme === "system") applyTheme(theme); };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, [theme]);
 
   useEffect(() => {
@@ -458,15 +449,9 @@ export default function App() {
     setEvents((current) => [`${new Date().toLocaleTimeString()}  ${method}`, ...current].slice(0, 80));
   }, []);
 
-  const appendAssistantDelta = useCallback((delta: string, targetThreadId: string) => {
+  const appendAssistantDelta = useCallback((delta: string, targetThreadId: string, itemId?: string, targetTurnId?: string) => {
     if (!delta) return;
-    updateThreadMessages(targetThreadId, (current) => {
-      const last = current[current.length - 1];
-      if (last?.role === "assistant" && !last.outputs?.length) {
-        return [...current.slice(0, -1), { ...last, content: `${last.content}${delta}` }];
-      }
-      return [...current, { id: crypto.randomUUID(), role: "assistant", content: delta, createdAt: new Date().toISOString() }];
-    });
+    updateThreadMessages(targetThreadId, (current) => appendStreamDelta(current, delta, itemId, targetTurnId));
   }, [updateThreadMessages]);
 
   const handleDynamicToolCall = useCallback(async (message: AppServerMessage) => {
@@ -523,14 +508,56 @@ export default function App() {
   }, []);
 
   const handleAppServerMessage = useCallback(
-    (message: AppServerMessage) => {
+    (event: GatewayUiEvent) => {
+      const message = event.message;
       addEvent(message);
+      if (event.kind === "invalid") { setAppError(event.error); return; }
+      setExecutions(current => reduceExecutions(current, event));
+      if (event.kind === "capabilities") { setPlatformCapabilities(event.capabilities); setEngineState("ready"); return; }
+      if (event.kind === "runtime-unavailable") {
+        setEngineState("unavailable");
+        setAppError(event.error);
+        timingStoreRef.current?.uncertain(); refreshTimings();
+        reconnectThreadIdsRef.current = new Set(runningThreadIdsRef.current);
+        for (const key of runtimeWorkRef.current) if (key.startsWith("turn:")) runtimeWorkRef.current.delete(key);
+        setRuntimeWorkCount(runtimeWorkRef.current.size);
+        setRunningThreadIds(new Set()); setTurnIdsByThread(new Map());
+        return;
+      }
       const params = asRecord(message.params);
       // The gateway can interleave events from several owned Threads. Update
       // lifecycle/tool/approval state globally, then route visible messages to
       // the selected Thread or its background cache.
       const eventThreadId = typeof params?.threadId === "string" ? params.threadId : undefined;
       const eventTurn = asRecord(params?.turn);
+      const timingThreadId = eventThreadId ?? threadIdRef.current;
+      const eventTurnId = typeof eventTurn?.id === "string" ? eventTurn.id : typeof params?.turnId === "string" ? params.turnId
+        : timingThreadId ? timingStoreRef.current?.forThread(timingThreadId).find(row => row.status === "running")?.turnId : undefined;
+      const terminalEvent = message.method === "turn/completed" || message.method === "turn/failed" || message.method === "turn/cancelled";
+      if (timingThreadId && eventTurnId && (message.method === "turn/started" || terminalEvent)) {
+        timingStoreRef.current?.observe(timingThreadId, {
+          ...params, ...eventTurn, id: eventTurnId,
+          status: eventTurn?.status ?? message.method?.replace("turn/", ""),
+        }, terminalEvent ? "finish" : "start");
+        refreshTimings();
+        if (message.method === "turn/started") {
+          const pending = pendingMessageRef.current;
+          if (pending?.threadId === timingThreadId) updateThreadMessages(timingThreadId, rows => rows.map(row => row.id === pending.clientMessageId ? { ...row, turnId: eventTurnId } : row));
+        }
+      }
+      // Full item notifications cover resumed streams and responses without deltas.
+      if (timingThreadId && eventTurnId && message.method === "item/completed" && asRecord(params?.item)?.type === "agentMessage") {
+        const restored = messagesFromThreadRead({ thread: { turns: [{ id: eventTurnId, items: [params!.item] }] } });
+        updateThreadMessages(timingThreadId, rows => {
+          const next = [...rows];
+          for (const row of restored) {
+            const index = next.findIndex(existing => existing.id === row.id);
+            if (index < 0) next.push(row); else next[index] = { ...next[index], ...row };
+          }
+          return next;
+        });
+        return;
+      }
       if (eventThreadId && message.method === "turn/started") {
         runtimeWorkRef.current.add(`turn:${eventThreadId}`);
         updateThreadRunning(eventThreadId, true);
@@ -559,6 +586,7 @@ export default function App() {
         updateThreadTurnId(threadIdRef.current, undefined);
       }
       if (eventThreadId && (message.method === "error" || message.error)) {
+        if (params?.willRetry !== true) { timingStoreRef.current?.uncertain(eventThreadId); refreshTimings(); }
         runtimeWorkRef.current.delete(`turn:${eventThreadId}`);
         updateThreadRunning(eventThreadId, false);
         updateThreadTurnId(eventThreadId, undefined);
@@ -566,8 +594,8 @@ export default function App() {
           setBackgroundNotices((current) => [...current.filter((notice) => notice.threadId !== eventThreadId), { id: crypto.randomUUID(), threadId: eventThreadId, message: "后台对话执行失败" }].slice(-3));
         }
       }
-      if (message.method === "output/state" && asRecord(params?.output)) {
-        const output = params!.output as OutputArtifact;
+      if (event.kind === "output") {
+        const output = event.output;
         if (output.status === "saving") runtimeWorkRef.current.add(`output:${output.id}`); else runtimeWorkRef.current.delete(`output:${output.id}`);
       }
       setRuntimeWorkCount(runtimeWorkRef.current.size);
@@ -576,72 +604,18 @@ export default function App() {
         return;
       }
 
-      if (message.method === "device/status") {
-        setDeviceState(params?.agent === "online" ? "online" : "offline");
-        if (typeof params?.deviceId === "string") setDeviceId(params.deviceId);
+      if (event.kind === "device") {
+        setDeviceState(event.state);
+        if (event.deviceId) setDeviceId(event.deviceId);
         return;
       }
-      if (message.method === "device/tool/started") {
-        const requestId = typeof params?.requestId === "string" ? params.requestId : undefined;
-        if (!requestId) return;
-        const parsedStartedAt = typeof params?.startedAt === "string" ? Date.parse(params.startedAt) : Number.NaN;
-        setExecutions((current) => [
-          ...current.filter((execution) => execution.requestId !== requestId),
-          {
-            requestId,
-            threadId: typeof params?.threadId === "string" ? params.threadId : undefined,
-            turnId: typeof params?.turnId === "string" ? params.turnId : undefined,
-            tool: typeof params?.tool === "string" ? params.tool : "device_tool",
-            program: typeof params?.program === "string" ? params.program : undefined,
-            cwd: typeof params?.cwd === "string" ? params.cwd : undefined,
-            streaming: params?.streaming === true,
-            status: "running" as ExecutionStatus,
-            startedAt: Number.isFinite(parsedStartedAt) ? parsedStartedAt : Date.now(),
-            lastSequence: 0,
-            logs: [],
-          },
-        ].slice(-24));
-        setExecutionClock(Date.now());
-        return;
-      }
-      if (message.method === "device/tool/output") {
-        const requestId = typeof params?.requestId === "string" ? params.requestId : undefined;
-        const eventSequence = typeof params?.eventSequence === "number" ? params.eventSequence : 0;
-        const stream = params?.stream === "stdout" || params?.stream === "stderr" || params?.stream === "progress" ? params.stream : undefined;
-        if (!requestId || !stream || eventSequence < 1) return;
-        setExecutions((current) => current.map((execution) => {
-          if (execution.requestId !== requestId || eventSequence <= execution.lastSequence) return execution;
-          const chunk = typeof params?.chunk === "string" ? params.chunk : "";
-          const appended = chunk ? appendBoundedExecutionLog(execution.logs, {sequence:eventSequence,stream,chunk}) : {logs:execution.logs,truncated:false};
-          return {
-            ...execution,
-            lastSequence: eventSequence,
-            truncated: execution.truncated || params?.truncated === true || appended.truncated,
-            logs: appended.logs,
-          };
-        }));
-        return;
-      }
-      if (message.method === "device/tool/completed") {
-        const requestId = typeof params?.requestId === "string" ? params.requestId : undefined;
-        if (!requestId) return;
-        const status: ExecutionStatus = params?.status === "succeeded" || params?.status === "failed" || params?.status === "cancelled" ? params.status : "unknown";
-        setExecutions((current) => current.map((execution) => execution.requestId === requestId ? {
-          ...execution,
-          status,
-          durationMs: typeof params?.durationMs === "number" ? params.durationMs : Date.now() - execution.startedAt,
-          exitCode: typeof params?.exitCode === "number" ? params.exitCode : undefined,
-          error: typeof params?.error === "string" ? boundedText(params.error, 2_000) : undefined,
-          truncated: execution.truncated || params?.truncated === true,
-        } : execution));
-        return;
-      }
+      if (event.kind === "execution-start" || event.kind === "execution-output" || event.kind === "execution-end") return;
       if (message.method === "attachment/progress") {
         if (!eventThreadId || eventThreadId === pendingMessageRef.current?.threadId) setSendStage(String(params?.stage ?? "正在准备附件"));
         return;
       }
-      if(message.method==="output/state" && asRecord(params?.output)){
-        const output=params!.output as OutputArtifact;
+      if(event.kind==="output"){
+        const output=event.output;
         const targetThreadId = eventThreadId ?? output.threadId ?? threadIdRef.current;
         if (!targetThreadId) return;
         updateThreadMessages(targetThreadId, current=>{
@@ -660,36 +634,37 @@ export default function App() {
           return submission?{...item,attachments:submission.attachments}:item;
         })); return;
       }
-      if (message.method === "gateway/disconnected") {
-        setAppState("offline");
+      if (event.kind === "connection" && event.state === "offline") {
+        timingStoreRef.current?.uncertain();
+        refreshTimings();
+        setAppState(event.retryable===false?"error":"offline");
+        if(event.retryable===false){
+          const error=event.error??"本机授权已失效，请在设置中重新配对。";
+          setAppError(error);setConfigReady(false);
+          setMessages(current=>[...current,{id:crypto.randomUUID(),role:"system",content:error}]);
+        }
         setDeviceState("offline");
         reconnectThreadIdsRef.current = new Set(runningThreadIdsRef.current);
         runtimeWorkRef.current.clear();
         setRuntimeWorkCount(0);
         setRunningThreadIds(new Set());
         setTurnIdsByThread(new Map());
-        setExecutions((current) => current.map((execution) => execution.status === "running" ? {
-          ...execution,
-          status:"unknown",
-          durationMs:Date.now()-execution.startedAt,
-          error:"中央连接已断开，无法确认本机命令的最终状态",
-        } : execution));
         return;
       }
-      if (message.method === "gateway/reconnecting") {
+      if (event.kind === "connection" && event.state === "reconnecting") {
         setAppState("reconnecting");
         setDeviceState("offline");
-        const reconnecting = asRecord(message.params);
-        const attempt = typeof reconnecting?.attempt === "number" ? reconnecting.attempt : undefined;
+        const attempt = event.attempt;
         setMessages((current) => [...current, { id: crypto.randomUUID(), role: "system", content: attempt ? `中央连接已断开，正在重连（第 ${attempt} 次）……` : "中央连接已断开，正在重连……" }]);
         return;
       }
-      if (message.method === "gateway/reconnected") {
+      if (event.kind === "connection" && event.state === "online") {
         // The default test principal gives the gateway durable-for-process
         // ownership across reconnects. Preserve the selected Thread so the
         // user can continue it, but never retry an interrupted write/turn.
         setAppState("online");
-        setDeviceState("offline");
+        // gateway.ready/device.status already reported this connection's
+        // device state; initialization completion must not overwrite it.
         const activeThreadId = threadIdRef.current;
         setMessages((current) => [...current, { id: crypto.randomUUID(), role: "system", content: activeThreadId ? "中央连接已恢复，正在恢复当前 Thread；中断中的写操作不会自动重试。" : "中央连接已恢复，请创建或恢复 Thread 后继续。" }]);
         const codexia = codexiaRef.current;
@@ -724,36 +699,29 @@ export default function App() {
         return;
       }
 
-      if (message.id !== undefined && message.method) {
-        const kind = message.requestKind ?? (message.method.includes("requestApproval")
-          ? "approval"
-          : message.method === "item/tool/requestUserInput"
-            ? "user-input"
-            : "other");
-        if (kind !== "other") {
-          setApprovals((current) => [...current.filter((item) => item.id !== message.id), { id: message.id!, method: message.method!, params: message.params, kind, threadId: eventThreadId }]);
-          setApprovalResponse(kind === "user-input" ? '{"answers":{}}' : '{"decision":"accept"}');
-          if (eventThreadId) updateThreadMessages(eventThreadId, (current) => [...current, { id: crypto.randomUUID(), role: "system", content: "App Server 请求审批或用户输入" }]);
-          if (eventThreadId && eventThreadId !== threadIdRef.current) {
-            setBackgroundNotices((current) => [...current.filter((notice) => notice.threadId !== eventThreadId), { id: crypto.randomUUID(), threadId: eventThreadId, message: "后台对话需要你的确认" }].slice(-3));
-          }
+      if (event.kind === "approval") {
+        const { kind } = event.approval;
+        setApprovals((current) => [...current.filter((item) => item.id !== event.approval.id), event.approval]);
+        setApprovalResponse(kind === "user-input" ? '{"answers":{}}' : '{"decision":"accept"}');
+        if (eventThreadId) updateThreadMessages(eventThreadId, (current) => [...current, { id: crypto.randomUUID(), role: "system", content: "App Server 请求审批或用户输入" }]);
+        if (eventThreadId && eventThreadId !== threadIdRef.current) {
+          setBackgroundNotices((current) => [...current.filter((notice) => notice.threadId !== eventThreadId), { id: crypto.randomUUID(), threadId: eventThreadId, message: "后台对话需要你的确认" }].slice(-3));
         }
         return;
       }
 
-      if (message.method === "serverRequest/resolved") {
-        const requestId = params?.requestId;
-        if (typeof requestId === "string" || typeof requestId === "number") setApprovals((current) => current.filter((item) => item.id !== requestId));
+      if (event.kind === "approval-resolved") {
+        setApprovals((current) => current.filter((item) => item.id !== event.requestId));
         return;
       }
 
       if (eventThreadId && eventThreadId !== threadIdRef.current) {
         if (message.method === "item/agentMessage/delta") {
           const delta = typeof params?.delta === "string" ? params.delta : typeof params?.text === "string" ? params.text : "";
-          appendAssistantDelta(delta, eventThreadId);
+          appendAssistantDelta(delta, eventThreadId, typeof params?.itemId === "string" ? params.itemId : undefined, eventTurnId);
         } else if (turnFinished) {
           const status = typeof eventTurn?.status === "string" ? eventTurn.status : message.method?.replace("turn/", "") ?? "completed";
-          updateThreadMessages(eventThreadId, (current) => [...current, { id: crypto.randomUUID(), role: "system", content: `回合 ${status}` }]);
+          updateThreadMessages(eventThreadId, (current) => eventTurnId ? current.some(row => row.id === `timing-${eventTurnId}`) ? current : [...current, { id: `timing-${eventTurnId}`, role: "system", content: "", turnId: eventTurnId, timingOnly: true }] : [...current, { id: crypto.randomUUID(), role: "system", content: `回合 ${status}` }]);
         }
         return;
       }
@@ -761,14 +729,15 @@ export default function App() {
       if (message.method === "item/agentMessage/delta") {
         const delta = typeof params?.delta === "string" ? params.delta : typeof params?.text === "string" ? params.text : "";
         const targetThreadId = eventThreadId ?? threadIdRef.current;
-        if (targetThreadId) appendAssistantDelta(delta, targetThreadId);
+        if (targetThreadId) appendAssistantDelta(delta, targetThreadId, typeof params?.itemId === "string" ? params.itemId : undefined, eventTurnId);
       } else if (turnFinished) {
         const turn = asRecord(params?.turn);
         const status = typeof turn?.status === "string" ? turn.status : message.method?.replace("turn/", "") ?? "completed";
-        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "system", content: `回合 ${status}` }]);
+        setMessages((current) => eventTurnId ? current.some(row => row.id === `timing-${eventTurnId}`) ? current : [...current, { id: `timing-${eventTurnId}`, role: "system", content: "", turnId: eventTurnId, timingOnly: true }] : [...current, { id: crypto.randomUUID(), role: "system", content: `回合 ${status}` }]);
       } else if (message.method === "error" || message.error) {
         const failedThreadId = eventThreadId ?? threadIdRef.current;
         if (failedThreadId) {
+          if (params?.willRetry !== true) { timingStoreRef.current?.uncertain(failedThreadId); refreshTimings(); }
           runtimeWorkRef.current.delete(`turn:${failedThreadId}`);
           updateThreadRunning(failedThreadId, false);
           setRuntimeWorkCount(runtimeWorkRef.current.size);
@@ -781,10 +750,12 @@ export default function App() {
         ]);
       }
     },
-    [addEvent, appendAssistantDelta, handleDynamicToolCall, refreshModels, syncRuntimeHistory, updateThreadMessages, updateThreadRunning, updateThreadTurnId],
+    [addEvent, appendAssistantDelta, handleDynamicToolCall, refreshModels, syncRuntimeHistory, updateThreadMessages, updateThreadRunning, updateThreadTurnId, refreshTimings],
   );
 
   const disconnectAppServer = useCallback(() => {
+    timingStoreRef.current?.uncertain();
+    refreshTimings();
     connectionGenerationRef.current += 1;
     connectionInFlightRef.current = false;
     appUnsubscribeRef.current?.();
@@ -793,6 +764,8 @@ export default function App() {
     appClientRef.current = undefined;
     codexiaRef.current = undefined;
     setAppState("offline");
+    setPlatformCapabilities({});
+    setEngineState("unknown");
     setThreadId(undefined);
     threadIdRef.current = undefined;
     setTurnIdsByThread(new Map());
@@ -803,6 +776,7 @@ export default function App() {
     runtimeWorkRef.current.clear();
     setRuntimeWorkCount(0);
     setRunningThreadIds(new Set());
+    setExecutions([]);
     setThreadBusy(undefined);
     threadsLoadingRef.current = false;
     setThreadsLoading(false);
@@ -980,6 +954,8 @@ export default function App() {
       } catch (error) {
         if (!isMissingRolloutError(error)) throw error;
       }
+      timingStoreRef.current?.removeThread(thread.id);
+      refreshTimings();
       archivedThreadIdsRef.current.delete(thread.id);
       restoredThreadIdsRef.current.delete(thread.id);
       setArchivedThreads((current) => current.filter((item) => item.id !== thread.id));
@@ -993,6 +969,8 @@ export default function App() {
   const connectAppServer = useCallback(async (overrideUrl?: string, preferredThreadId?: string) => {
     if (connectionInFlightRef.current) return false;
     disconnectAppServer();
+    timingStoreRef.current?.useScope(timingScope((overrideUrl ?? appUrl).trim()));
+    refreshTimings();
     const generation = ++connectionGenerationRef.current;
     connectionInFlightRef.current = true;
     setAppError("");
@@ -1003,7 +981,7 @@ export default function App() {
     const codexia = new CodexiaGatewayAdapter(client);
     appClientRef.current = client;
     codexiaRef.current = codexia;
-    appUnsubscribeRef.current = codexia.subscribe(handleAppServerMessage);
+    appUnsubscribeRef.current = codexia.subscribeUi(handleAppServerMessage);
     try {
       await codexia.initialize();
       if (connectionGenerationRef.current !== generation) return;
@@ -1022,12 +1000,15 @@ export default function App() {
 
       if (summaries.length > 0) {
         nextThreadId = summaries.find(thread => thread.id === preferredThreadId)?.id ?? summaries[0].id;
-        await codexia.threadResume(nextThreadId);
-        if (connectionGenerationRef.current !== generation) return;
-        const history = await codexia.threadRead(nextThreadId);
-        if (connectionGenerationRef.current !== generation) return;
-        syncRuntimeHistory(nextThreadId, history.result);
-        restoredMessages = messagesFromThreadRead(history.result);
+        const recovery = await recoverInitialThread(codexia, nextThreadId, () => connectionGenerationRef.current === generation);
+        if (recovery.state === "superseded") return;
+        if (recovery.state === "unavailable") {
+          setAppError(recovery.notice);
+          nextThreadId = undefined;
+        } else {
+          syncRuntimeHistory(nextThreadId, recovery.history.result);
+          restoredMessages = messagesFromThreadRead(recovery.history.result);
+        }
       }
 
       setThreadId(nextThreadId);
@@ -1052,7 +1033,7 @@ export default function App() {
   }, [appUrl, disconnectAppServer, handleAppServerMessage, mode, refreshModels, syncRuntimeHistory]);
 
   const configBusy = sending || uncertainSubmissions.size > 0 || approvals.length > 0 || attachments.adding || workspaceLoading || Boolean(threadBusy) || runtimeWorkCount > 0 || messages.some(message => message.outputs?.some(output => output.status === "saving"));
-  const applyRuntimeConfig = async () => {
+  const applyRuntimeConfig = async (selectedConfig?: DesktopConfig) => {
     if (configApplyingRef.current || configLoadingRef.current || configBusy || !runtimeConfig) return;
     configApplyingRef.current = true; setConfigApplying(true); setConfigError(""); setConfigNotice("");
     const previousUrl = runtimeConfig.uiGatewayUrl;
@@ -1065,7 +1046,7 @@ export default function App() {
         if (runtimeWorkRef.current.size) throw new Error("任务或文件保存尚未结束，请完成后再应用配置");
       }
       disconnectAppServer();
-      const view = await invoke<ConfigView>("apply_desktop_config", { config: configDraft });
+      const view = await invoke<ConfigView>("apply_desktop_config", { config: selectedConfig ?? configDraft });
       setRuntimeConfig(view); setConfigDraft(view.saved); setAppUrl(view.uiGatewayUrl); setConfigReady(true);
       setWorkspacePath("."); setWorkspaceResultStatus("idle"); setGatewayOutput("工作区已切换，请刷新目录");
       if (previousUrl !== view.uiGatewayUrl) {
@@ -1097,17 +1078,61 @@ export default function App() {
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
+    if (scrollThreadRef.current !== threadId) {
+      scrollThreadRef.current = threadId;
+      followMessagesRef.current = true;
+      setShowLatest(false);
+    }
+    if (!followMessagesRef.current) { setShowLatest(true); return; }
     const frame = window.requestAnimationFrame(() => {
       element.scrollTo({ top: element.scrollHeight, behavior: "auto" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages, threadId]);
+  }, [messages, executions, turnRunning, threadId, activePage, timingVersion]);
+
+  const sendSteering = useCallback(async () => {
+    const codexia = codexiaRef.current;
+    if (engineState === "unavailable" || !codexia || !threadId || !composer.trim() || sendGuard.current || uncertainSubmission || appState !== "online") return;
+    if (mode !== "central-gateway") { setAppError("运行中追加需要中央网关连接"); return; }
+    if (attachments.drafts.length) { setAppError("运行中追加目前仅支持文字，请移除附件后发送"); return; }
+    if (!turnId) { setAppError("当前轮次尚未确认，请等待启动完成或重新选择对话"); return; }
+    const target = threadId;
+    const text = composer;
+    const clientMessageId = crypto.randomUUID();
+    sendGuard.current = true; steeringRequestRef.current = true; setSending(true); setSendStage("正在追加要求…"); setAppError("");
+    const delivery = (state: ChatMessage["delivery"]) => updateThreadMessages(target, rows => rows.map(row => row.id === clientMessageId ? {...row,delivery:state} : row));
+    updateThreadMessages(target, rows => [...rows,{id:clientMessageId,role:"user",content:text,delivery:"sending",turnId}]);
+    const accepted = () => {
+      delivery("sent");
+      threadDraftsRef.current.set(target, {text:"",attachments:[]});
+      if (threadIdRef.current === target) setComposer("");
+      updateUncertainSubmission(target, undefined);
+    };
+    try {
+      await codexia.turnSteer({threadId:target,expectedTurnId:turnId,clientMessageId,input:[{type:"text",text}]});
+      // turn/steer emits no new turn/started. Existing lifecycle events remain authoritative.
+      accepted();
+    } catch (error) {
+      setAppError(String(error));
+      try {
+        const history = await codexia.threadRead(target);
+        syncRuntimeHistory(target, history.result);
+        const status = asRecord((await appClientRef.current?.request("message/status", {threadId:target,clientMessageId}))?.result);
+        if (status?.status === "sent") { accepted(); setAppError(""); }
+        else if (status?.status === "failed" || status?.status === "absent") { delivery("failed"); updateUncertainSubmission(target, undefined); }
+        else { delivery("unknown"); updateUncertainSubmission(target, {id:clientMessageId,threadId:target}); }
+      } catch {
+        delivery("unknown"); updateUncertainSubmission(target, {id:clientMessageId,threadId:target});
+      }
+    } finally { sendGuard.current = false; steeringRequestRef.current = false; setSending(false); setSendStage(""); }
+  }, [threadId,turnId,composer,uncertainSubmission,appState,engineState,mode,attachments.drafts,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
 
   const sendTurn = useCallback(async () => {
     if (configApplyingRef.current) return;
+    if (turnRunning) { if (!threadBusy && !attachments.adding) await sendSteering(); return; }
     const text = composer;
     const codexia = codexiaRef.current;
-    if ((!text.trim() && !attachments.drafts.length) || !codexia || appState !== "online" || turnRunning || threadBusy || sendGuard.current || attachments.adding || uncertainSubmission) return;
+    if (engineState === "unavailable" || (!text.trim() && !attachments.drafts.length) || !codexia || appState !== "online" || turnRunning || threadBusy || sendGuard.current || attachments.adding || uncertainSubmission) return;
     if (attachments.drafts.length && deviceState !== "online") { setAppError("Local Agent 离线，请等待设备上线后重试"); return; }
     sendGuard.current = true; cancelSendRef.current = false;
     setSending(true); setSendStage("正在客户端校验附件"); setAppError("");
@@ -1126,7 +1151,6 @@ export default function App() {
           ...(appModel.trim() ? { model: appModel.trim() } : {}),
           ...(appServiceTier.trim() ? { serviceTier: appServiceTier.trim() } : {}),
           ...(mode !== "central-gateway" && appCwd.trim() ? { cwd: appCwd.trim() } : {}),
-          serviceName: "central-codex-local-spike",
         });
         targetThreadId = threadIdFromResult(response.result);
         if (!targetThreadId) throw new Error("thread/start 返回中没有 thread.id");
@@ -1149,6 +1173,11 @@ export default function App() {
       });
       const result = asRecord(response.result);
       const turn = asRecord(result?.turn);
+      if (typeof turn?.id === "string") {
+        timingStoreRef.current?.observe(targetThreadId, turn, "start");
+        refreshTimings();
+        updateThreadMessages(targetThreadId, rows => rows.map(row => row.id === clientMessageId ? { ...row, turnId: turn.id as string } : row));
+      }
       const submission = asRecord(result?.submission);
       if (submission?.attachments) setMessages(current=>current.map(item=>item.id===clientMessageId?{...item,attachments:submission.attachments}:item));
       threadDraftsRef.current.set(targetThreadId, { text: "", attachments: [] });
@@ -1175,7 +1204,7 @@ export default function App() {
       sendGuard.current=false;pendingMessageRef.current=undefined;setSending(false);setSendStage("");
       if (creatingThread) setThreadBusy(undefined);
     }
-  }, [appCwd,appEffort,appModel,appServiceTier,appState,composer,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission]);
+  }, [appCwd,appEffort,appModel,appServiceTier,appState,engineState,composer,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
 
   const reconcileSubmission = async () => {
     if (!uncertainSubmission || !codexiaRef.current) return;
@@ -1186,9 +1215,11 @@ export default function App() {
       const status=asRecord((await appClientRef.current?.request("message/status",{threadId:uncertainSubmission.threadId,clientMessageId:uncertainSubmission.id}))?.result);
       if (status?.status === "sent") {threadDraftsRef.current.set(uncertainSubmission.threadId,{text:"",attachments:[]});setComposer("");attachments.setDrafts([]);setMessages(messagesFromThreadRead(history.result));updateUncertainSubmission(uncertainSubmission.threadId, undefined);setAppError("");}
       else if (status?.status === "failed" || status?.status === "absent") {
-        runtimeWorkRef.current.delete(`turn:${uncertainSubmission.threadId}`);
-        setRuntimeWorkCount(runtimeWorkRef.current.size);
-        updateThreadRunning(uncertainSubmission.threadId, false);
+        updateThreadMessages(uncertainSubmission.threadId, rows => rows.map(row => row.id === uncertainSubmission.id ? {...row,delivery:"failed"} : row));
+        if (!composer.trim()) {
+          const failed = messagesFromThreadRead(history.result).find(row => row.id === uncertainSubmission.id);
+          if (failed) setComposer(failed.content);
+        }
         updateUncertainSubmission(uncertainSubmission.threadId, undefined);setAppError("该消息尚未提交，可以重试发送");
       }
       else setAppError("提交结果仍未确认，请稍后再次核对历史；草稿已保留");
@@ -1241,7 +1272,7 @@ export default function App() {
       setMessages(restored);
       setEvents([]);
     } catch (error) {
-      setAppError(error instanceof Error ? error.message : String(error));
+      setAppError(threadRecoveryError(error));
     } finally {
       setThreadBusy(undefined);
     }
@@ -1363,7 +1394,7 @@ export default function App() {
     return normalized.includes("turn") || normalized.includes("message") || normalized.includes("thread");
   });
 
-  const workspaceAvailable = mode !== "central-gateway" || deviceState === "online";
+  const workspaceAvailable = mode === "fake-central" ? gateway.gateway === "online" : mode === "central-gateway" && appState === "online" && deviceState === "online";
   const joinWorkspacePath = useCallback((base: string, name: string) => {
     const normalized = base.trim().replace(/[\\/]+$/, "");
     return normalized && normalized !== "." ? `${normalized}/${name}` : name;
@@ -1389,18 +1420,25 @@ export default function App() {
   const primaryConnectionState = mode === "fake-central" ? gateway.gateway : appState;
   const connectionTitle = mode === "central-gateway" ? "中央网关" : mode === "local-app-server" ? "本机 App Server" : "Fake Central";
   const connectionStateLabel = primaryConnectionState === "online" ? "已连接" : primaryConnectionState === "connecting" ? "连接中" : primaryConnectionState === "reconnecting" ? "重连中" : primaryConnectionState === "error" ? "连接错误" : "未连接";
-  const canStartConversation = mode !== "fake-central" && appState === "online";
+  const canStartConversation = mode !== "fake-central" && appState === "online" && engineState !== "unavailable";
   const selectedModel = models.find((model) => (model.model || model.id) === appModel || model.id === appModel);
   const modelLabel = selectedModel?.displayName || selectedModel?.model || appModel || "服务端默认模型";
   const reasoningOptions = selectedModel?.supportedReasoningEfforts ?? [];
   const serviceTierOptions = selectedModel?.serviceTiers ?? [];
-  const visibleExecutions = executions.filter((execution) => !execution.threadId || execution.threadId === threadId).slice(-3);
+  const visibleExecutions = executions.filter((execution) => !execution.threadId || execution.threadId === threadId);
   const visibleExecutionRunning = visibleExecutions.some((execution) => execution.status === "running");
+  const threadTimings = threadId ? timingStoreRef.current?.forThread(threadId) ?? [] : [];
+  const messageTimings = timingAnchors(messages, threadTimings);
+  const runningTiming = threadTimings.find(timing => timing.turnId === turnId && timing.status === "running");
 
   const openSettings = (section: SettingsSection = "connection") => {
     setSettingsSection(section);
     setActivePage("settings");
+    setSidebarOpen(false);
   };
+
+  const closeSidebar = () => setSidebarOpen(false);
+  const configuredWorkspaceName = runtimeConfig?.effective.workspaceRoot.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
 
   const startConversationFromSidebar = () => {
     if (canStartConversation) startNewConversation();
@@ -1408,15 +1446,26 @@ export default function App() {
   };
 
   return (
-    <main className="desktop-shell">
-      <aside className="codex-sidebar">
+    <main className={`desktop-shell ${sidebarOpen ? "sidebar-open" : ""}`}>
+      {sidebarOpen && compactLayout && <button className="sidebar-backdrop" aria-label="关闭导航" onClick={closeSidebar} />}
+      <aside ref={sidebarRef} id="app-sidebar" className="codex-sidebar" inert={compactLayout && !sidebarOpen} aria-label="应用导航" onKeyDown={(event) => {
+        if (!compactLayout || !sidebarOpen) return;
+        if (event.key === "Escape") { event.preventDefault(); closeSidebar(); }
+        if (event.key === "Tab") {
+          const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]'));
+          const first = items[0], last = items.at(-1);
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+      }}>
+        <button className="sidebar-close text-icon-button" aria-label="关闭导航" onClick={closeSidebar}><UiIcon name="close" /></button>
         {activePage === "conversation" ? (
           <>
             <nav className="conversation-nav" aria-label="对话导航">
-              <button className="sidebar-primary-action" onClick={startConversationFromSidebar} disabled={sending || Boolean(threadBusy) || appState === "connecting"}>
-                <span>＋</span><strong>新对话</strong><small>Ctrl N</small>
+              <button className="sidebar-primary-action" onClick={() => { startConversationFromSidebar(); setSidebarOpen(false); }} disabled={sending || Boolean(threadBusy) || appState === "connecting"}>
+                <UiIcon name="edit" /><strong>新对话</strong>
               </button>
-              <div className="sidebar-search-wrap"><span>⌕</span><input aria-label="搜索对话" value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder="搜索对话" /></div>
+              <div className="sidebar-search-wrap"><UiIcon name="search" /><input aria-label="搜索对话" value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder="搜索对话" />{threadQuery && <button type="button" className="text-icon-button" aria-label="清除搜索" onClick={() => setThreadQuery("")}><UiIcon name="close" /></button>}</div>
             </nav>
 
             <section className="conversation-list-section">
@@ -1433,7 +1482,7 @@ export default function App() {
                   const needsApproval = approvals.some((item) => item.threadId === thread.id);
                   const needsReconcile = uncertainSubmissions.has(thread.id);
                   return <div key={thread.id} className={`conversation-item ${thread.id === threadId ? "active" : ""} ${thread.archived ? "archived" : ""} ${running ? "running" : ""}`}>
-                    <button className="conversation-select" onClick={() => void resumeThread(thread.id)} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
+                    <button className="conversation-select" aria-current={thread.id === threadId ? "page" : undefined} onClick={() => { void resumeThread(thread.id); setSidebarOpen(false); }} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
                       <span className="conversation-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong></span>
                     </button>
                     <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : <><button title="编辑标题" aria-label="编辑标题" disabled={Boolean(threadBusy)} onClick={() => void renameThread(thread)}><EditIcon /></button><button title="归档" aria-label="归档" disabled={Boolean(threadBusy)} onClick={() => void archiveThread(thread)}><ArchiveIcon /></button></>}</div>
@@ -1443,30 +1492,29 @@ export default function App() {
             </section>
 
             <div className="sidebar-footer">
-              <button className="connection-summary" onClick={() => openSettings("connection")}>
-                <span className={`connection-dot dot-${primaryConnectionState}`} />
-                <span><strong>{connectionTitle}</strong><small>{connectionStateLabel} · Local Agent {deviceState === "online" ? "在线" : "离线"}</small></span>
-                <span className="connection-summary-arrow">›</span>
-              </button>
-              <button className="sidebar-settings-button" onClick={() => openSettings()}><span>⚙</span><span>设置</span></button>
+              <div className="connection-summary" role="status" aria-label="连接状态">
+                <span className="connection-summary-lines"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "connecting" || deviceState === "reconnecting" ? "连接中" : "离线"}</span></span>
+              </div>
+              <button className="sidebar-settings-button" onClick={() => openSettings()}><UiIcon name="settings" /><span>设置</span></button>
             </div>
           </>
         ) : (
           <>
-            <button className="back-to-app" onClick={() => setActivePage("conversation")}><span>←</span> 返回对话</button>
+            <button className="back-to-app" onClick={() => { setActivePage("conversation"); setSidebarOpen(false); }}><UiIcon name="arrow" /> 返回应用</button>
             <div className="settings-nav-title">设置</div>
             <nav className="settings-nav" aria-label="设置分类">
-              <button className={settingsSection === "connection" ? "active" : ""} onClick={() => setSettingsSection("connection")}><span>⚙</span><span><strong>常规与连接</strong><small>网关、模型与运行模式</small></span></button>
-              <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => setSettingsSection("conversations")}><span>⌁</span><span><strong>对话管理</strong><small>归档、恢复与永久删除</small></span></button>
-              <button className={settingsSection === "workspace" ? "active" : ""} onClick={() => setSettingsSection("workspace")}><span>▣</span><span><strong>工作区与工具</strong><small>本机文件和受控命令</small></span></button>
-              <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => setSettingsSection("diagnostics")}><span>≋</span><span><strong>诊断</strong><small>状态、事件与版本</small></span></button>
+              <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="settings" /><strong>常规与连接</strong></button>
+              <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="review" /><strong>对话管理</strong></button>
+              <button className={settingsSection === "workspace" ? "active" : ""} onClick={() => openSettings("workspace")}><UiIcon name="folder" /><strong>工作区与工具</strong></button>
+              <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => openSettings("diagnostics")}><UiIcon name="activity" /><strong>诊断</strong></button>
             </nav>
             <div className="settings-sidebar-note"><span className={`connection-dot dot-${primaryConnectionState}`} /><span>{connectionTitle}<small>{connectionStateLabel}</small></span></div>
           </>
         )}
       </aside>
 
-      <section className="main-stage">
+      <section className="main-stage" inert={compactLayout && sidebarOpen}>
+        <button ref={sidebarToggleRef} className="sidebar-toggle text-icon-button" aria-label="打开导航" aria-controls="app-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><UiIcon name="panel" /></button>
         {activePage === "conversation" ? (
           <div className="conversation-page">
             <header className="conversation-header">
@@ -1489,27 +1537,46 @@ export default function App() {
             )}
 
             <section className="conversation-surface">
-              <div ref={messageListRef} className="message-list" style={{paddingBottom:composerClearance}} role="log" aria-live="polite" aria-label="对话消息">
+              <div ref={messageListRef} className="message-list" onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; setShowLatest(!followMessagesRef.current); }} role="log" aria-live="polite" aria-label="对话消息">
                 {messages.length === 0 ? (
                   <div className="conversation-empty-state">
-                    <div className="empty-orbit"><span>✦</span></div>
-                    <h1>{appState === "online" ? "今天想完成什么？" : "连接中央 Codex 开始工作"}</h1>
-                    <p>{appState === "online" ? "发送第一条消息后创建对话；Codex 会在中央机推理，并通过 Local Agent 操作你允许的本机工作区。" : "连接参数已移到设置页。客户端不会保存 OpenAI 凭据，也不会在本机运行 Codex。"}</p>
+                    <div className="empty-orbit"><UiIcon name="terminal" /></div>
+                    <h1>{runtimeConfig?.needsSetup ? "先选择本机工作区" : appState === "online" ? configuredWorkspaceName ? `你想在 ${configuredWorkspaceName} 中完成什么？` : "今天想完成什么？" : "连接后开始工作"}</h1>
+                    {appState !== "online" && <p>在设置中连接中央网关，即可开始对话。</p>}
+                    {canStartConversation && !threadId && <div className="conversation-starters">{([
+                      ["search", "探索并理解代码", "请先梳理项目结构，解释主要模块及其关系。"],
+                      ["build", "构建新功能", "我想添加一个新功能，请先和我明确需求。"],
+                      ["review", "审查代码改动", "请审查当前代码改动，指出有依据的问题。"],
+                      ["bug", "修复问题与失败", "请帮我定位问题，先检查错误信息和相关代码。"],
+                    ] as const).map(([icon, label, prompt]) => <button key={icon} type="button" onClick={() => { setComposer(current => current ? `${current}\n${prompt}` : prompt); composerInputRef.current?.focus(); }}><UiIcon name={icon} /><span>{label}</span></button>)}</div>}
                     {!canStartConversation && <button className="empty-action" onClick={() => openSettings("connection")}>打开连接设置</button>}
                   </div>
-                ) : messages.map((message) => <ChatBubble key={message.id} message={message} retryOutput={async(output)=>{
+                ) : messages.map((message) => <ChatBubble key={message.id} message={message} timing={messageTimings.get(message.id)} retryOutput={async(output)=>{
                   if(!appClientRef.current)throw new Error("请先连接中央网关");
                   const reply=await appClientRef.current.request("output/retry",{threadId:output.threadId,outputId:output.id});
                   const result=asRecord(reply.result);
                   if(asRecord(result?.output))setMessages(current=>current.map(item=>item.id===`output-${output.id}`?{...item,outputs:[result!.output as OutputArtifact]}:item));
                 }}/>)}
+                {(visibleExecutions.length > 0 || turnRunning) && (
+                  <div className="conversation-activity">
+                    {turnRunning && <div className="turn-elapsed" aria-label="当前任务用时" aria-live="off">{runningTiming?.startedAt !== undefined ? `已用时 ${formatTurnDuration(Math.max(0, executionClock - runningTiming.startedAt))}` : "任务处理中"}</div>}
+                    {visibleExecutions.length > 0 ? (
+                      <details className="execution-history" key={threadId ?? "new"} open={turnRunning || undefined}>
+                        <summary>本机执行记录 · {visibleExecutions.length} 项{visibleExecutionRunning ? " · 执行中" : ""}</summary>
+                        <ExecutionPanel executions={visibleExecutions} now={executionClock} continuing={turnRunning && !visibleExecutionRunning} />
+                      </details>
+                    ) : !sending && <div className="turn-status-dock" role="status"><span className="execution-status-dot" />Codex 正在继续处理<span>等待下一步输出</span></div>}
+                  </div>
+                )}
               </div>
+
+              {showLatest && messages.length > 0 && <button className="jump-to-latest" type="button" onClick={() => { followMessagesRef.current = true; setShowLatest(false); const el = messageListRef.current; el?.scrollTo({ top: el.scrollHeight, behavior: "auto" }); }}>回到最新 ↓</button>}
 
               {approval && (
                 <div className="approval-card" role="alert" aria-live="assertive">
-                  <div className="approval-heading"><span className="approval-icon">!</span><div><strong>需要你的确认</strong><p>{approval.kind === "user-input" ? "Codex 需要补充输入" : "Codex 请求执行一项操作"}</p><code className="approval-method">{approval.method}</code><pre>{JSON.stringify(approval.params, null, 2)}</pre></div></div>
+                  <div className="approval-heading"><span className="approval-icon">!</span><div><strong>需要你的确认</strong><p>{approval.kind === "user-input" ? "Codex 需要补充输入" : "Codex 请求执行一项操作"}</p><code className="approval-method">{approval.method}</code>{approval.method === "device/fileChange/requestApproval" && <p>仅批准本次客户端补丁；Local Agent 将在执行前重新核对文件版本。目标设备、工作区及完整补丁如下。</p>}<pre>{JSON.stringify(approval.params, null, 2)}</pre></div></div>
                   {approval.kind === "approval" ? (
-                    <div className="button-row"><button onClick={() => decideApproval("accept")}>允许一次</button><button className="button-secondary" onClick={() => decideApproval("acceptForSession")}>本会话允许</button><button className="button-secondary" onClick={() => decideApproval("decline")}>拒绝</button><button className="button-quiet" onClick={() => decideApproval("cancel")}>取消</button></div>
+                    <div className="button-row"><button onClick={() => decideApproval("accept")}>允许一次</button>{approval.method !== "device/fileChange/requestApproval" && <button className="button-secondary" onClick={() => decideApproval("acceptForSession")}>本会话允许</button>}<button className="button-secondary" onClick={() => decideApproval("decline")}>拒绝</button><button className="button-quiet" onClick={() => decideApproval("cancel")}>取消</button></div>
                   ) : (
                     <div className="custom-response"><p>该请求需要自定义 JSON 响应。</p><textarea value={approvalResponse} onChange={(event) => setApprovalResponse(event.target.value)} rows={4} /><button onClick={sendCustomApprovalResponse}>发送 JSON 响应</button></div>
                   )}
@@ -1517,23 +1584,17 @@ export default function App() {
               )}
 
               <form ref={composerRef} className={`composer ${turnRunning ? "composer-running" : ""}`} onSubmit={(event) => { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); }}>
-                {(visibleExecutions.length > 0 || (turnRunning && !sending)) && (
-                  <div className="composer-status-region">
-                    {visibleExecutions.length > 0
-                      ? <ExecutionPanel executions={visibleExecutions} now={executionClock} continuing={turnRunning && !visibleExecutionRunning} />
-                      : <div className="turn-status-dock" role="status"><span className="execution-status-dot" />Codex 正在继续处理<span>等待下一步输出</span></div>}
-                  </div>
-                )}
                 <div className="composer-shell">
                   <div className="composer-body">
                     {mode === "central-gateway" && attachments.controls}
-                    {sending && <p className="attachment-notice" role="status">{sendStage || "正在核对提交结果…"}{sendStage && sendStage !== "正在提交中央模型" && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(String(e)));}}>取消准备</button>}</p>}
+                    {sending && <p className="attachment-notice" role="status">{sendStage || "正在核对提交结果…"}{sendStage && sendStage !== "正在追加要求…" && sendStage !== "正在提交中央模型" && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(String(e)));}}>取消准备</button>}</p>}
                     {uncertainSubmission && <div className="attachment-error-text">提交结果未知，草稿已保留。<button type="button" disabled={sending||appState!=="online"} onClick={()=>void reconcileSubmission()}>核对历史</button></div>}
-                  <div className="composer-input-wrap"><textarea aria-label="发送消息" onPaste={attachments.paste} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); } }} disabled={sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : "描述任务，按 Enter 发送"} rows={2} /></div>
+                  <div className="composer-input-wrap"><textarea ref={composerInputRef} aria-label="发送消息" onPaste={attachments.paste} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); } }} disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? "中央引擎不可用，请重新连接并核对任务状态" : mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : turnRunning ? "补充文字要求，按 Enter 调整当前任务方向" : "描述任务，按 Enter 发送"} rows={2} /></div>
+                  {turnRunning && <p className="attachment-notice">可继续追加文字要求；正在执行的操作可能需要完成后才调整。模型设置在下一轮生效。</p>}
                   </div>
                   <div className="composer-footer">
                     {mode === "central-gateway" && attachments.pickerButton}
-                    <details ref={modelPickerRef} className="model-picker" onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
+                    <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
                       <summary aria-label="切换模型、推理强度和速度"><span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || "自动"}</span><span className="model-picker-chevron" aria-hidden="true" /></summary>
                       <div className="model-picker-popover">
                         <details className="model-picker-submenu" open={openModelSubmenu === "model"}>
@@ -1552,7 +1613,10 @@ export default function App() {
                         {!modelsLoading && !modelsError && models.length === 0 && <small className="model-picker-hint">连接中央网关后获取可用模型</small>}
                       </div>
                     </details>
-                    <div className="button-row"><button className={`send-button ${turnRunning ? "send-button-stop" : ""}`} type={turnRunning ? "button" : "submit"} aria-label={turnRunning ? "暂停生成" : "发送"} disabled={sending || attachments.adding || Boolean(uncertainSubmission) || (!turnRunning && ((!composer.trim() && !attachments.drafts.length) || appState !== "online" || Boolean(threadBusy)))} onClick={turnRunning ? () => void interruptTurn() : undefined}>{turnRunning ? <PauseIcon /> : <SendIcon />}</button></div>
+                    <div className="button-row">
+                      {turnRunning && <button className="send-button send-button-stop" type="button" aria-label="停止当前任务" title="停止当前任务" disabled={appState !== "online" || (sending && !steeringRequestRef.current)} onClick={() => void interruptTurn()}><PauseIcon /></button>}
+                      <button className="send-button" type="submit" aria-label={turnRunning ? "追加要求" : "发送"} title={turnRunning ? "追加要求" : "发送"} disabled={engineState === "unavailable" || sending || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || (turnRunning ? !composer.trim() || !turnId || mode !== "central-gateway" || Boolean(attachments.drafts.length) : !composer.trim() && !attachments.drafts.length)}><SendIcon /></button>
+                    </div>
                   </div>
                 </div>
               </form>
@@ -1560,7 +1624,7 @@ export default function App() {
           </div>
         ) : (
           <div className="settings-page">
-            <header className="settings-header"><div><p>Codexia Workspace</p><h1>{settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "工作区与工具" : "诊断"}</h1></div><button onClick={() => setActivePage("conversation")}>完成</button></header>
+            <header className="settings-header"><div><p>远舟</p><h1>{settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "工作区与工具" : "诊断"}</h1></div></header>
             <div className="settings-scroll">
               {settingsSection === "connection" && (
                 <div className="settings-content">
@@ -1574,9 +1638,8 @@ export default function App() {
 
                   <section className="settings-section">
                     <div className="settings-section-heading"><h2>外观</h2><p>主题会立即应用，并在下次启动时恢复。</p></div>
-                    <div className="settings-card theme-settings-card">
-                      <label className={`settings-choice ${theme === "dark" ? "selected" : ""}`}><input type="radio" name="theme" checked={theme === "dark"} onChange={() => setTheme("dark")} /><span><strong>深色模式</strong><small>适合低光环境，减少大面积高亮背景</small></span><i aria-hidden="true">☾</i></label>
-                      <label className={`settings-choice ${theme === "light" ? "selected" : ""}`}><input type="radio" name="theme" checked={theme === "light"} onChange={() => setTheme("light")} /><span><strong>浅色模式</strong><small>明亮背景与更清晰的深色文字</small></span><i aria-hidden="true">☀</i></label>
+                    <div className="settings-card form-settings-card theme-settings-card">
+                      <div className="settings-field"><span><strong>主题</strong><small>选择客户端的显示外观</small></span><ThemePicker value={theme} onChange={setTheme} /></div>
                     </div>
                   </section>
 
@@ -1592,7 +1655,7 @@ export default function App() {
                   {mode !== "fake-central" ? (
                     <section className="settings-section">
                       <div className="settings-section-heading"><h2>连接配置</h2><p>这些地址属于当前可信局域网 Spike，不应暴露到互联网。</p></div>
-                      {desktopRuntime && mode === "central-gateway" && <RuntimeSettings view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={() => void applyRuntimeConfig()} reload={() => void loadRuntimeConfig()} />}
+                      {desktopRuntime && mode === "central-gateway" && <RuntimeSettings view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setEvents([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} />}
                       <div className="settings-card form-settings-card">
                         {!(desktopRuntime && mode === "central-gateway") && <>
                         <label className="settings-field"><span><strong>WebSocket 地址</strong><small>{mode === "central-gateway" ? "桌面客户端连接中央网关，不直连 App Server" : "开发代理监听地址"}</small></span><input value={appUrl} onChange={(event) => setAppUrl(event.target.value)} placeholder={mode === "central-gateway" ? "ws://192.0.2.10:4510/ws" : "ws://127.0.0.1:4501"} /></label>
@@ -1613,7 +1676,8 @@ export default function App() {
                 <div className="settings-content workspace-settings-content">
                   <div className="settings-section-heading page-intro"><h2>客户端工作区</h2><p>文件读取和命令执行始终由当前设备的 Local Agent 完成。</p></div>
                   {desktopRuntime && mode === "central-gateway" && <div className="settings-card runtime-workspace-summary"><span>当前本机工作区：<code>{runtimeConfig?.effective.workspaceRoot || "尚未读取配置"}</code></span><button className="button-secondary" onClick={() => openSettings("connection")}>修改工作区</button></div>}
-                  <WorkspacePanel mode={mode} deviceState={deviceState} path={workspacePath} entries={workspaceEntries} loading={workspaceLoading} output={gatewayOutput} resultStatus={workspaceResultStatus} content={workspaceContent} contentPath={workspaceContentPath} command={workspaceCommand} available={workspaceAvailable} onPathChange={setWorkspacePath} onOpen={() => navigateWorkspace(workspacePath)} onParent={() => navigateWorkspace(parentWorkspacePath)} onRefresh={() => navigateWorkspace(workspacePath)} onEntryClick={readWorkspaceEntry} onCommandChange={setWorkspaceCommand} onRunCommand={() => void sendWorkspaceRequest("exec", { program: workspaceCommand, args: ["--version"], cwd: "." })} onCloseContent={() => { setWorkspaceContent(""); setWorkspaceContentPath(""); }} />
+                  {platformCapabilities.remoteWorkspace === true && <p className="attachment-notice">当前运行时使用客户端工作区。{platformCapabilities.imageGeneration === false ? "新图片生成暂不可用；已有图片输出仍可查看和保存。" : ""}{platformCapabilities.plugins === false ? "插件暂不可用。" : ""}{platformCapabilities.subagents === false ? "子任务暂不可用。" : ""}</p>}
+                  <WorkspacePanel diffScope={`${appUrl}:${deviceId}:${runtimeConfig?.effective.workspaceRoot ?? ""}:${workspacePath}`} loadDiff={mode === "central-gateway" && platformCapabilities.remoteWorkspace === true ? staged => { const adapter = codexiaRef.current; if (!adapter) return Promise.reject(new Error("中央网关尚未连接")); return adapter.workspaceDiff(workspacePath, staged); } : undefined} mode={mode} deviceState={deviceState} path={workspacePath} entries={workspaceEntries} loading={workspaceLoading} output={gatewayOutput} resultStatus={workspaceResultStatus} content={workspaceContent} contentPath={workspaceContentPath} command={workspaceCommand} available={workspaceAvailable} onPathChange={setWorkspacePath} onOpen={() => navigateWorkspace(workspacePath)} onParent={() => navigateWorkspace(parentWorkspacePath)} onRefresh={() => navigateWorkspace(workspacePath)} onEntryClick={readWorkspaceEntry} onCommandChange={setWorkspaceCommand} onRunCommand={() => void sendWorkspaceRequest("exec", { program: workspaceCommand, args: ["--version"], cwd: "." })} onCloseContent={() => { setWorkspaceContent(""); setWorkspaceContentPath(""); }} />
                 </div>
               )}
 
@@ -1698,17 +1762,17 @@ function SendIcon() {
 }
 
 function PauseIcon() {
-  return <svg className="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 3.2v9.6M10.8 3.2v9.6" /></svg>;
+  return <svg className="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4z" /></svg>;
 }
 
 function ExecutionPanel({ executions, now, continuing }: { executions: ExecutionActivity[]; now: number; continuing: boolean }) {
   return <aside className="execution-dock" aria-label="本机任务执行状态" aria-live="polite">
     {executions.map((execution) => {
       const elapsed = execution.durationMs ?? Math.max(0, now - execution.startedAt);
-      const title = execution.tool === "device_exec"
+      const title = execution.status === "running" && execution.phase === "dispatched" ? "已派发操作，等待本机确认" : execution.tool === "device_exec"
         ? `正在本机执行${execution.program ? ` · ${execution.program}` : "命令"}`
         : executionToolLabel(execution.tool);
-      const status = executionStatusLabel(execution.status);
+      const status = execution.status === "running" && execution.phase === "dispatched" ? "中央已派发" : executionStatusLabel(execution.status);
       return <details className={`execution-card execution-${execution.status}`} key={execution.requestId} open={execution.status === "running" || undefined}>
         <summary>
           <span className="execution-status-dot" />
@@ -1716,10 +1780,13 @@ function ExecutionPanel({ executions, now, continuing }: { executions: Execution
           <span className="execution-chevron">›</span>
         </summary>
         <div className="execution-body">
+          {execution.deviceId && <div className="execution-cwd">目标设备：{execution.deviceId}</div>}
           {execution.cwd && <div className="execution-cwd" title={execution.cwd}>目录：{execution.cwd}</div>}
           {execution.logs.length > 0 ? <ExecutionLog logs={execution.logs} /> : <div className="execution-waiting">{execution.status === "running" ? execution.tool !== "device_exec" ? "正在等待本机操作结果…" : execution.streaming ? "等待命令输出…" : "当前 Local Agent 不支持实时输出，正在等待最终结果…" : "该操作没有命令行输出"}</div>}
           {execution.truncated && <div className="execution-notice">输出过长，界面仅保留受限内容。</div>}
           {execution.error && <div className="execution-error">{execution.error}</div>}
+          {execution.patch && <div className="workspace-file-view"><div className="workspace-file-heading"><span>{execution.patch.outcome === "partial" ? "补丁部分已应用" : execution.patch.outcome === "unknown" ? "补丁结果未知" : execution.patch.outcome === "completed" ? "补丁已应用" : "补丁失败"}</span></div><pre>{execution.patch.applied.length ? execution.patch.applied.map(file => `${file.path} · ${file.version}`).join("\n") : "未收到已应用文件的确认。"}</pre>{execution.patch.failedPath && <p>失败路径：{execution.patch.failedPath}</p>}{execution.patch.error && <p className="execution-error">{execution.patch.error}</p>}<p className="execution-notice">多文件修改不保证整体回滚；请核对本机实际 diff 与文件版本后继续，不会自动重试。</p></div>}
+          {execution.diff && <div className="workspace-file-view"><div className="workspace-file-heading"><span>本机实际 diff · {execution.diff.repositoryRoot} · {execution.diff.staged ? "已暂存" : "未暂存"}</span></div><pre>{execution.diff.stdout || "该范围没有已跟踪文件的变更。"}</pre>{execution.diff.truncated && <div className="execution-notice">diff 超出输出上限，当前展示不完整。</div>}</div>}
         </div>
       </details>;
     })}
@@ -1743,6 +1810,12 @@ function ExecutionLog({ logs }: { logs: ExecutionLogChunk[] }) {
 function executionToolLabel(tool: string): string {
   return ({
     device_workspace_list:"正在读取本机工作区",
+    device_workspace_context:"正在读取本机项目规则",
+    device_workspace_search:"正在搜索本机代码",
+    device_workspace_read_text:"正在读取本机文本",
+    device_workspace_git_status:"正在核对本机 Git 状态",
+    device_workspace_git_diff:"正在读取本机实际 diff",
+    device_workspace_apply_patch:"正在应用本机补丁",
     device_read_file:"正在读取本机文件",
     device_read_text:"正在读取本机文本",
     device_write_file:"正在写入本机文件",
@@ -1754,7 +1827,7 @@ function executionToolLabel(tool: string): string {
 }
 
 function executionStatusLabel(status: ExecutionStatus): string {
-  return ({running:"执行中",succeeded:"已完成",failed:"执行失败",cancelled:"已中断",unknown:"状态未知"} as Record<ExecutionStatus,string>)[status];
+  return ({running:"执行中",succeeded:"已完成",failed:"执行失败",cancelled:"已中断",timed_out:"执行超时",denied:"权限拒绝",offline:"设备离线",unknown:"结果未知"} as Record<ExecutionStatus,string>)[status];
 }
 
 function formatDuration(milliseconds: number): string {
@@ -1767,29 +1840,21 @@ function formatDuration(milliseconds: number): string {
     : `${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
 }
 
-function appendBoundedExecutionLog(logs: ExecutionLogChunk[], entry: ExecutionLogChunk): {logs:ExecutionLogChunk[];truncated:boolean} {
-  const encoder = new TextEncoder();
-  const next = [...logs, entry];
-  let bytes = next.reduce((total, value) => total + encoder.encode(value.chunk).byteLength, 0);
-  let truncated = false;
-  while (bytes > executionLogBytes && next.length > 1) {
-    bytes -= encoder.encode(next[0].chunk).byteLength;
-    next.shift();
-    truncated = true;
-  }
-  return {logs:next,truncated};
+function TurnTimingSummary({ timing }: { timing: TurnTiming }) {
+  const status = timing.status === "failed" ? "任务失败 · " : timing.status === "interrupted" ? "已停止 · " : "";
+  return <div className="turn-timing-summary" aria-label="任务用时">
+    {timing.status === "unknown" ? "连接中断，用时待核对" : `${status}${timing.durationMs !== undefined ? `用时 ${formatTurnDuration(timing.durationMs)}` : "用时未记录"}`}
+  </div>;
 }
 
-function boundedText(value: string, limit: number): string {
-  return value.length > limit ? `${value.slice(0, limit)}…` : value;
-}
-
-function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutput:(output:OutputArtifact)=>Promise<void> }) {
+function ChatBubble({ message, timing, retryOutput }: { message: ChatMessage; timing?: TurnTiming; retryOutput:(output:OutputArtifact)=>Promise<void> }) {
   const isLong = message.content.length > 5_000 || message.content.split("\n").length > 80;
   const [expanded, setExpanded] = useState(false);
   const displayTime = formatMessageTime(message.createdAt);
+  if (message.timingOnly) return timing ? <TurnTimingSummary timing={timing} /> : null;
   return (
-    <div className={`chat-message-row chat-message-row-${message.role}`}>
+    <div className={`chat-message-row chat-message-row-${message.role}${timing ? " chat-message-row-has-timing" : ""}`}>
+      {timing && message.role !== "user" && <TurnTimingSummary timing={timing} />}
       <article className={`chat-bubble bubble-${message.role}`}>
         {message.attachments?.length ? <MessageAttachments attachments={message.attachments}/> : null}
         {message.outputs?.map(output=><OutputCard key={output.id} output={output} retry={retryOutput}/>)}
@@ -1803,6 +1868,8 @@ function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutpu
         )}
       </article>
       {displayTime && <time className="bubble-meta" dateTime={message.createdAt}>{displayTime}</time>}
+      {message.delivery && <span className="bubble-meta" role="status">{({sending:"正在发送追加要求…",sent:"追加要求已接收",failed:"追加未发送，可在输入框重试",unknown:"追加结果待核对"})[message.delivery]}</span>}
+      {timing && message.role === "user" && <TurnTimingSummary timing={timing} />}
     </div>
   );
 }
@@ -1814,7 +1881,8 @@ function ExpandableOutput({ content }: { content: string }) {
 }
 
 function StatusPill({ value }: { value: string }) {
-  return <span className={`status-pill pill-${value}`}><span />{value}</span>;
+  const label: Record<string, string> = { online: "已连接", offline: "离线", connecting: "连接中", reconnecting: "重连中", error: "连接错误", ready: "就绪", unknown: "未知" };
+  return <span className={`status-pill pill-${value}`}><span />{label[value] ?? value}</span>;
 }
 
 function StatusLine({ label, value }: { label: string; value: string }) {

@@ -11,6 +11,9 @@ publish.workspace = true
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+platform-security = { path = "../../../crates/platform-security" }
+futures-util.workspace = true
+tokio-tungstenite.workspace = true
 tauri.workspace = true
 tauri-plugin-opener = "2"
 serde_json.workspace = true

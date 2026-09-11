@@ -1,0 +1,72 @@
+{
+  "date": "2026-09-10",
+  "scope": "Owned gateway metrics to native snapshot and Central App overview",
+  "candidateId": "windows-x64-node24-qa1-74b3e6f43896219f",
+  "manifestSha256": "74b3e6f43896219f00d4e3fd8dffafe8f98ffc8c91c50e097a2d60d3f27a8449",
+  "manifestBytes": 176002,
+  "candidateFiles": 864,
+  "regression": {
+    "gatewayTypeScript": "passed",
+    "gatewayMetricsGroups": 5,
+    "gatewayShutdownCases": 4,
+    "completeCandidateHostChecks": 6,
+    "completeCandidateHostResult": "target/central-p0/central-service-host-gRTJCM/result.json",
+    "centralRust": {"passed": 63, "failed": 0, "ignored": 7, "context": "actual Windows user"},
+    "nativeLifecyclePassed": true,
+    "nativeLifecycleSeconds": 4.16,
+    "overviewMetricsCases": 14,
+    "centralTypeScript": "passed",
+    "vite": "passed",
+    "cargoFmt": "passed"
+  },
+  "realChain": {
+    "passed": true,
+    "elapsedMs": 72080,
+    "model": "gpt-6-astra",
+    "modelTurns": 1,
+    "modelToolReads": 2,
+    "modelToolExecs": 1,
+    "idleBeforeClient": true,
+    "activeModelObserved": true,
+    "activeCounts": {"onlineDevices": 1, "activeTurns": 1, "workers": 1, "readyWorkers": 1},
+    "idleTurnAfterCompletion": true,
+    "offlineAfterRevocation": true,
+    "clearedAfterShutdown": true,
+    "latestSequence": 21,
+    "serviceCleanupVerified": true,
+    "nodeJobCleanupVerified": true,
+    "temporaryStoreRemoved": true,
+    "nativeResult": "target/central-p0/central-metrics-live-20260910-run1/result.json",
+    "clientResult": "target/central-p0/central-metrics-live-20260910-run1/client-result.json"
+  },
+  "tauriUi": {
+    "normalFrontendAndNativeIpc": true,
+    "runningZeroCountsObserved": true,
+    "workerBreakdownObserved": true,
+    "stoppingTransitionObserved": true,
+    "stoppedZeroCountsAndCleanupMessageObserved": true,
+    "windowCloseCleanupVerified": true,
+    "syntheticProfileRetained": true,
+    "finalNoticeFixRecheck": "passed",
+    "finalUiElapsedSeconds": 78.52,
+    "screenshots": "viewed directly in task; no standalone screenshots saved"
+  },
+  "finalApp": {
+    "build": "passed",
+    "path": "target/debug/central-app.exe",
+    "sha256": "4a9746af571ea1118317e34ec9463c7a76ac556cb6c6c25d870979205881a1a5",
+    "profile": "com.yuanzhou.central.resource-qa-20260910",
+    "frontendAsset": "index-BG3HWbdL.js",
+    "installerBuilt": false
+  },
+  "finalCleanup": {"qaProcessesRemaining": 0, "qaListenersRemaining": 0},
+  "limits": {
+    "activeModelCountsObservedInNativeHarness": true,
+    "activeModelCountsRenderedInRealTauriTest": false,
+    "realRemoteDeviceVerified": false,
+    "formal4510Changed": false,
+    "productionQualified": false,
+    "macCentralVerified": false,
+    "installationUpgradeRollbackVerified": false
+  }
+}

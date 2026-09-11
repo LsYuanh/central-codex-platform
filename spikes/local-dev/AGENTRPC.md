@@ -2,6 +2,157 @@
 
 # Local AgentRPC / Fake App Server round 1
 
+## One-code bootstrap (2026-09-11)
+
+The current client accepts `yzpair1.` plus base64url JSON containing exactly
+`version: 1`, `gateway`, `caPem`, `token`, and `expiresAt` (Unix milliseconds).
+The central native management bridge wraps the existing single-use five-minute
+device pairing token with its owned WSS gateway and public CA. The client validates
+the envelope and bootstraps HTTPS trust from that CA, retaining certificate chain
+and hostname verification. Private keys, unknown fields, oversized or expired
+payloads are rejected. No proxy, redirect or global root installation is used.
+The CA and device token are committed together in private native storage; older
+credentials without an embedded CA remain readable. UI and Local Agent reload
+this trust automatically. The `/auth/device/pair` server protocol is unchanged.
+
+Formal Mac 4510 has now migrated to WSS; Windows native one-code UI, persisted
+Agent reconnect and real remote model/tool execution passed. Mac client packaging
+passed, but Mac visual acceptance remains pending. Earlier migration statements
+below are historical. See [current acceptance](../../docs/客户端一体配对码实施与验收-2026-09-11.md).
+
+## Device-token authentication (2026-09-10 status correction; unreleased)
+
+The user selected HTTPS/WSS plus administrator-issued single-use pairing codes and
+revocable device tokens. Switching the entry-point defaults was initially rejected by
+automatic approval review; the user has now explicitly approved that change. UI checks and 21 real HTTPS/WSS
+module protocol checks have passed. Windows native compilation, 19 Agent unit tests,
+two token storage tests and nine native HTTPS/WSS module checks also passed. Later RC3
+acceptance covered real 4529 model/Agent create and resume on Windows and macOS.
+Windows RC4 covered re-pairing, revocation cancellation and terminal Tauri UI behavior.
+Mac RC4 and the new authentication candidate's installer upgrade/rollback remain pending;
+production 4510 has not migrated and the candidate is still `deployable=false`.
+These are historical acceptance records, not tests rerun by this documentation correction.
+
+The implemented module contract is `device-token-v1`: administrator-session
+`POST /auth/admin/pair-code {userId}` returns a code valid for five minutes;
+unauthenticated `POST /auth/device/pair {code,name}` consumes it once and returns the
+device secret to the native client. UI and Agent WSS use that device-bound bearer in
+the Authorization header. `/auth/device/status` and `/auth/device/disconnect` apply only
+to that device. Device tokens have role user, including devices belonging to an admin;
+they cannot issue codes or enumerate/revoke sibling devices. Revocation closes existing
+channels. No secret is accepted in URL query parameters and there is no TLS bypass.
+
+Native storage uses current-user DPAPI plus protected ACLs on Windows, and owned
+0700 directories / 0600 files on macOS. macOS contents are not encrypted. The renderer
+receives public state only. This replaces the pending legacy Mac Keychain acceptance;
+old records below are historical. Re-pairing does not transfer existing Thread bindings.
+Windows central Worker isolation remains future work, independent of device auth.
+See [implementation and remaining acceptance](../../docs/简化设备认证实施与验收-2026-09-09.md).
+
+## Device certificates (P5 fourth batch historical mode, 2026-09-09)
+
+The following describes the previous `legacy-mtls-v1` path, not the approved new default.
+
+Real authenticated gateways require `PLATFORM_DEVICE_CA_CONFIG` outside all Worker roots.
+Pairing adds `tlsPublicKey` (base64 DER SPKI) and returns `certificate` with public PEM,
+SHA-256 fingerprint, `expiresAt` and `renewAfter` in Unix milliseconds. Client TLS private
+keys remain in separate native credential vault entries; they are never uploaded.
+The HTTPS listener requests client certificates; bootstrap and UI routes remain available
+without them. `/ws/agent` additionally requires an authorized, non-resumed TLS connection,
+a present clientAuth certificate issued by the device CA, and a fingerprint bound to the
+same registered device as the signed one-use upgrade ticket.
+
+`POST /auth/device/renew` requires that mTLS identity plus `{sessionId,deviceId}` matching
+an active platform session and unrevoked device. It reuses the registered TLS public key.
+Before the renewal window, the current certificate is returned unchanged. Success extends
+the authorization lease of existing Agent connections only for the same device, session
+and previous certificate. This is explicit application reauthorization, not a replacement
+TLS handshake; subsequent reconnects use the new certificate. Old certificates keep their
+original expiry. Without renewal, certificate expiry closes the channel and cancels work.
+Device revoke, session logout and user disablement still invalidate active connections.
+
+`DEVICE_CERTIFICATE_REQUIRED`, `DEVICE_CERTIFICATE_INVALID`,
+`DEVICE_CERTIFICATE_EXPIRED` and `DEVICE_REVOKED` are terminal device states with explicit
+repair via pairing. `AUTH_REQUIRED` asks for platform login. Transient renewal failures
+retry only while the current certificate remains valid. No failed command is replayed.
+
+## Authenticated Worker model access (P5 third batch, 2026-09-09)
+
+Authenticated model Workers require the pinned macOS sandbox and a central model credential
+broker. Worker environment contains only its own revocable loopback capability, never the
+provider credential, gateway login/session, SSH agent or inherited proxy/loader settings.
+Model access bindings are resolved centrally from the verified platform user. GET `/model-access`
+returns only the caller's safe status; a query userId cannot select a foreign account.
+Binding disable/rebind aborts that user's model stream and Worker; reconnect after repair
+creates a fresh capability and can restore its history without replaying the previous Turn.
+Unknown central approval request types are rejected; the existing user-input RPC remains allowed.
+Device execution still uses the existing outbound AgentRPC route. SSH is only a developer QA tool.
+See [configuration and acceptance](../../docs/Worker权限与模型凭据隔离-2026-09-09.md).
+
+## Authenticated TLS connections (P5 first batch, 2026-09-09)
+
+When `PLATFORM_AUTH_FILE` is set, gateway HTTPS APIs authenticate platform accounts and
+WSS upgrades derive the principal from opaque bearer tokens, never a supplied userId.
+AgentRPC remains V1; the authenticated Agent's hello must match its assigned deviceId and
+the SHA-256 of its registered Ed25519 public key. A one-use 30-second signed challenge binds
+sessionId and deviceId; successful proof yields a one-use 15-second upgrade ticket in the
+Authorization header. Neither tokens nor private keys are carried in URL parameters.
+
+Session logout/expiry, account disablement and device revocation invalidate existing sockets;
+per-message and dispatch checks refuse stale identities, and Agent disconnection cancels its
+commands. UI and Agent use TLS server certificate/hostname validation. This is device signature
+authentication over TLS, not a completed client X.509/mTLS enrollment implementation.
+Legacy ws connections are available only on gateways without platform authentication enabled.
+See [implementation and acceptance](../../docs/平台登录与设备身份实施-2026-09-09.md).
+
+## Enforced remote workspace extension (2026-09-09)
+
+AgentRPC remains V1. New Agents advertise `remote-workspace/v1`, `agent.workspaceRoot`,
+and `workspace/context`, `workspace/search`, `workspace/read_text`, `workspace/git_status`,
+`workspace/git_diff`, `workspace/apply_patch`. The gateway pins user/device/installation key/
+workspace/policy to each Thread and injects `params.__remoteWorkspace` for workspace and exec
+requests. UI/model-supplied binding fields are rejected; Agent checks actual identity/root again.
+Legacy attachment/output methods retain their explicitly documented LAN path permissions.
+
+Patch dry run returns a hash and exact path-to-SHA256/missing preconditions. The gateway presents
+the actual device/root/patch and accepts approval only for that invocation. Apply rechecks after
+approval and returns completed/failed/partial/unknown with committed paths; it is not a multi-file
+transaction. Do not replay unknown mutations. Workspace Git results have `source:client`, actual
+stdout/stderr/exitCode and truncation. See [full Agent contract](../../docs/harness-agent-implementation.md).
+
+Broker responses/events must match request ID, target device and the original WebSocket. Identity
+cannot change via a second hello. A lost response or disconnect returns a non-retryable unknown
+result; timeout requests cancellation without falsely claiming the process has exited. Stopping
+a Turn also cancels its pending patch approvals. Platform file saves, native Turns and device
+executions remain separate status domains. Native unadapted execution/plugin/subtask entry points
+are refused by the pinned central harness, not merely by approval interception.
+
+Windows Agent startup installs a non-breakaway, kill-on-close process Job before spawning
+commands; failure is explicit `AGENT_JOB_SETUP_FAILED`. Forced Agent termination also terminates
+command descendants. Bound exec cwd must be relative to the workspace (or omitted), including
+legacy tool tables. Runtime loss cancels pending device execution and reports unknown outcomes.
+Gateway state uses an atomic durable replacement; corrupt state fails before inference starts,
+and persistence failure stops inference. Reconnection retains submission IDs; a recorded `sent`
+status means accepted, not successfully executed, and must not cause replay after restart.
+See [P4 acceptance](../../docs/Harness-P4兼容与故障验收-2026-09-09.md).
+
+## Mid-turn user input (2026-09-07)
+
+`conversation.turn.steer` is a desktop-to-central platform operation, not an AgentRPC method.
+It accepts `threadId`, `expectedTurnId`, `clientMessageId` and nonempty text-only `input`.
+The gateway enforces Thread ownership and source-device association, strips platform fields,
+and forwards `turn/steer` to the central App Server. Model/cwd/policy overrides are rejected.
+Its result includes `turnId`, `started` (true only for a confirmed normal-completion fallback),
+and the durable submission record. Repeated identical accepted IDs return the same result
+without forwarding another input. An ID cannot be reused with changed content or target Turn.
+
+Submission records add optional `kind: start | steer` and `expectedTurnId`; old records remain
+compatible. `conversation.message.status` and Thread history reconcile uncertain delivery.
+Only a definitive no-active-turn rejection plus a normally completed expected Turn and no
+new active Turn permits `turn/start` fallback. Cancellation versions suppress fallback after
+a stop request. Interruptions, mismatches and uncertain outcomes never trigger automatic retry.
+Local Agent wire formats, inbound networking and system-execution boundaries are unchanged.
+
 ## Live command execution (`exec-stream/v1`, 2026-09-04)
 
 Agents advertising `exec-stream/v1` execute `exec` with piped stdout/stderr and emit bounded
@@ -220,6 +371,24 @@ Supported first-round device methods are `workspace/list`, `read_file`, and the
 existing safe `exec` version command. The schema also reserves names for the
 next file/process/Git round; the bridge returns `NOT_IMPLEMENTED` for those
 instead of silently widening the Local Agent permission surface.
+
+## Authenticated central per-user Workers (P5 second batch)
+
+With `PLATFORM_AUTH_FILE`, the real gateway derives Worker identity from the verified user,
+starts one App Server per active user, and gives it separate central runtime/state directories.
+This does not change the AgentRPC envelope or move Codex onto the client. Thread ownership
+is checked both on client requests and on messages from the originating Worker. Pending
+approvals carry the exact Worker instance and a fresh platform request ID; a restarted
+Worker reusing its upstream JSON-RPC ID cannot accept a stale approval response.
+
+`gateway/runtimeUnavailable` only goes to the affected user's clients, with `recoverable:true`.
+The affected device tools are cancelled and unfinished results require reconciliation.
+Reconnection starts a replacement after backoff; no failed Turn or tool is automatically replayed.
+Capacity failures use `WORKER_CAPACITY`, `WORKER_REQUEST_LIMIT`, `TURN_LIMIT`, or `THREAD_BUSY`.
+Authenticated `/audit` and `/workers` views are admin-only. Audit records persist across restart;
+audit storage failure stops Workers and closes authenticated connections.
+
+The sections below describe the earlier protocol-only Fake Central and legacy LAN probe.
 
 ## Fake App Server worker
 

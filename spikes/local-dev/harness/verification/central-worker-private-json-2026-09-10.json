@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "fixtureOnly": true,
+  "nativeAclVerified": true,
+  "hostileSameUserSwapProtected": false,
+  "observedColdCtimeChanges": 3,
+  "checks": [
+    "Protected current-user directory and JSON file pass actual native admission",
+    "Three newly copied helper executables pass cold-start revalidation with stable identity, mtime and pinned content",
+    "Modified executable bytes and multiply linked executable identity are rejected before launch",
+    "Ordinary Windows file and broad parent remain rejected even if the file ACL alone is protected",
+    "Absent or incorrect helper pin and oversized/undersized read bounds fail closed",
+    "Malformed JSON and unsupported protocol fields produce no stdout payload and only fixed stderr codes",
+    "Broker reads config and synthetic credential through native admission; later hardlink makes status unavailable",
+    "Junction aliases and absent files fail without disclosing private paths"
+  ]
+}

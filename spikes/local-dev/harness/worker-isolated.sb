@@ -1,0 +1,28 @@
+; SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+; P5 authenticated workers: no model credentials, arbitrary Mach services or direct upstream network.
+(version 1)
+(deny default)
+(allow process-exec (literal (param "HARNESS_BINARY")))
+(allow process-info* (target self))
+(allow signal (target self))
+(allow sysctl-read)
+(allow network-outbound (remote ip (param "BROKER_ADDRESS")))
+(allow system-socket)
+(allow file-read-metadata)
+(allow file-test-existence)
+(allow file-map-executable
+    (literal (param "HARNESS_BINARY"))
+    (subpath "/System") (subpath "/usr/lib") (subpath "/Library/Apple/usr/lib"))
+(allow system-mac-syscall (mac-policy-name "vnguard"))
+(allow system-mac-syscall (require-all (mac-policy-name "Sandbox") (mac-syscall-number 67)))
+(allow file-read-data file-write-data (subpath "/dev/fd"))
+(allow file-read*
+    (literal "/") (subpath "/System") (subpath "/usr/lib")
+    (subpath "/usr/share/zoneinfo") (subpath "/Library/Apple")
+    (subpath "/private/var/db/timezone") (literal "/private/etc/localtime")
+    (literal "/dev/urandom") (literal "/dev/random")
+    (literal (param "HARNESS_BINARY"))
+    (subpath (param "CODEX_HOME")) (subpath (param "WORKER_DIR")))
+(allow file-write*
+    (literal "/dev/null")
+    (subpath (param "CODEX_HOME")) (subpath (param "WORKER_DIR")))

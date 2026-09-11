@@ -1,0 +1,94 @@
+{
+  "date": "2026-09-10",
+  "scope": "Central App native Service and People to real model and same-host Local Agent; authenticated Tauri UI",
+  "candidateId": "windows-x64-node24-qa1-ed2082f1f2b34662",
+  "manifestSha256": "ed2082f1f2b346626fb8d577fae1e32bd0c57461a1a26f9bb0af799f1b685cd2",
+  "finalApp": {
+    "path": "target/debug/central-app.exe",
+    "sha256": "c6d08b606aa7d166cbcfa2012a0f1fe704f80fd94aaa14702a5b6a0c4a7cde06",
+    "profile": "com.yuanzhou.central.resource-qa-20260910",
+    "tauriDebugBuildPassed": true,
+    "installerBuilt": false,
+    "frontendAsset": "index-DRsfh0rR.js"
+  },
+  "realChain": {
+    "passed": true,
+    "elapsedMs": 89186,
+    "model": "gpt-6-astra",
+    "modelTurns": 1,
+    "modelToolReads": 2,
+    "modelToolExecs": 1,
+    "execExitCode": 0,
+    "runtimeMarker": "yuan-zhou-remote-workspace/1",
+    "inputSha256": "56d954dacf07e9bb0a90c04d1eb05f283fc44c55d7e78812169bab08126dcff1",
+    "proofSha256": "9a029ba93890675d799d5afe152155fa21fb6d9928994d4ae323e8c5040ff0a6",
+    "nativePeopleObservedAgentOnline": true,
+    "nativeAdminRevocationVerified": true,
+    "agentNaturalExitAfterRevocation": true,
+    "localTokenRemoved": true,
+    "serviceCleanupVerified": true,
+    "nodeJobCleanupVerified": true,
+    "temporaryStoreRemoved": true,
+    "nativeResult": "target/central-p0/central-app-live-20260910-run2/result.json",
+    "clientResult": "target/central-p0/central-app-live-20260910-run2/client-result.json",
+    "localAgentSha256": "f531bef0ae59708c025f84a4cbf0a0c8560c5c4cfe94095218290e37f6b51a6c",
+    "nativeQaTransportSha256": "3dbb23d69e01c7182dc91d4ddf27b51e78b35f7de0fe99fff92150360a21eae1"
+  },
+  "authenticatedTauriUi": {
+    "passed": true,
+    "elapsedSeconds": 175.66,
+    "normalFrontendAndNativeIpc": true,
+    "syntheticUsers": 3,
+    "syntheticDevices": 2,
+    "nativeApiSessionSetup": true,
+    "verified": [
+      "configuration read recovers from transient OPERATION_BUSY",
+      "running owned gateway appears on overview",
+      "admin, pairing-only, and disabled user states",
+      "user selection updates pairing target",
+      "disable-user confirmation target and impact",
+      "Tab and Shift+Tab stay inside dialog",
+      "Escape cancels and restores trigger focus",
+      "two registered devices correctly shown offline; one revoked",
+      "revoke-device confirmation opens and cancels",
+      "normal window close and owned service cleanup"
+    ],
+    "syntheticProfileRetained": true,
+    "uiPasswordEntryTested": false,
+    "uiFinalDisableOrRevokeTested": false,
+    "uiPairCodeGenerationAndExpiryTested": false,
+    "screenshots": "viewed directly in task; no standalone screenshots saved"
+  },
+  "regression": {
+    "centralRust": {"passed": 60, "failed": 0, "ignored": 7, "context": "actual Windows user"},
+    "configReadRetrySmoke": 5,
+    "peopleDtoSmoke": 15,
+    "typeScript": "passed",
+    "vite": "passed",
+    "cargoFmt": "passed"
+  },
+  "defaultDataDirectory": {
+    "msixPhysicalDefaultFixed": true,
+    "savedConfigurationAutomaticallyMigrated": false,
+    "nativeRegressionTests": 3,
+    "realOwnedServiceStartedWithProductionDefault": true,
+    "normalTauriOverviewObserved": true,
+    "elapsedSeconds": 72.97,
+    "serviceCleanupVerified": true,
+    "syntheticProfileRetained": true
+  },
+  "failureHistory": [
+    {"run": "central-app-live-20260910-run1", "error": "CONFIG_INVALID", "modelCalls": 0, "cleanupVerified": true, "fix": "valid synthetic public client hostname and matching TLS SANs; retain localhost transport"},
+    {"run": "initial authenticated UI fixture", "error": "SERVICE_DATA_UNSAFE", "fix": "isolated temporary runtime directory; MSIX default path subsequently fixed separately"},
+    {"run": "first opened authenticated UI", "error": "OPERATION_BUSY remained on initial configuration load", "fix": "bounded read-only retry; serialize fixture before WebView creation"}
+  ],
+  "limits": {
+    "postExecutionEvidenceOnly": true,
+    "commandPreExecutionSandboxVerified": false,
+    "realRemoteDeviceVerified": false,
+    "formal4510Changed": false,
+    "productionQualified": false,
+    "macCentralVerified": false,
+    "installationUpgradeRollbackVerified": false
+  }
+}

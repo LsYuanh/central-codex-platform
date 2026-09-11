@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-10",
+  "scope": "Central app Windows runtime candidate inspection and native TLS resource import",
+  "deployable": false,
+  "productionWindowsWorkerEnabled": false,
+  "formal4510Modified": false,
+  "realModelCredentialsReadThisRound": false,
+  "osTrustModified": false,
+  "tests": {
+    "centralAppPassed": 28,
+    "platformSecurityPassed": 25,
+    "syntheticUiPreparationPassedSeparately": true,
+    "typeScriptPassed": true,
+    "viteBuildPassed": true,
+    "cargoCheckPassed": true,
+    "cargoFmtPassed": true,
+    "draftSmokePassed": true,
+    "managementSmokePassed": true,
+    "nativePermissionContext": "Real Windows user; sandbox directory rejection is not bypassed in product code"
+  },
+  "runtime": {
+    "packageId": "windows-x64-codex-0.153.4-qa1",
+    "sourceSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+    "sourceBytes": 248785408,
+    "stagedAndReusedWithHashVerification": true,
+    "bundledResourceFilesMatchCatalog": true,
+    "verbatimPathRegressionPassed": true,
+    "ready": false,
+    "qualified": false,
+    "missing": ["complete Node gateway runtime", "production Windows Worker", "complete package qualification"]
+  },
+  "tls": {
+    "sourceFiles": ["server.pem", "server-key.pem", "ca.pem"],
+    "privateKeyFormat": "PKCS8 PEM",
+    "storage": "Current-user DPAPI, protected ACL, append-only records, namespace and record ID entropy binding",
+    "chainHostnameIpValidityServerUsageCaConstraintsAndKeyMatchVerified": true,
+    "wrongHostImportLeavesStoreUnchanged": true,
+    "publicCaExportContainsNoPrivateKey": true,
+    "revocationChecked": false,
+    "sourcePrivateKeyReturnedToRenderer": false,
+    "msixLogicalAppDataResolvedAndPhysicalPathRechecked": true,
+    "syntheticCertificateFingerprint": "2b39442843000d16e41ef119dfe15179ec15550e4e6b08c2f95234f6952992b0",
+    "syntheticCertificateExpiryDate": "2026-09-30"
+  },
+  "nativeUi": {
+    "qaIdentifier": "com.yuanzhou.central.resource-qa-20260910",
+    "normalApplicationBuildRestored": true,
+    "configRevisionRestored": 1,
+    "certificateInventoryAndExpiryVisible": true,
+    "tlsInspectionPassed": true,
+    "sourceImportPickerAndExportSaveDialogManuallyExercised": false,
+    "importExportCoreVerifiedByNativeIntegrationTests": true,
+    "allSixChecksRendered": true,
+    "runtimeCandidateHashPassedAfterVerbatimFix": true,
+    "finalInspectionObservedCompleteWithinSeconds": 34,
+    "inspectionTimeoutSeconds": 60,
+    "repeatedNativeHashInspectionsAreSerialized": true,
+    "serviceStartAndStopDisabled": true
+  },
+  "limits": [
+    "No actual central service startup or remote Local Agent run this round",
+    "macOS secret storage and complete runtime remain unavailable",
+    "Trusts current user and administrators; not full isolation against hostile same-user processes",
+    "Read-only hash snapshots are not authorization for a future unchecked executable launch"
+  ]
+}

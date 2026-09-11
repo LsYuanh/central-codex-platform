@@ -1,0 +1,108 @@
+{
+  "date": "2026-09-09",
+  "scope": "P5 first batch, not released or production isolation",
+  "authChecks": 13,
+  "local": {
+    "ok": true,
+    "source": "real-TLS-native-vault-Windows-Agent-with-labelled-App-Server-fixture",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "cross-user Thread access and mutations denied",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session",
+      "no plaintext credentials in server state"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-An5JB8"
+  },
+  "central": {
+    "ok": true,
+    "source": "real-central-Rust-TLS-native-vault-Windows-Agent",
+    "checks": [
+      "untrusted TLS rejected",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "cross-user Thread access and mutations denied",
+      "real model approval and events stay with owner; forged approval cannot write",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-THwJyW"
+  },
+  "native": {
+    "applicationId": "com.centralcodex.harnessqa20260909",
+    "uiObserved": [
+      "central connected",
+      "device online",
+      "paired identity visible",
+      "owned device list loaded"
+    ],
+    "authFlowMethod": "QA executable exercising the shared native security module; password form buttons not clicked",
+    "restartRecovered": true,
+    "desktopPid": 5536,
+    "agentPid": 22316,
+    "closedWindowBothProcessesExited": true,
+    "afterCloseClients": 0,
+    "afterCloseDevices": 0
+  },
+  "cleanup": {
+    "at": "2026-09-09T06:49:31.359Z",
+    "logout": {
+      "loggedOut": true
+    },
+    "bootstrap": {
+      "removed": true
+    },
+    "qaConfigRestored": true,
+    "originalCaConfigAbsent": true
+  },
+  "centralCleanup": {
+    "gatewayPid": 80196,
+    "appServerPid": 80204,
+    "bothExited": true,
+    "port4529Closed": true,
+    "vitePid": 12268,
+    "viteStopped": true
+  },
+  "production": {
+    "pid": 90685,
+    "clients": 1,
+    "devices": 2,
+    "sequenceBefore": 6620,
+    "sequenceAfter": 6624,
+    "incident": "Launcher unexpectedly started installed desktop PID 7632 and Agent 21960; closed that new window, both exited, configuration unchanged",
+    "installedConfigSha256": "4FD301EFADF939BF2E24E8E1B821C97461325C6529BE454FF7ED73A5C85FB178",
+    "codeDeployed": false
+  },
+  "baseline": {
+    "originalFilesChecked": 34,
+    "hashMismatches": 0,
+    "stashPreserved": true
+  },
+  "artifacts": [
+    {
+      "path": "spikes/local-dev/target/harness-agent/debug/desktop-spike.exe",
+      "sha256": "A40AE259DF5AB9FE867A01745EA66B9DCD775F687D8AE880C58E8C49B4F32322"
+    },
+    {
+      "path": "spikes/local-dev/target/harness-agent/debug/local-agent.exe",
+      "sha256": "EEE83A107AD641AA5682EFF2A16D7C3DF21FA357B1B6020DB9A40A77A9311B4C"
+    },
+    {
+      "path": "spikes/local-dev/target/harness-deploy/gateway.tar.gz",
+      "sha256": "2994E53581E58CA63FB9EB4951787A2CAAEA2D936459C24196D7B4A57FC6E912"
+    }
+  ],
+  "limitations": [
+    "macOS native credential path not independently verified",
+    "single gateway identity store writer",
+    "full mTLS certificate lifecycle deferred",
+    "OS worker isolation and formal model credentials deferred",
+    "durable comprehensive auth audit deferred",
+    "installer and release deferred"
+  ]
+}

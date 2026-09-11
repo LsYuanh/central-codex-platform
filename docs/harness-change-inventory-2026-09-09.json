@@ -1,0 +1,1076 @@
+{
+  "baseCommit": "e3b9c730b58f3db21b806b673992e0bbb832a618",
+  "files": [
+    {
+      "baselineSha256": null,
+      "path": "docs/按用户Worker管理实施与验收-2026-09-09.md",
+      "currentSha256": "D99D39A7D08E051AAE7A194D9D8659B83B73C9319F3A596CA80D18168380A2AD",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "791D2078A1ACF89585E212CD43F171AEB74F965A28CD6F60422A5F7931681063",
+      "path": "docs/对话任务用时实施与验收-2026-09-07.md",
+      "currentSha256": "791D2078A1ACF89585E212CD43F171AEB74F965A28CD6F60422A5F7931681063",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/发布候选隔离打包说明-2026-09-09.md",
+      "currentSha256": "07FA68057D951FA83F8626424034EE062FA3A2C3808CAFA88A7C6124185FEFD0",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/发布候选与迁移准备验收-2026-09-09.md",
+      "currentSha256": "E524886A40B3FA662F79CDE1E066101E653FC22BF2FF7641A7484381C730BAF0",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/简化设备认证实施与验收-2026-09-09.md",
+      "currentSha256": "447673F62D3DC649883B36C1C6EA578B1686B6ABA387A49817EF9496CD293AA6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "1662F341A70C3A1D913E425B444539012A1C6DA8B57EECC763E5BA206FDC0653",
+      "path": "docs/开源Codex-Harness改造计划-2026-09-09.md",
+      "currentSha256": "1662F341A70C3A1D913E425B444539012A1C6DA8B57EECC763E5BA206FDC0653",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "AFD8D3EEFA58B43D9D6D4E63987CEB54BCDD791290C0AEEF402A2EE466EEF303",
+      "path": "docs/客户端UI设计规范-V0.1-2026-09-07.md",
+      "currentSha256": "AFD8D3EEFA58B43D9D6D4E63987CEB54BCDD791290C0AEEF402A2EE466EEF303",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "FA818ACF6C0C5C6F019493ADAF8360207507E5691ED0452E0D66AB9C9056229F",
+      "path": "docs/客户端UI与Local-Agent开发交接文档-2026-09-02.md",
+      "currentSha256": "FA818ACF6C0C5C6F019493ADAF8360207507E5691ED0452E0D66AB9C9056229F",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "4671A492DA4F613D033EE240E1ECA9D04379DEB8A27111E3784D0CB27BB9764A",
+      "path": "docs/客户端UI重构实施与验收-2026-09-07.md",
+      "currentSha256": "4671A492DA4F613D033EE240E1ECA9D04379DEB8A27111E3784D0CB27BB9764A",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/平台登录与设备身份实施-2026-09-09.md",
+      "currentSha256": "7A2AD234841A082C95910F6E40BB9C793E93462885F43EE99574EA86C197B069",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/迁移预检与回退演练-2026-09-09.md",
+      "currentSha256": "2192483C47786B2C216547384EA1661E209BFED6A60632DF877089F9FE1493CE",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/设备证书与mTLS生命周期-2026-09-09.md",
+      "currentSha256": "75448145030BA66833E5AFB01DEA23A816A1B57CF65A0D2B7A57E194061F7392",
+      "kind": "implementation-or-record"
+    },
+    {
+      "path": "docs/源代码库合并记录-2026-09-10.md",
+      "kind": "implementation-or-record",
+      "baselineSha256": null,
+      "currentSha256": "10BA49779C149B611483481DA04F33655ED89A699BCBA81B12A8A3A0560051E2"
+    },
+    {
+      "baselineSha256": "1EA33F28CC9A2234B1E8D35A8AB2F82C66026CFB8C0636D8ED0212E217AB9062",
+      "path": "docs/远舟Windows重新打包与安装-2026-09-07.md",
+      "currentSha256": "1EA33F28CC9A2234B1E8D35A8AB2F82C66026CFB8C0636D8ED0212E217AB9062",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "81566B02EF89E910E16A61D8C0D386DF3C3B33E40D940AEF68ED978E7420DC6A",
+      "path": "docs/运行中追加要求实施与验收-2026-09-07.md",
+      "currentSha256": "81566B02EF89E910E16A61D8C0D386DF3C3B33E40D940AEF68ED978E7420DC6A",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "path": "docs/中央管理App开发交接与后续计划-2026-09-10.md",
+      "kind": "implementation-or-record",
+      "baselineSha256": null,
+      "currentSha256": "89446B385C8484457C11542CF0B06FCF2F2EBF4C93001D0630CF82E4FEEB7A5B"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/harness-agent-implementation.md",
+      "currentSha256": "C735FF59E7CCF58442A5D292D05BD8CAC4D5ADF7E78E641C9E883CC3068359DF",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/harness-artifact-history-validation.md",
+      "currentSha256": "9BD608D8157CA21A0B591701144D68B2B433DFAAD98191DCDCA84D2DAF5CB4B7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/harness-baseline-2026-09-09.json",
+      "currentSha256": "1E49D060FED33E9D19EF70B37449C23571FD48ED71526970D3E3AF3E6EB0E3F6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/harness-history-live-validation.md",
+      "currentSha256": "B0727A3A478F2308A14AC5D20609C05978068A4DF2072D1C45994C3C04FF45A4",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/Harness-P4兼容与故障验收-2026-09-09.md",
+      "currentSha256": "C9E0634B1B339530DD7C91F5EABAA1FC34EA7E6C5A603EBD482CD03FA7A6D95B",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/harness-source-audit.md",
+      "currentSha256": "32A2777E5502AC30807CF985F8AAE1FCC1A0F8301E647E80BC75308C4A35AB52",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/harness-ui-implementation.md",
+      "currentSha256": "A17CE8F1532493D75DFA19060CAD8EFD1957B7AE34665F67C6D16E12EB3A0A9D",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/Harness实施与验收-2026-09-09.md",
+      "currentSha256": "7F2CD40FA7A0E79D4461E086FD7C98A047371A8175FCDF36A452DBB19D441FA6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "docs/Worker权限与模型凭据隔离-2026-09-09.md",
+      "currentSha256": "AEF1FA5186DD912F48D27B0F664E2E77077B24AC40808405BDB4C10488F06D9F",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "F6EA43FA6CD4AC293070A8EC48C8009B8690240E3B81F4345FE71C7FE461E177",
+      "path": "spikes/local-dev/AGENTRPC.md",
+      "currentSha256": "BCBF12EDD80B08CDFD3785BD19479FB3379C0C3C6B4D2C5A8D484164402ACD93",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "94F94742F9CFEB25C9742EF88658C3A58299DA30F241302289449B2D94976933",
+      "path": "spikes/local-dev/apps/desktop/index.html",
+      "currentSha256": "94F94742F9CFEB25C9742EF88658C3A58299DA30F241302289449B2D94976933",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "AD5E9A23C458001D8BE7E9D076757D3EBE19DB9B874A413075A3AA493D02E0C5",
+      "path": "spikes/local-dev/apps/desktop/src-tauri/capabilities/default.json",
+      "currentSha256": "AD5E9A23C458001D8BE7E9D076757D3EBE19DB9B874A413075A3AA493D02E0C5",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src-tauri/Cargo.toml",
+      "currentSha256": "42E4E2A8AD90055DD27F4D481D94DD8F5E01D3D6E654AF3EDB32862001F8B395",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src-tauri/rc-installer-hooks.nsh",
+      "currentSha256": "B65AAE97A043F01DE12F11C47BF62A50A34279DFB64F337A04900F22B3467B65",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src-tauri/src/main.rs",
+      "currentSha256": "8FED2ED866F095ABB353BB696694A69F7A0CC750C267AD88AD41B91B55E49D51",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src-tauri/src/platform.rs",
+      "currentSha256": "463CA583A31DBDF8594840C3EAB019EF38E4BF2C540ABA9591F8D213D376D226",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src-tauri/src/runtime.rs",
+      "currentSha256": "8D7B5DFA48ED107B5CB2907E706BAD4863AA6782C566C63E629DF9E2DD60F7DB",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "DC17C074D4E9ACB4CAE41807CB9A2BFF240B97A17F40DF005E17F1CC9B29BF19",
+      "path": "spikes/local-dev/apps/desktop/src-tauri/tauri.bundle.conf.json",
+      "currentSha256": "DC17C074D4E9ACB4CAE41807CB9A2BFF240B97A17F40DF005E17F1CC9B29BF19",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "EBE683EA1C2EC55D77187AB77EB8239E0DEB6FF4CBAA33F517F25F9FC945DF70",
+      "path": "spikes/local-dev/apps/desktop/src-tauri/tauri.conf.json",
+      "currentSha256": "EBE683EA1C2EC55D77187AB77EB8239E0DEB6FF4CBAA33F517F25F9FC945DF70",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src-tauri/tauri.rc.conf.json",
+      "currentSha256": "30973AD1D6550DBF9A2A39E65CE1FBDC04EE5351E4F5783505213C7B76ACF902",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "2D7D7EAC58B1C20406E47153A7C6F428A057C28BBB304226E9B47AF8478C759C",
+      "path": "spikes/local-dev/apps/desktop/src/App.tsx",
+      "currentSha256": "E1E02670823FA8AA8BA0C69921F5BB54CC4A95B32E1D1801C295AF67E180C030",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "B12502C9E4D29A8FB2256338A4754359B8EDF2415652CA7D51EF2F21F2F3B20C",
+      "path": "spikes/local-dev/apps/desktop/src/chat-stream.ts",
+      "currentSha256": "B12502C9E4D29A8FB2256338A4754359B8EDF2415652CA7D51EF2F21F2F3B20C",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "C59D2CF68B0706981D85EABE012DE605C458D5B766EA9108C0ACABF5E4879D82",
+      "path": "spikes/local-dev/apps/desktop/src/codexia-gateway-adapter.ts",
+      "currentSha256": "17801DE6049A3969B08A3E7CC2DBB80A8BB83A752DECD33240BEC525A5EC6176",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src/gateway-auth-error.ts",
+      "currentSha256": "B7073A3C8E2326212A9F90BF38ABB0179BC38690B847677A8D61DFEF5F5C81A6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src/gateway-ui-events.ts",
+      "currentSha256": "5F9E687CAAA6445B42508F959903E3A9F067934AAC6994CDFCC8FB82DA6BC7E9",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "44E8A641F22E66085B333AD63787E7EBBD5C5B7E2F171D38BEF236F6832130B1",
+      "path": "spikes/local-dev/apps/desktop/src/main.tsx",
+      "currentSha256": "44E8A641F22E66085B333AD63787E7EBBD5C5B7E2F171D38BEF236F6832130B1",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src/native-gateway-socket.ts",
+      "currentSha256": "AF52F5887C3D328C513635A70BA3068535A851C231D84186071367C7B6EB8F4A",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src/platform-account-settings.tsx",
+      "currentSha256": "021D05C2D77B61AC98DFB0D88BC59F73E5B0F7D1F333C35D8A192BE0F45BE5F2",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "C76FC64B58EFCC743BEDAEEE791FF9F0A4F054B38E73A008C0122C2A3E7317E8",
+      "path": "spikes/local-dev/apps/desktop/src/platform-gateway-client.ts",
+      "currentSha256": "97E96B6E1FE2277CB0152F9D224A9443121E9B2B9E944098E3D688046AB149D5",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src/platform-pairing-state.ts",
+      "currentSha256": "4CC76A971F73B386D1C690D58CE6AC2EF6471FEC236A359BF7D5BC6B58EE1997",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "357FA1E3C1724B38DCD95E8F52B5A7A8F049A16D16C1CCC4E235F280960A1462",
+      "path": "spikes/local-dev/apps/desktop/src/runtime-settings.tsx",
+      "currentSha256": "A6ECEB914625D5F9EF30FFF3C3D04E84E221B89ADFE115BA092496CA31000D39",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "65DEC50E01EC096B607C1B6E21DC3A9D939DECCC497023698B58A2BD1D6EE123",
+      "path": "spikes/local-dev/apps/desktop/src/styles.css",
+      "currentSha256": "65DEC50E01EC096B607C1B6E21DC3A9D939DECCC497023698B58A2BD1D6EE123",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "8B82293D818AD135EB01492DC5AF4FEE44B96B62DED628204814E02ED4E93F6B",
+      "path": "spikes/local-dev/apps/desktop/src/theme.ts",
+      "currentSha256": "8B82293D818AD135EB01492DC5AF4FEE44B96B62DED628204814E02ED4E93F6B",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "61FA75B936D64E0F25AF7C2C30F75A14D3CE16A3186C4C4382C5885C36B8BE06",
+      "path": "spikes/local-dev/apps/desktop/src/ThemePicker.tsx",
+      "currentSha256": "61FA75B936D64E0F25AF7C2C30F75A14D3CE16A3186C4C4382C5885C36B8BE06",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "EC1A5B552D6C7F46494B98BF0EB5DD9616EEC04960FE1C700818B991B31C1238",
+      "path": "spikes/local-dev/apps/desktop/src/thread-history.ts",
+      "currentSha256": "EC1A5B552D6C7F46494B98BF0EB5DD9616EEC04960FE1C700818B991B31C1238",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/apps/desktop/src/thread-recovery.ts",
+      "currentSha256": "E918885D80B11A9A82F71684F12EC89314FB08A00DF0C633AC6E4EC4CCC0F75B",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "2911EDF80D5EFCB0B88CBEA8908E2C3C59807A9403F0CD4211774E8989F8BF6F",
+      "path": "spikes/local-dev/apps/desktop/src/turn-timing.ts",
+      "currentSha256": "2911EDF80D5EFCB0B88CBEA8908E2C3C59807A9403F0CD4211774E8989F8BF6F",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "F30ED125B497537A9F6611F9EAA056501375483C98D34EDF498CE04FCB966031",
+      "path": "spikes/local-dev/apps/desktop/src/UiIcon.tsx",
+      "currentSha256": "F30ED125B497537A9F6611F9EAA056501375483C98D34EDF498CE04FCB966031",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "3F75D293DF2C888F2E13366443223AEAB06A3C9DC0ADD7B52A0F869AFA3BB6AB",
+      "path": "spikes/local-dev/apps/desktop/src/WorkspacePanel.tsx",
+      "currentSha256": "076D8464AC370431A51AAC42C1F41C069E206677684021982F961A96DA838FBC",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/Cargo.lock",
+      "currentSha256": "9296A4090743D44EFBC7BC0FB9D040454513059E6E1C92929577D524758F8D84",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/Cargo.toml",
+      "currentSha256": "E3740597C0990B02E21029CD4C394FAF3A8791B55B07E40617DF50D57610513E",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/Cargo.toml",
+      "currentSha256": "83343D8B1B868376FD684D8A797C8014B030DBCDD43189CD277F290B17BC953B",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/src/main.rs",
+      "currentSha256": "778C2C8BC44415E4EFB4104240F6B278E9C30A4740FC9D13BAAA95C59685FEF0",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/src/process.rs",
+      "currentSha256": "95EC8F30A1D224413E3B465290CC34380CB1484D61C163115EF7C456BF637F4B",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/src/windows_job.rs",
+      "currentSha256": "B57370C493DD7418EE64FA47863EBC39674A9B6D2BF10BD914C02DA8948AE3F1",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/src/workspace.rs",
+      "currentSha256": "4E3790743C793FD37F3611C25E9C180CBE7FA85C4ADB1393533E51252593A430",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/Cargo.toml",
+      "currentSha256": "899D8FE7CC8852405635EE9AC9B2F92A67D80CC7BD12B6CA4CE058B74548FF96",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/LICENSE",
+      "currentSha256": "D17F227E4DF5DA1600391338865CE0F3055211760A36688F816941D58232D8DC",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/NOTICE",
+      "currentSha256": "9D71575ECFD9A843FC1677B0EFB08053C6BA9FD686A0DE1A6F5382FD3C220915",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/src/file_update.rs",
+      "currentSha256": "C666D44B5088D3AC375A4127ACA3E2ABA89AF2931A7AD465A458BA28F9EE6C5D",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/src/lib.rs",
+      "currentSha256": "4745BA98EB19CD1AD98C8D54E032576D9B2664E555BCC26CC204B1C642EB40F2",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/src/parser.rs",
+      "currentSha256": "3D193B8D6CC49E4761051D44E730FF95960986FAD364AC206EDC39903F7E1E74",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/src/seek_sequence.rs",
+      "currentSha256": "5ECED89191977D6B53B1B770CCAAD6CAFA2FB3ECBCD4839A88318F75E4A620E4",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/src/streaming_parser.rs",
+      "currentSha256": "B81BD01D32E140AB10B4D6F7F7C3CB3D91111EC073D3C61691B3D006344878B3",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/src/text_file.rs",
+      "currentSha256": "35CBBDEB91E86780D99FCCD097A5DBA2772F048730556B73D685E94658DDC6E3",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/local-agent/vendor/codex-patch-core/UPSTREAM.md",
+      "currentSha256": "09938574C12723A8584FE1EA6433DAF889C7C75B52E911D9914C9C763EA21CB9",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/platform-security/Cargo.toml",
+      "currentSha256": "F41C05D4A19A68895D58E13F6FDF31A4AD7F964BDB1858898EA841258FF374A4",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/platform-security/examples/platform-acceptance.rs",
+      "currentSha256": "FAF1B1A8B2ADA6011109986814F03D5FEFF7E6BF937E9A513C665BA156CEFE3F",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/platform-security/examples/token-socket-qa.rs",
+      "currentSha256": "58CC5FB8C6EFB1EC913CDB76FDB49D79BA8B284290B87333A9E9A02B3BA32A6E",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/platform-security/src/device_certificate.rs",
+      "currentSha256": "4F556538836F26C8FC55EB4429B43F6C5F8F87101EA43BE858E8E58A177F793B",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/platform-security/src/device_token.rs",
+      "currentSha256": "7954C325A1BCA65D21B4E32597315E54594125D2A70B6367BE81652B0DD5B7E9",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/crates/platform-security/src/lib.rs",
+      "currentSha256": "D42AFD788C6B6343575FB4AB42700678FF2ECE824BF21D2AC0B737B3A09F728E",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/.gitignore",
+      "currentSha256": "1281AA463C3017F95CDBB584C71EA6B980665568C99965A4E3A5498CD04662B4",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/apply-fork.mjs",
+      "currentSha256": "BAD994B13B62AD32302481A98FB6999D452C9CE232C63A1276B5C750A866A2EF",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/auth-lifecycle.md",
+      "currentSha256": "32AC8195B125C5A315F2EF184DF0A90F3EDDC0AA70B95478D6FDE0B5F6A40EC6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/auth-refresh-smoke.mjs",
+      "currentSha256": "3381C7D6655DFEFEB0D2D7893913F335A1A8AFF0D7932EC91CFC82F6345AC804",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/build-central.sh",
+      "currentSha256": "92A483EDD91470509DB8F5E1EFB788A1F23C4A23B935965E2E36C32DF4A2ECF1",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/build-rc-macos.sh",
+      "currentSha256": "7168B1D0288BCA35FD87F6CB52A63DD6648F72335EA889D8972E706C504A57D3",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/cleanup-mtls-native-qa.mjs",
+      "currentSha256": "2B57E2F240E3C59620A96F27B8B923D9C528926E44A1C8E6813A844A332ED1BC",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/cleanup-platform-native-qa.mjs",
+      "currentSha256": "F57BEBAD37712E288B8DB8C20E673D08087D5C6B4CCDD072D2759821D998D93A",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/export-schema.mjs",
+      "currentSha256": "8768DDF87665760B44FB059FF2276B179C28E1FC0B4F1347EA28901E0417D220",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/fetch-source.mjs",
+      "currentSha256": "DB467B8241C0C786DB15E81F7EE3B94ED4C574818001151BFD6551E46E302135",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/launch-central.sh",
+      "currentSha256": "DC9E32141CA82899C4D180F4FC81CAE149EAA6112A8F1F265B591F8033C04B47",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/os-boundary-probe.c",
+      "currentSha256": "B44E237713EFC0F8375CAF84CD9657789CBABEE442FF68060E0CFEE22D9BD829",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/prepare-isolated-qa.mjs",
+      "currentSha256": "0DCD3254697D559B1A9833CD2544D8F8E178C34795AF1C9C02EF1961786D2F07",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/prepare-mtls-native-qa.mjs",
+      "currentSha256": "CC60C0B99BA6A8122645E39FDB116AC74801A3CE3CF7B7B6D378DF404A2516A9",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/prepare-mtls-qa.mjs",
+      "currentSha256": "EABF6B945779FC8A86611B7C8A2AE53AC0711EBAF142D8F8E8ACE977BA2B7168",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/prepare-platform-native-qa.mjs",
+      "currentSha256": "48A421D77D79635F518F53B319AEDB5E431F8B3A7F0892C323816ECB97106EA2",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/prepare-platform-qa.mjs",
+      "currentSha256": "602208B1A827A7AE7E685208CF0E7DFC0D708ED9C9438B2F626B1E05ACE19924",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/prepare-workers-qa.mjs",
+      "currentSha256": "D804F44E652C9237BFA78C8FC2825D8753B7E881FC0D0598D4CD3919D9626363",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/provision-platform-qa.mjs",
+      "currentSha256": "20611B7A94B6C8A09CE4EE19325FDEECE9452F57261F5941FD5D8749AC4792CE",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/qa-control.mjs",
+      "currentSha256": "774486B487E8467BA365939E1B668C9AB5D7D4CC4E3F347759144151C2018416",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/rc-device-acceptance.mjs",
+      "currentSha256": "6173F45C6C4BDD6A197A3EFB7D85CED3C9C7B4FFBCFA0D53600A0C24277E3B45",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/rc-native-macos-qa.mjs",
+      "currentSha256": "DFF0D698E9028936BB1BF1FD78F6173091A96946767D831836B4E840B2CEE034",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/rc-native-windows-qa.mjs",
+      "currentSha256": "71040FAFEB2DA57F50555E31F833DBDEFD0BE9E2A322420809ECBBE3878EE2EB",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/README.md",
+      "currentSha256": "256343255888ECAD0CB8CB4E337FF73B8B14182C17D636EA222D338EBAB5E8D2",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/remote_workspace.rs",
+      "currentSha256": "8CE4744FE3A5AE9834EE27104772FE8432FD83E2E2EAD832D2619840F3278C64",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/remote-workspace.patch",
+      "currentSha256": "BAD9D4C5F4A73FBCE8F61654EF0EC3575DCB908083065CCF071FD73170B1CDFA",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/run-rc-acceptance.mjs",
+      "currentSha256": "B6A4D3B1BACF08A735A792E9734C6768F93FD484CE508BD82B26BF48230F85F8",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/run-token-qa.mjs",
+      "currentSha256": "98FBB0E10AB766A09772F24C691A160DF828EA33B5CF07296D75B33876DE31A0",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/runtime-smoke.mjs",
+      "currentSha256": "FD2796962B3C60C03D206FAE080700C1FB7F574EDEA78AF19BFFFAFC6D751885",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/schema/app-server-exports-experimental.json.zst",
+      "currentSha256": "05948C1AE7D50D2EC2D01153EEB4EB9B82CF6F7D851ACB576EBB5FB201C38B2C",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/schema/app-server-exports-stable.json.zst",
+      "currentSha256": "90CC88760F6B43C84D1266F5DDD6791D1E6971E7C402F591883AA85C7B406A28",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/source-files.json",
+      "currentSha256": "96C36A6B285A1ADDBCA603AC59764A20658A3DBB62AC09D521F263CAC3C91846",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/token-client-qa.mjs",
+      "currentSha256": "E9F469135A88CCCD3138A417C8820FA80C72CB9A5BEE5C9DBCC55E7D87506DEF",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/token-device-acceptance.mjs",
+      "currentSha256": "3D37B8583CF7E7BDB633290746B5197B9E9418B1BD5B13F1AF6B14B51969621A",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/token-live-revocation.mjs",
+      "currentSha256": "C7B881F9B18E6892A16F661372BF6A261EBE9CD157E0B8E456FD53CD1014623E",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/upstream.json",
+      "currentSha256": "A473921323CB5F04006DD3E781807903DF53194CCDCCC3DE67E2EA9FA9D8971D",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/upstream/Cargo.lock",
+      "currentSha256": "3494B8A78D0F643556A83A9CC184E912BCAB9F4C5640288952F4223452BA5DC8",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/upstream/LICENSE",
+      "currentSha256": "D17F227E4DF5DA1600391338865CE0F3055211760A36688F816941D58232D8DC",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/upstream/NOTICE",
+      "currentSha256": "9D71575ECFD9A843FC1677B0EFB08053C6BA9FD686A0DE1A6F5382FD3C220915",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/central-qa.json",
+      "currentSha256": "0901CF5DF826C47A7F81E711EB864E34216982D66EA6E92E2AE383986E72F1E7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/long-running-qa.json",
+      "currentSha256": "47CF0DF8AC3FE14BA5D40CD733BF53C3FDC3C4150FB9FCA130769D59DACAD307",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p4-acceptance.json",
+      "currentSha256": "15074A745195C2409EC97FF94227CD0A2152CCD32D42255630C56DC9A55966D7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p5-device-token-qa.json",
+      "currentSha256": "7A3F1C941420CBC149087F4C3438781264D55F3188CAF725814DCD16BED15877",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p5-identity-qa.json",
+      "currentSha256": "A5A98DF2F008D96D7B34E4D0C9A0E3C61981477E54A0AA19FCDCCC782D19D6E2",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p5-isolation-qa.json",
+      "currentSha256": "0688C44A88B4515A3258E7BEBF1955628E3618B9BA112B5D40F479A37A5479E7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p5-mtls-qa.json",
+      "currentSha256": "6F7E20B25D2A9FE555917DDA8E97837B8F618C83FF2CC73386637F8FC76F6A6D",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p5-release-candidate-qa.json",
+      "currentSha256": "CB6FC04F0B2A4831DE8B0611B886B292D104D0A7748F1A6AA8C15BFC1D5A5969",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/verification/p5-workers-qa.json",
+      "currentSha256": "D2ACEDB45EC2455D3CB81E5FD3A99E05EDD795E17A3811E186F28FEE44533E23",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/worker-isolated.sb",
+      "currentSha256": "4B67CEC3DFF5E3879797EBE7875546F6B232D5FD78C99ACFAF0D3E274F0F6AE3",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/worker-isolation-probe.c",
+      "currentSha256": "9B95F3B7E85E91244B68E8C7AD72ADDBCE20C94C202C4B1E0DA617C3319F8B32",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/worker-isolation-smoke.mjs",
+      "currentSha256": "AF894D6C820282CB475A13442F755848158D5599BBE3A4100B550A92B97F1959",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/harness/worker.sb",
+      "currentSha256": "077DEBEDD957CD53EDC093AF130CAB70D43B14EA088360EE8D1BBFAB0D2E4441",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/package-lock.json",
+      "currentSha256": "8F218777CB5CEC28DBD875C37B4BBEE7DC905CF9850EC63F8C3770B5B48597B7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "A50D5BE2B7BCB42F3E5FAFAB0353A74C7326D3091E5AA850DBAFD7C5415F0190",
+      "path": "spikes/local-dev/package.json",
+      "currentSha256": "C70C9B38402D48E84EE2EE34BEB30788DB62033D8C5ABB49594B45E8A9136B88",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/packages/agentrpc-types/schema/agentrpc-v1.schema.json",
+      "currentSha256": "888A57B151D68ACC162E50BE3585D072DC8D1625A7F41E1140F51C0164111EF7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "6E1207806792FD9910D271451A5DCF4048DDA5D0D284E7BD1314DB6352A89F55",
+      "path": "spikes/local-dev/packages/agentrpc-types/src/index.ts",
+      "currentSha256": "090FB0DEECD825055BE4CF2AB41196211ADF15333F3E3A7A65B96DC8918C390F",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "2FA99E8DD7588247D02A55A0BF5F02709B2DD2AD0BECA345BBE50AB845709AAE",
+      "path": "spikes/local-dev/README.md",
+      "currentSha256": "AFC8CC34D66CD2F74B0D1F8754179C6EDBA1C8103D22763690BC59EAC1D65C42",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/device-ca-init.mjs",
+      "currentSha256": "EF4B473B047664B6E8250785FF38E60D83DC795FBFD96AD80C27235C5FAFF04C",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/device-certificates-smoke.mjs",
+      "currentSha256": "29E9A29D7B4C40AAC57329288E095F243D38AE339487EECA4E1FB8991B17CB48",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/device-mtls-smoke.mjs",
+      "currentSha256": "29147E67F9AD4931B79872F064E4C97E74D8078235B782626E5517FAA39408AA",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/device-token-gateway-smoke.mjs",
+      "currentSha256": "ED4623283FE4DEEBA3A9B3E280F64AACD010C541E6D35E43D242A239CC86A354",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/device-token-native-smoke.mjs",
+      "currentSha256": "2DB00A83370FA5F1CC30D5C9A096B89C9C0E9905DFE8BA3639ED74385998C4A3",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/device-token-smoke.mjs",
+      "currentSha256": "9C81FFAD998FECC48FF75654E6E9D8685351B4426F988AA547F50623E5698DBA",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/gateway-auth-reconnect-smoke.mjs",
+      "currentSha256": "55B571157C6869F7F9FE5A3EEFC20E2D8A7683F340D8A73D0DFC4CD43E465EC6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-artifact-history-smoke.mjs",
+      "currentSha256": "5FEEA1F7C20DA9B3E7CF739CD51D28B4476B88C2B5375E234BC95824A08240A7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-fault-live-smoke.mjs",
+      "currentSha256": "D5F946A08FA0D557AD58187CB61AA0190AAC37DD0412893873AEFB48C4211223",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-gateway-smoke.mjs",
+      "currentSha256": "9015288F4936BC6AFB4077C2721CC9C557A9B594E5E7A9348FA6EC42F106B6C8",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-history-live-smoke.mjs",
+      "currentSha256": "7DDAA9C21A3680B27CBDCD2978EFF9290548565B1C96C04DE13993A01A133216",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-live-smoke.mjs",
+      "currentSha256": "B39A32EEB99144471BC6B1063C5914CB42F2ECCBAAD411F74BD21914FD3FCFE7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-state-smoke.mjs",
+      "currentSha256": "5EFEA14431114ABA3A3B97653E98164DF5F60C27CF5F1B414F2FF5A9DCAB09D8",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-ui-smoke.ts",
+      "currentSha256": "1B94F2E0257285225536D28234F9D0F0EA31998658147B223E0B2B1B676196D7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/harness-workspace-smoke.mjs",
+      "currentSha256": "F537ABF993CA1BAD976A6151FB685A2DF26BA7F3C63DADD9EA82C182CC6100DC",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/migration-preflight.mjs",
+      "currentSha256": "5EE9FF8720495327A4D61243BC9B82B32A1C1AC4143C963645830C7971B775CE",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/migration-rehearsal.mjs",
+      "currentSha256": "D64779ED8216BB46135685A53943B7FEE49DA4D29E364C3F3E3188661B5CB617",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/model-access-configure.mjs",
+      "currentSha256": "3BBBB80F60131D859751044E9735EAC59880CD1C69E6D20D709E768934ED9C63",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/model-credential-broker-smoke.mjs",
+      "currentSha256": "ACB9D0EDE15725E24F8A0B223F838721A5ABD6A4CF739523661CEBC8542EE5F0",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/package-desktop.mjs",
+      "currentSha256": "43BE7139398FF31A63C65D725C5207196305D7263943279D51F9EEE3742CF354",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/platform-auth-bootstrap.mjs",
+      "currentSha256": "444F08D39158CF86805483B9CE5FBF539785C26C2D0BCFD30E38936A7D460DCB",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/platform-auth-live-smoke.mjs",
+      "currentSha256": "14CDBFF341E044D1739F43AFF3F2E62272DE412FE66DE462AE80AC4ACC3D485E",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/platform-auth-smoke.mjs",
+      "currentSha256": "05B733F65645D47E964A5566809A6DDDEDA17F080C12297DBE10C7DF0E88F4F1",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/platform-pairing-ui-smoke.ts",
+      "currentSha256": "21ACF8A73A825C18FADCC7C83F17F612C89F75A12892CF590BF31BE2AF3391B6",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "562EC5F159299265A6133AE0CED82D66950D517F5244C4FBBC1AA88C48F162E5",
+      "path": "spikes/local-dev/scripts/steering-gateway-smoke.mjs",
+      "currentSha256": "AAA3ED436A975DB4E4A4625C0A187A6713A4DB0288A90290253DA97036773412",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "E1621A30AC7CF7C943671253E07EB497608C39AB7BA45376193D50C8E038DC6D",
+      "path": "spikes/local-dev/scripts/steering-live-smoke.mjs",
+      "currentSha256": "E1621A30AC7CF7C943671253E07EB497608C39AB7BA45376193D50C8E038DC6D",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": "01F9297592A6D3B78C917783B7BE9B0093C890AEA41CD2684BACF4D038AD0C49",
+      "path": "spikes/local-dev/scripts/steering-smoke.ts",
+      "currentSha256": "01F9297592A6D3B78C917783B7BE9B0093C890AEA41CD2684BACF4D038AD0C49",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/thread-recovery-smoke.ts",
+      "currentSha256": "5EB18233F18C9BB322C50430578E3D4D65CCDD3E86258F2F477C31D6FB8A8FC8",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "44072A4A709FA64ACF9E266BE103E6C400E0209820B466C53300916938268B07",
+      "path": "spikes/local-dev/scripts/turn-timing-smoke.ts",
+      "currentSha256": "44072A4A709FA64ACF9E266BE103E6C400E0209820B466C53300916938268B07",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/worker-manager-smoke.mjs",
+      "currentSha256": "9BC4174A82A81C68EDFA9096869BAB008587F49F41BF638E8A1F36C6C04BE4D3",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/scripts/worker-routing-smoke.mjs",
+      "currentSha256": "88BC8C615D37D65A5F451D0DA30764AA1EB462DBF2472EA2E0F3F5A218BE65C7",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/package.json",
+      "currentSha256": "51488DD01DE40BAAA3BA7315AACC493402CCD86E3228C922DBF6DAE39B4DE04E",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/audit-journal.ts",
+      "currentSha256": "85441686FE21EEF89A0BE9125B44D237270E31B8C6D507B2355493C767A8B16B",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/device-certificates.ts",
+      "currentSha256": "22C67ECA5749C8D3A2D8DFD7535F60E840B4838723EDF79AA47BA53A77DE5C6F",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/gateway-state.ts",
+      "currentSha256": "2D298E819072A8878F12477B3819E00D988B7E69EC80B64FB300ABC135E9CC0D",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "8D377D3FE99179C49D8579951D263AA456EA529ADFCE7F73827746C1A7373586",
+      "path": "spikes/local-dev/services/test-gateway/src/index.ts",
+      "currentSha256": "BB9FF6F75BAE6811BF5F742EBBD617CBD9F128CAA31F8D3441AA845C3E2C09DD",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/model-credential-broker.ts",
+      "currentSha256": "585AC36A37C879B71ADC9D857094F2D4770AC9CECE27B6B40A4452FF12F36050",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/platform-auth.ts",
+      "currentSha256": "50D904FE0556C52CCA2D7118B1EC6EA9B9B42CA814ED4F615C12E7051392DAFC",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/remote-workspace.ts",
+      "currentSha256": "46D041CF3783B715344D64EF41EFFD8624C29F3E5A9DB51B71E11BB8F04B1E36",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": "CBAA15B9FDF3555E7CF587EF6A17A1BD13AAF1BBF362CCF968470A9C04C43FA6",
+      "path": "spikes/local-dev/services/test-gateway/src/steering.ts",
+      "currentSha256": "CBAA15B9FDF3555E7CF587EF6A17A1BD13AAF1BBF362CCF968470A9C04C43FA6",
+      "kind": "synchronized-user-baseline"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/worker-isolation.ts",
+      "currentSha256": "FA35EAA7ADA085CBFF87E9CA8D1226E8CF48E9B3D10E5DF41B3F70290010F545",
+      "kind": "implementation-or-record"
+    },
+    {
+      "baselineSha256": null,
+      "path": "spikes/local-dev/services/test-gateway/src/worker-manager.ts",
+      "currentSha256": "CF0D69AEE5175707FF34DF5EFE8BDEAA81A0867B520F8B9AAF454FFB3256FCC8",
+      "kind": "implementation-or-record"
+    }
+  ],
+  "note": "Device-token default approved and integrated. RC3 real Windows/Mac model and lifecycle passed. RC4 Windows terminal revoke and re-pair passed; Mac RC4 source upload awaits specific authorization after automatic review rejection. QA4529 stopped. Not a production release. Generated schemas and this inventory excluded.",
+  "date": "2026-09-09",
+  "documentationUpdatedAt": "2026-09-10",
+  "sourceMerge": {
+    "date": "2026-09-10",
+    "destination": "C:/Workplace/central-codex-platform",
+    "commitCreated": false,
+    "record": "docs/源代码库合并记录-2026-09-10.md"
+  }
+}

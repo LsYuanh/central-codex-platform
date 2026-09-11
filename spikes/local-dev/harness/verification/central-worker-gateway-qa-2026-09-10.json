@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-10",
+  "scope": "Windows native Worker host candidate, private credential reader, gateway drain and independent runtime distribution",
+  "deployable": false,
+  "centralAppServiceLifecycleEnabled": false,
+  "explicitGatewayWindowsCandidateModeImplemented": true,
+  "productionWindowsWorkerQualified": false,
+  "formal4510Modified": false,
+  "realModelCredentialsReadThisRound": false,
+  "realModelCallsThisRound": 0,
+  "osTrustModified": false,
+  "tests": {
+    "gatewayTypeScriptBuild": true,
+    "nativeHostMsvcBuildWarnings": 0,
+    "nativeHostStaticCrt": true,
+    "legacyQaSharedBridgeCompile": true,
+    "nativeHelperRustTests": 2,
+    "nativeHelperCargoFmt": true,
+    "workerManagerAndAudit": 28,
+    "workerStartupTimeout": 3,
+    "workerDrain": 7,
+    "windowsTransportProtocol": 18,
+    "windowsPrivateJsonAndColdStart": 8,
+    "brokerSynthetic": 23,
+    "modelPipeLeaseSynthetic": 19,
+    "realNativeHostMetadataAndLifecycle": 6,
+    "workerRouting": 8,
+    "harnessGatewayProtocol": true,
+    "gatewayGracefulShutdownWithRealChild": true,
+    "standaloneDistributionChecks": 9,
+    "finalFreshCandidateFirstNativeStartPassed": true,
+    "nativePermissionContext": "Actual Windows user; protected synthetic ACLs and real AppContainer processes"
+  },
+  "package": {
+    "id": "windows-x64-node24-qa1-bf607d2f19af1bc6",
+    "directory": "spikes/local-dev/target/central-gateway/windows-x64-node24-qa1-bf607d2f19af1bc6",
+    "manifestSha256": "bf607d2f19af1bc6199c1434c4085b7c54deb5064bada79910ddfb446f3ef640",
+    "nodeVersion": "v24.20.0",
+    "productionDependencyCount": 22,
+    "fileCount": 862,
+    "containsNativeHostAppServerAndHelper": true,
+    "ready": false,
+    "qualified": false,
+    "copiedOutsideSourceWorkspaceHealthPassed": true,
+    "workspaceNodeModulesUsedByDistributionSmoke": false,
+    "artifactPinsCompiledIntoCentralApp": false,
+    "npmTarballIntegrityIndependentlyVerified": false
+  },
+  "binaries": {
+    "hostSha256": "03928c4cc4c768408c4c79bae9a43e42fa62d2cc767726b0caee61fd4e3ab8b8",
+    "appServerSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+    "nativeHelperSha256": "88547d7577c579d2435b65d36a19f1225018b1547986096708fee5b81e70cc1d"
+  },
+  "failuresFoundAndResolved": [
+    "Volume GUID CODEX_HOME rejected by pinned AppContainer canonicalization fallback; pinned-handle DOS path and same-object verification fixed initialization",
+    "CreateProcess then AssignProcessToJobObject parent-exit gap removed by atomic PROC_THREAD_ATTRIBUTE_JOB_LIST",
+    "Worker stdout cannot forge host closure because it is encoded inside host/data envelopes",
+    "Spontaneous verified native exit now notifies gateway/runtimeUnavailable",
+    "PowerShell 5.1 synthetic ACL fixture isolated from PowerShell 7 module environment",
+    "Cargo hardlinked helper rejected; candidate contains ordinary single-link copies",
+    "Three fresh helper copies reproduced ctime-only changes; original and reopened FD hashes plus stable identity revalidation allow genuine unchanged content"
+  ],
+  "detailedEvidence": {
+    "nativeHost": "central-worker-native-lifecycle-2026-09-10.json",
+    "privateJsonColdStart": "central-worker-private-json-2026-09-10.json",
+    "coldStartMetadataBeforeFix": "central-worker-cold-probe-2026-09-10.json"
+  },
+  "notVerified": [
+    "Central App actual start/stop and model account UI",
+    "Authenticated gateway real model Turn with Local Agent through this new host",
+    "Thread persistence with actual messages",
+    "Full native filesystem/ACL and network-denial adversarial acceptance",
+    "Parent crash and blocked-output lifecycle fault injection",
+    "Protection from hostile same-user helper swap-and-restore",
+    "New macOS flow and production packaging qualification"
+  ]
+}

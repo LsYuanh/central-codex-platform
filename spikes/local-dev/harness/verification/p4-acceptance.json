@@ -1,0 +1,187 @@
+{
+  "date": "2026-09-09",
+  "scope": "isolated central 4529 and real Windows Agent; bounded P4 acceptance",
+  "productionChanged": false,
+  "agentSha256": "3CCF62FD08A79EBE0B35ACC7186BC86556E381E2275200C492AB75908571C0E8",
+  "gatewayPackageSha256": "F6E468648F8AF6D9C1CEEE4C8C6456D34C70BF699AB4DD8650D3E6CC4D7A593F",
+  "history": {
+    "ok": true,
+    "source": "real-central-harness-windows-agent",
+    "fixtureKind": "legacy-tool-table-and-v1-metadata-QA-migration-fixture",
+    "threadId": "01a084b2-4cb9-7fa2-84f2-95729792c1dc",
+    "turns": [
+      "01a084b2-4d60-75f1-b5f3-4057ff7dbab5",
+      "01a084b2-6739-7101-a1e4-8ecfbbf2d413"
+    ],
+    "userId": "harness-history-f613e9d4-03a8-4bb3-963f-7b08991e3f58",
+    "deviceId": "harness-history-f613e9d4-03a8-4bb3-963f-7b08991e3f58",
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\codex-harness-history-uVthGO",
+    "agentBinary": "C:\\Users\\developer\\.codex\\worktrees\\3c14\\central-codex-platform\\spikes\\local-dev\\target\\harness-agent\\debug\\local-agent.exe",
+    "agentSha256": "3ccf62fd08a79ebe0b35acc7186bc86556e381e2275200c492ab75908571c0e8",
+    "checks": [
+      "fixed-legacy-native-tools",
+      "v1-summary-additive-binding-migration",
+      "native-history-reconnect-resume",
+      "codexia-workspace-compatibility",
+      "codexia-files-output",
+      "exact-patch-approval",
+      "lost-submission-reconciled-before-reissue",
+      "same-submission-no-duplicate-turn-or-counter",
+      "archive-list-unarchive-resume",
+      "artifact-history-equivalence"
+    ],
+    "artifacts": {
+      "threadId": "01a084b2-4cb9-7fa2-84f2-95729792c1dc",
+      "submissionId": "8bd71937-8d7e-4ba4-8d17-42f2f1d626d2",
+      "turnId": "01a084b2-6739-7101-a1e4-8ecfbbf2d413",
+      "attachment": {
+        "id": "eac323ba-4038-4b9d-adce-bd5febaee22c",
+        "deviceId": "harness-history-f613e9d4-03a8-4bb3-963f-7b08991e3f58",
+        "path": "C:\\Users\\developer\\AppData\\Local\\Temp\\codex-harness-history-uVthGO\\artifact-history-b43ba492-4c4f-4c9b-ab77-2b763b200939\\client-source.txt",
+        "version": "120:1788932671356196100",
+        "bytes": 120
+      },
+      "output": {
+        "id": "call_GufPpcUHyiop1O32q7clHpdX",
+        "deviceId": "harness-history-f613e9d4-03a8-4bb3-963f-7b08991e3f58",
+        "deviceKey": "1ce60276-a209-42ac-8cd9-b773d9f71f69",
+        "path": "C:\\Users\\developer\\AppData\\Local\\Temp\\codex-harness-history-uVthGO\\artifact-history-b43ba492-4c4f-4c9b-ab77-2b763b200939\\client-result.txt",
+        "version": "84:1788932703638435400",
+        "bytes": 84,
+        "sha256": "1c92ca6d0e3972d5543b2212de0ab9bc5eb38699e59777e848edd39b212d101f",
+        "status": "saved"
+      }
+    }
+  },
+  "faultPhases": [
+    {
+      "ok": true,
+      "source": "real-central-runtime-windows-agent",
+      "mode": "transport",
+      "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\harness-fault-2N1vFR",
+      "deviceId": "harness-fault-145284bb-592d-4c62-9d7e-f6e92494a177",
+      "checks": [
+        {
+          "name": "offline-before-operation"
+        },
+        {
+          "name": "command-timeout-cleans-process"
+        },
+        {
+          "name": "agent-transport-loss-cancels-process-and-reconnects"
+        },
+        {
+          "name": "committed-response-loss-reconciled-without-replay"
+        },
+        {
+          "name": "agent-process-exit-cleans-descendants"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "source": "real-central-runtime-windows-agent",
+      "mode": "model",
+      "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\harness-fault-gcWlNY",
+      "deviceId": "harness-fault-58dc4f03-256f-4756-bd36-c2fabb28f6a0",
+      "checks": [
+        {
+          "name": "offline-before-operation"
+        },
+        {
+          "name": "reject",
+          "threadId": "01a084b2-86a8-7323-bf12-a5554fbb61f3",
+          "turnId": "01a084b2-8723-7711-b637-db38bfe38554"
+        },
+        {
+          "name": "conflict",
+          "threadId": "01a084b2-affb-7111-9510-0c4b674ce418",
+          "turnId": "01a084b2-b06e-72b1-b6be-20a9b49f6ced"
+        },
+        {
+          "name": "cancel-approval",
+          "threadId": "01a084b2-daf1-7e23-a003-d9a368dcd9de",
+          "turnId": "01a084b2-db6a-74e3-87eb-db485dc1acf8"
+        },
+        {
+          "name": "ui-close",
+          "threadId": "01a084b2-fcee-7ca3-8a87-89aed9babd55",
+          "turnId": "01a084b2-fd53-7c21-881c-059b9fe9864b"
+        },
+        {
+          "name": "lost-patch-result",
+          "threadId": "01a084b3-28af-78e1-8c76-201832371645",
+          "turnId": "01a084b3-2915-7390-86c6-5ac249e288fc"
+        },
+        {
+          "name": "native-turn-interrupt-cleans-client-process",
+          "threadId": "01a084b3-5c92-7781-a8a7-3c7f0bd936a8",
+          "turnId": "01a084b3-5d07-7531-b3f1-49b45d51bd06"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "source": "real-central-runtime-windows-agent",
+      "mode": "runtime",
+      "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\harness-fault-HC03VA",
+      "deviceId": "harness-fault-6e56332c-2bec-4802-b2f0-905c0f2c07fb",
+      "checks": [
+        {
+          "name": "offline-before-operation"
+        },
+        {
+          "name": "central-runtime-crash-cancels-client-execution-without-fallback",
+          "threadId": "01a084b6-009c-73f1-9f6f-81a6753306ef",
+          "turnId": "01a084b6-011b-72e2-9c14-f164e23f9e45"
+        },
+        {
+          "name": "gateway-restart-retains-binding-history-and-submission-fence",
+          "threadId": "01a084b6-009c-73f1-9f6f-81a6753306ef",
+          "turnId": "01a084b6-011b-72e2-9c14-f164e23f9e45",
+          "nativeTurnStatuses": [
+            {
+              "id": "01a084b6-011b-72e2-9c14-f164e23f9e45",
+              "status": "interrupted"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "source": "real-central-runtime-windows-agent",
+      "mode": "restart",
+      "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\harness-fault-QrTpnm",
+      "deviceId": "harness-fault-39eeabc4-a517-4a07-99c3-22b976752ee3",
+      "checks": [
+        {
+          "name": "offline-before-operation"
+        },
+        {
+          "name": "gateway-restart-retains-binding-history-and-submission-fence",
+          "threadId": "01a084b7-4fb4-7551-be0d-f9a146a12315",
+          "turnId": "01a084b7-5025-7713-876e-0e7ee1fd9023",
+          "nativeTurnStatuses": [
+            {
+              "id": "01a084b7-5025-7713-876e-0e7ee1fd9023",
+              "status": "interrupted"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cleanup": {
+    "qaGatewayPid": 76442,
+    "qaRuntimePid": 76449,
+    "qaPidsExited": true,
+    "port4529Closed": true,
+    "windowsQaProcessesExited": true,
+    "productionPid": 90685,
+    "productionClients": 1,
+    "productionDevices": 2,
+    "productionSequence": 6620,
+    "installedConfigSha256": "4FD301EFADF939BF2E24E8E1B821C97461325C6529BE454FF7ED73A5C85FB178"
+  }
+}

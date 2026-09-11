@@ -1,0 +1,54 @@
+{
+  "scope": "real-windows-local-agent-loopback-qa",
+  "passed": true,
+  "realLocalAgentVerified": true,
+  "realModelVerified": false,
+  "realRemoteDeviceVerified": false,
+  "productionDeviceBrokerVerified": false,
+  "deployable": false,
+  "checks": [
+    "Real Agent reports its bound workspace and reads the randomized QA fixture",
+    "Agent executes PowerShell, streams output, writes the QA marker and reports the actual machine and process",
+    "Actual Agent rejects workspace traversal and wrong binding; adapter rejects caller binding injection",
+    "Turn cancellation reaches job.cancel, terminates the command and allows a new request",
+    "AbortSignal sends actual Agent cancellation and releases its command process",
+    "Disconnect produces unknown execution status, kills the command tree and never reconnects or replays",
+    "Agent, command processes, pending requests and ephemeral listener are fully closed"
+  ],
+  "agentBinarySha256": "700837cc5dba17ed7712005e657ccd5eddfbd9fb806daaf7ec897dd6e94c8e7c",
+  "execution": {
+    "machineSha256": "77d754aedd1e066cf57aae97b911b795dffd589c2486aa74e09236ccef819840",
+    "commandPid": 2768,
+    "outputSha256": "4227e60ec4dbb5fc471b67d6e730d38e04a07f159ab5f5843eb88e0b1f48300a",
+    "streamedEvents": 4
+  },
+  "adapter": {
+    "scope": "local-agent-loopback-qa-adapter",
+    "realLocalAgent": true,
+    "productionDeviceBroker": false,
+    "connections": 1,
+    "requests": 10,
+    "responses": 9,
+    "streamEvents": 11,
+    "cancelSent": 3,
+    "cancelAccepted": 2,
+    "rejectedFrames": 0,
+    "duplicateResponses": 0,
+    "unknownResults": 1,
+    "replayedRequests": 0,
+    "stderrBytes": 131,
+    "stdoutBytes": 0,
+    "agentExited": true,
+    "listenerClosed": true,
+    "pendingRequests": 0,
+    "helloChecks": {
+      "firstHello": true,
+      "validKey": true,
+      "workspaceMatches": true,
+      "windows": true,
+      "absolutePathsDisabled": true,
+      "missingCapabilities": []
+    }
+  },
+  "commandProcessesGone": true
+}

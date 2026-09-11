@@ -1,0 +1,199 @@
+{
+  "date": "2026-09-09",
+  "status": "windows-rc4-verified-cleaned-4529-stopped-macos-rc4-upload-approval-pending",
+  "defaultSwitchApproval": {
+    "status": "approved",
+    "source": "explicit user confirmation after the specific default-change approval request",
+    "scope": "current worktree and isolated 4529 gateway, desktop and Local Agent default device-token-v1 mode",
+    "deploymentVerified": true,
+    "productionDeploymentVerified": false
+  },
+  "deployable": false,
+  "authMode": "device-token-v1",
+  "passed": {
+    "frontendTypeCheckAndBuild": true,
+    "pairingUiAndHarnessUiSmoke": true,
+    "windowsNativeCheck": [
+      "platform-security",
+      "local-agent",
+      "desktop-spike"
+    ],
+    "rustFmt": true,
+    "localAgentTests": 19,
+    "windowsTokenStorageTests": 2,
+    "deviceTokenModuleChecks": 21,
+    "legacyAuthChecks": 13,
+    "legacyMtlsChecks": 14,
+    "windowsNativeModuleChecks": 9,
+    "gatewayEntryProtocolFixtureChecks": 18,
+    "legacyWorkerRoutingChecks": 8,
+    "rc3WindowsRealCreateChecks": 5,
+    "rc3WindowsRealResumeChecks": 3,
+    "rc3WindowsRealRevocationChecks": 8,
+    "rc3MacosRealCreateChecksReportedByRoot": 5,
+    "rc3MacosRealResumeChecksReportedByRoot": 3,
+    "windowsRc4PackageCheckAndFmt": true,
+    "windowsRc4RustTerminalAllowlistChecks": 1,
+    "windowsRc4TypescriptBehaviorChecks": 12,
+    "windowsRc4RealRepairedChecks": 6,
+    "windowsRc4RealRevocationChecks": 8
+  },
+  "evidence": [
+    "target/device-token-smoke-NGiryB/result.json",
+    "target/device-token-native-qO82wS/result.json",
+    "target/device-token-gateway-cYqbKu/result.json",
+    "target/token-native-win32/acceptance-create.json",
+    "target/token-native-win32/acceptance-resume-1788959940373.json",
+    "target/token-native-win32/ui-paired.json",
+    "target/token-native-win32/ui-model-result.json",
+    "target/token-native-win32/first-close.json",
+    "target/token-native-win32/history-restart.json",
+    "target/token-native-win32/revocation-1788959994042-75801761-13ba-4397-97fb-fab62ec64de9.json",
+    "target/token-native-win32/rc4-ui-revoked-startup.json",
+    "target/token-native-win32/acceptance-repaired-1788960906508.json",
+    "target/token-native-win32/revocation-1788960945701-3139853f-5055-4bf9-b1a8-f8607dfa99f0.json",
+    "target/token-native-win32/rc4-ui-live-revoked.json",
+    "target/token-native-win32/record.json"
+  ],
+  "evidenceScopes": {
+    "module21": "local real HTTPS/WSS PlatformAuth module; no native vault, real Agent or model",
+    "native9": "real Windows native helper and DPAPI/ACL against a local PlatformAuth module; no real Agent or central model",
+    "gateway18": "actual gateway entry and HTTPS/WSS with explicitly labelled Node App Server and Agent protocol fixtures",
+    "rc3Real": "isolated 4529 central model and actual client Local Agents; candidate binaries, not installer upgrade or rollback"
+  },
+  "rc3Windows": {
+    "namespace": "com.centralcodex.harnessqa.rc20260909",
+    "gateway": "wss://192.0.2.10:4529/ws",
+    "deviceId": "fbcdb0c3-2dcd-48f5-bc02-50f58147c094",
+    "userId": "19f1839b-4f2e-44d3-b0d2-03cb4b168ed1",
+    "threadId": "01a0864e-2bf5-7680-898c-91fc3e7d4555",
+    "actualPairingUiVerified": true,
+    "actualModelResultUiVerified": true,
+    "normalCloseAndRestartVerified": true,
+    "historicalFailedAttempt": {
+      "evidence": "target/token-native-win32/acceptance-resume-1788959893538.json",
+      "error": "AGENT_OFFLINE",
+      "reason": "resume attempted before Agent became ready",
+      "subsequentResumePassed": true
+    },
+    "revocation": {
+      "backendAndOsCancellationPassed": true,
+      "checks": 8,
+      "readyBeforeRevokeVerified": true,
+      "pendingRequestFailed": true,
+      "wssClosedBeforeScriptCleanup": true,
+      "recordedAgentAndPowerShellExited": true,
+      "completionMarkerAbsent": true,
+      "commandDelaySeconds": 30,
+      "completionCheckElapsedSeconds": 133,
+      "uiTerminalStatePassed": false,
+      "knownDefect": "RC3 UI reconnected indefinitely after revocation; fixed and real UI retested successfully in Windows RC4"
+    }
+  },
+  "rc3Macos": {
+    "verificationSource": "root observed remote acceptance; full JSON is not present locally",
+    "remoteEvidencePath": "/Users/operator/central-harness-qa-20260909/rc-client-source/target/token-native-darwin/lifecycle-1788959400072.json",
+    "embeddedCreateChecks": 5,
+    "embeddedResumeChecks": 3,
+    "pairingAndRealModelPassedReportedByRoot": true,
+    "twoNormalAppQuitsPassedReportedByRoot": true,
+    "sameParentAgentStartAndExitPassedReportedByRoot": true,
+    "storageDirectoryModeReportedByRoot": "0700",
+    "storageFileModeReportedByRoot": "0600",
+    "fullJsonExported": false,
+    "fullJsonExportDeniedByAutomaticApprovalReview": true
+  },
+  "rc4": {
+    "status": "windows-real-acceptance-passed-macos-upload-approval-pending",
+    "sourceArchiveSha256": "9F5CB643AD868B463F854E0A2D1C6E8A6BEE4B6901D3FC69ABA4E64ACAEA45F4",
+    "uploadStatus": "macos-source-upload-automatic-review-denied-new-batch-scope-awaiting-specific-user-approval",
+    "deploymentVerified": false,
+    "results": {
+      "windows": {
+        "version": "0.2.0-rc.4",
+        "packageCheckAndFmtPassed": true,
+        "rustTerminalAllowlistChecks": 1,
+        "typescriptBehaviorChecks": 12,
+        "revokedStartupPromptPassed": true,
+        "repairedChecks": 6,
+        "oldThreadBindingDeniedAfterRepair": true,
+        "repairedRealModelPassed": true,
+        "liveRevocationChecks": 8,
+        "revokedUiPromptPassed": true,
+        "reconnecting": false,
+        "observationSeconds": 67,
+        "completionMarkerAbsent": true,
+        "desktopPid": 16804,
+        "agentPid": 6732,
+        "powerShellPid": 19664,
+        "allRecordedProcessesExited": true,
+        "directExecutableSha256": "6F352ADAE9ABAEA970E7A3421B7929F3E382687008ECD43B0827EA3699F3E89C",
+        "nsis": {
+          "path": "target/rc-delivery/远舟 RC 20260909_0.2.0-rc.4_x64-setup.exe",
+          "sizeBytes": 4466570,
+          "sha256": "AADFB316143EFE0AA0C0AA191D6C5EC0D52DDF47BBCDFD58318D8073898648F2",
+          "built": true,
+          "newlyInstalledForAcceptance": false
+        },
+        "installerUpgradeRollbackVerified": false
+      },
+      "macos": {
+        "status": "pending-specific-upload-approval-build-resume-close"
+      }
+    },
+    "deploymentScope": "Windows local direct executable verified; macOS RC4 not uploaded or deployed"
+  },
+  "nativeHelperSha256": "46ccf203c83aea498f256254487237ed566b7be7c078d3bcd19abdf869fb89b5",
+  "nativeFixtureCleanupConfirmed": true,
+  "gatewayFixtureCleanupConfirmed": true,
+  "realQaCleanup": {
+    "status": "windows-cleaned-isolated-gateway-stopped-macos-and-central-final-cleanup-pending",
+    "windowsRecordStageAtDocumentationRead": "cleaned",
+    "record": "target/token-native-win32/record.json",
+    "windows": {
+      "localRemoved": true,
+      "remoteRevocationConfirmed": true,
+      "configurationRestored": true
+    },
+    "isolatedGatewayReportedByRoot": {
+      "status": "stopped",
+      "qaPidsExited": true,
+      "port4529Closed": true,
+      "evidenceRetained": true
+    },
+    "retainedForMacosRc4": [
+      "macOS pairing",
+      "central synthetic QA accounts",
+      "central QA bootstrap"
+    ]
+  },
+  "keychainUsedForNewFlow": false,
+  "macosFileContentsEncrypted": false,
+  "pending": [
+    "macOS RC4 source upload specific approval, build, same-device resume and normal close",
+    "macOS and central final QA cleanup"
+  ],
+  "boundaries": {
+    "production4510Updated": false,
+    "installedProductionClientChanged": false,
+    "originalBaselineFilesChecked": 34,
+    "originalBaselineChanged": [],
+    "originalStashPreserved": true,
+    "baselineEvidenceScope": "root rechecked after Windows RC4 acceptance: all 34 original files, stash and production configuration hashes unchanged",
+    "deviceTokenInstallerUpgradeRollbackVerified": false,
+    "centralCrossPlatformManagementAppComplete": false,
+    "windowsCentralWorkerIsolationImplemented": false,
+    "realHistoryMigrationImplemented": false,
+    "productionCheckpointReportedByRoot": {
+      "pid": 90685,
+      "clients": 1,
+      "devices": 2,
+      "sequence": 6987,
+      "unchanged": true
+    }
+  },
+  "unverifiedDeliveryCapabilities": [
+    "new device-token installer, upgrade and rollback",
+    "complete central cross-platform management App"
+  ]
+}

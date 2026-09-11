@@ -10,12 +10,15 @@
   },
   "workspaces": [
     "apps/desktop",
+    "apps/central",
     "services/fake-central",
     "services/app-server-proxy",
     "services/test-gateway",
     "packages/agentrpc-types"
   ],
   "scripts": {
+    "dev:central-app": "npm run tauri:dev --workspace @central-codex-spike/central",
+    "dev:central-ui": "npm run web:dev --workspace @central-codex-spike/central",
     "dev": "concurrently -k -n app-proxy,desktop -c cyan,magenta \"npm run dev:app-proxy\" \"npm run dev:desktop\"",
     "dev:central": "concurrently -k -n test-gateway,web -c cyan,green \"npm run dev:test-gateway\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
     "dev:fake": "concurrently -k -n gateway,agent,desktop -c cyan,yellow,magenta \"npm run dev:gateway\" \"npm run dev:agent\" \"npm run dev:desktop\"",
@@ -36,12 +39,26 @@
     "stream:smoke": "node scripts/command-stream-smoke.mjs",
     "history:smoke": "node --no-warnings --experimental-strip-types scripts/thread-history-smoke.ts",
     "multi-session:smoke": "node --no-warnings --experimental-strip-types scripts/multi-session-smoke.ts",
+    "steering:smoke": "node --no-warnings --experimental-strip-types scripts/steering-smoke.ts",
+    "steering:gateway-smoke": "node scripts/steering-gateway-smoke.mjs",
     "attachment:smoke": "node scripts/attachment-smoke.mjs",
     "output:smoke": "node scripts/output-smoke.mjs",
     "day5:acceptance": "node scripts/day5-acceptance.mjs",
     "protocol:test": "npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/fake-central && npm run test:protocol --workspace @central-codex-spike/fake-central",
     "test": "npm run protocol:test && cargo test --workspace",
-    "build": "npm run build --workspaces --if-present && cargo build --workspace"
+    "build": "npm run build --workspaces --if-present && cargo build --workspace",
+    "harness:gateway-smoke": "node scripts/harness-gateway-smoke.mjs",
+    "harness:workspace-smoke": "node scripts/harness-workspace-smoke.mjs",
+    "workers:smoke": "node scripts/worker-manager-smoke.mjs",
+    "workers:drain-smoke": "node scripts/worker-manager-drain-smoke.mjs",
+    "workers:transport-smoke": "node scripts/windows-worker-transport-smoke.mjs",
+    "workers:native-smoke": "node scripts/windows-worker-host-smoke.mjs",
+    "gateway:shutdown-smoke": "node scripts/gateway-shutdown-smoke.mjs",
+    "harness:ui-smoke": "node --no-warnings --experimental-strip-types scripts/harness-ui-smoke.ts",
+    "device-token:smoke": "node scripts/device-token-smoke.mjs",
+    "device-token:native-smoke": "node scripts/device-token-native-smoke.mjs",
+    "device-token:ui-smoke": "node --no-warnings --experimental-strip-types scripts/platform-pairing-ui-smoke.ts",
+    "harness:check": "npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/test-gateway && npm run check --workspace @central-codex-spike/desktop && npm run build --workspace @central-codex-spike/desktop && npm run harness:gateway-smoke && npm run harness:ui-smoke"
   },
   "devDependencies": {
     "concurrently": "10.0.5"

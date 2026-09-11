@@ -1,0 +1,159 @@
+{
+  "date": "2026-09-09",
+  "scope": "P5 second batch: per-user central Worker management; not released or operating-system isolation",
+  "worker": {
+    "ok": true,
+    "checks": [
+      "real child processes and canonical homes separated",
+      "worker capacity enforced",
+      "per-user turn quota does not consume another user allowance",
+      "terminal event releases quota",
+      "crashed user restarts with saved history; other worker and active turn unaffected",
+      "bounded pending RPCs recover after timeout",
+      "global quota and idle reclaim preserve active worker",
+      "late old Turn completion cannot release the pending or identified new Turn reservation",
+      "completion preceding start response retains quota until the matching Turn ID is confirmed",
+      "bounded rotated durable audit survives reopen and append; unknown fields never reach disk",
+      "returned and persisted audit remove error text, unknown fields and control characters",
+      "truncated audit refuses startup without resetting history",
+      "invalid JSON, optional field types, missing fields, unknown fields, blank records and invalid UTF-8 fail closed",
+      "missing audit segment refuses startup",
+      "empty final segment from interrupted creation accepts the first complete record",
+      "oversized first record creates no skipped or invalid segment",
+      "audit open failure is surfaced and sticky without acknowledgement",
+      "stale reopened writer refuses changed segment instead of appending to an outdated view",
+      "short successful writes are completed before acknowledgement",
+      "partial write poisons the instance and restart detects the unacknowledged tail",
+      "fsync failure is not acknowledged or replayed; a complete uncertain record remains readable",
+      "acknowledged audit survives a real writer process killed without shutdown",
+      "recent cache is bounded while durable history remains intact"
+    ],
+    "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\workers-3aSSSI"
+  },
+  "routing": {
+    "ok": true,
+    "source": "real local TLS gateway with authenticated protocol-only App Server and Agent fixtures",
+    "checks": [
+      "offline owner approval is rejected on its Worker and never leaks to last-active foreign user",
+      "restarted Worker reusing upstream approval ID rejects stale UI response; current response reaches correct bridge",
+      "audit failure stops Workers, rejects new authentication, and discards the next buffered tool message without Agent dispatch",
+      "legacy shared history refuses secure per-user startup before accepting connections"
+    ],
+    "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\worker-routing-blqXRH"
+  },
+  "identity": {
+    "passed": 13,
+    "evidence": "C:/Users/developer/AppData/Local/Temp/platform-auth-x5A5pI"
+  },
+  "local": {
+    "ok": true,
+    "source": "real-TLS-native-vault-Windows-Agent-with-labelled-App-Server-fixture",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "cross-user Thread access and mutations denied",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session",
+      "no plaintext credentials in server state"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-RlLKFe"
+  },
+  "centralFinalBuild": {
+    "ok": true,
+    "source": "real-central-Rust-TLS-native-vault-Windows-Agent",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "cross-user Thread access and mutations denied",
+      "real model approval and events stay with owner; forged approval cannot write",
+      "distinct real central worker PIDs; worker and audit views admin-only",
+      "two users run concurrently; over-quota submission fails without unknown-state lock",
+      "one worker crash cancels its Windows command; other worker completes with same PID",
+      "worker recreation restores own history and preserves no-replay boundary",
+      "gateway restart retains audit IDs and per-user history without replay",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-kh3g7K"
+  },
+  "checks": [
+    "npm run harness:check",
+    "npm run steering:gateway-smoke",
+    "npm run history:smoke",
+    "npm run multi-session:smoke",
+    "final desktop TypeScript check and Vite build"
+  ],
+  "native": {
+    "rustSourceUnchangedThisBatch": true,
+    "desktopAndAgentExitedAfterWindowClose": true,
+    "desktopPid": 21872,
+    "connectedAndDeviceOnlineObserved": true,
+    "failureBannerAndDisabledComposerObserved": true,
+    "vitePid": 20304,
+    "crashedWorkerPids": [
+      84457,
+      84671
+    ],
+    "applicationId": "com.centralcodex.harnessqa20260909",
+    "disconnectReconnectRecovered": true,
+    "agentPid": 20460,
+    "user": "nativeqa"
+  },
+  "cleanup": {
+    "retainedData": "Central QA account state, audit and user history remain under the ignored isolated QA directory",
+    "finalGatewayPid": 86327,
+    "qaPidsExited": true,
+    "finalBootstrapVaultRemoved": true,
+    "port4529Closed": true,
+    "evidenceRetained": true,
+    "status": "stopped",
+    "native": {
+      "at": "2026-09-09T07:33:27.706Z",
+      "logout": {
+        "loggedOut": true
+      },
+      "bootstrap": {
+        "removed": true
+      },
+      "qaConfigRestored": true,
+      "originalCaConfigAbsent": true
+    }
+  },
+  "production": {
+    "installedConfigSha256": "4FD301EFADF939BF2E24E8E1B821C97461325C6529BE454FF7ED73A5C85FB178",
+    "port": 4510,
+    "pid": 90685,
+    "unchangedThisBatch": true,
+    "devices": 2,
+    "installedClientNotLaunchedThisBatch": true,
+    "sequenceAfter": 6624,
+    "sequenceBefore": 6624,
+    "clients": 1
+  },
+  "originalRepository": {
+    "source": "C:/Workplace/central-codex-platform",
+    "stashPreserved": "stash@{0}: On main: backup before Codexia worktree integration",
+    "mismatches": 0,
+    "checkedFiles": 34
+  },
+  "artifacts": {
+    "frontend": "index-CTX4ySJ_.js",
+    "desktopSha256": "A40AE259DF5AB9FE867A01745EA66B9DCD775F687D8AE880C58E8C49B4F32322",
+    "gateway": "spikes/local-dev/target/harness-deploy/gateway.tar.gz",
+    "agentSha256": "EEE83A107AD641AA5682EFF2A16D7C3DF21FA357B1B6020DB9A40A77A9311B4C",
+    "gatewaySha256": "01E03821F6601A57093681DD7953B05A9F330EC92515C493646055A90DAC029C"
+  },
+  "limitations": [
+    "Separate processes and directories are not operating-system isolation",
+    "Production model credential management, full mTLS and installer/release remain future work",
+    "Legacy shared history requires explicit recoverable migration",
+    "Audit is single-writer and has no automated retention policy",
+    "macOS native client was not tested in this Windows acceptance"
+  ]
+}

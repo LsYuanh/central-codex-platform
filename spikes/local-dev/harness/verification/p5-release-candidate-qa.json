@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-09",
+  "status": "historical-windows-complete-macos-mtls-superseded-by-device-token-direction",
+  "supersededBy": "docs/简化设备认证实施与验收-2026-09-09.md",
+  "qaCleanup": {"gateway904Stopped": true, "port4529Closed": true, "qaSessionsRevoked": 7, "qaDevicesRevoked": 2, "production4510Pid": 90685, "productionSequenceAtCleanup": 6987},
+  "artifacts": [
+    {
+      "name": "远舟 RC 20260909_0.2.0-rc.1_x64-setup.exe",
+      "bytes": 5339037,
+      "sha256": "f9092bbfe538f11cdaa1de9814a70e093568b3b3993d2382810179d7df029164"
+    },
+    {
+      "name": "远舟 RC 20260909_0.2.0-rc.2_aarch64.dmg",
+      "bytes": 11471982,
+      "sha256": "d4901b45ea58fe91a39aab0f251765a9266a726d07763c88cccca47770353d3b"
+    },
+    {
+      "name": "远舟 RC 20260909_0.2.0-rc.2_x64-setup.exe",
+      "bytes": 5334648,
+      "sha256": "7d99f10211ac31b79c07f4d5f77399c1096f65463959bb9042a8b24b26d4bd01"
+    }
+  ],
+  "windows": {
+    "passed": [
+      "NSIS RC1 install",
+      "native Agent mTLS and renewal across original certificate expiry",
+      "real central model reads client marker",
+      "RC1 to RC2 upgrade preserves config/identity/history",
+      "RC2 to RC1 rollback preserves config/identity/history",
+      "re-pair refuses old device binding and new conversation works",
+      "UI online, restored history and explicit re-pair recovery notice",
+      "normal window close stops Agent",
+      "RC uninstall preserves config; explicit QA logout/vault/config cleanup"
+    ],
+    "evidence": [
+      "target/rc-win32-create-result.json",
+      "target/rc-win32-resume-result.json",
+      "target/rc-win32-rollback-resume-result.json",
+      "target/rc-win32-repaired-result.json",
+      "target/rc-windows-upgrade.json",
+      "target/rc-windows-rollback.json",
+      "target/rc-windows-uninstall.json",
+      "target/rc-native-windows/record.json"
+    ]
+  },
+  "macos": {
+    "build": "passed arm64 RC1 and RC2; desktop check, Agent19 and certificate2 tests; ad-hoc signature verification passed",
+    "native": "historical Keychain failure; user chose device-token authentication without Keychain; old mTLS acceptance is superseded, not passed",
+    "qaGatewayPid": 904,
+    "qaGatewayPort": 4529,
+    "bootstrapCleanupPending": true,
+    "userReportedKeychainUnlocked": true,
+    "retryAfterUnlock": {
+      "nativeNonsecretProbeSaved": false,
+      "systemProbeSaved": false,
+      "systemError": "SecKeychainItemCreateFromContent (<default>): User interaction is not allowed.",
+      "uid": 501,
+      "defaultKeychain": "/Users/operator/Library/Keychains/login.keychain-db",
+      "next": "Superseded: no further user Keychain operation required for new device-token flow"
+    }
+  },
+  "migration": {
+    "checks": 24,
+    "evidence": "target/migration-rehearsal-OvHtcN/result.json",
+    "realImportImplemented": false
+  },
+  "originalBaseline": {
+    "count": 34,
+    "changed": [],
+    "stash": "stash@{0}: On main: backup before Codexia worktree integration"
+  },
+  "pending": [
+    "new device-token native Windows/macOS and real isolated gateway acceptance tracked separately",
+    "real shared-history import and confirmed account/device ownership mapping",
+    "remaining development QA bootstrap cleanup (central RC sessions/devices already revoked)"
+  ]
+}

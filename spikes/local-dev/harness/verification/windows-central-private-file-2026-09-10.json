@@ -1,0 +1,17 @@
+{
+  "scope": "windows-central-private-file-admission",
+  "passed": true,
+  "testsPassed": 18,
+  "doctestsPassed": 0,
+  "formatCheckPassed": true,
+  "sameHandleRead": true,
+  "fixedVolumeOnly": true,
+  "protectedDaclAndOwnerChecks": true,
+  "ancestorReparseAndWriterChecks": true,
+  "hardlinkAndSizeChecks": true,
+  "zeroizingBoundedRead": true,
+  "existingCredentialsRead": false,
+  "existingAclModified": false,
+  "brokerIntegrated": false,
+  "log": "spikes/local-dev/target/central-private-file-qa.log"
+}

@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import type { AgentRpcResponsePayload } from "@central-codex-spike/agentrpc-types";
+
+export const REMOTE_WORKSPACE_POLICY = "remote-workspace/v1";
+export function explainRuntimeError(message: string): string {
+  const modelCode=/\b(MODEL_[A-Z_0-9]+)\b/.exec(message)?.[1];
+  if(modelCode){
+    const reason=modelCode==='MODEL_CREDENTIAL_DISABLED'?'模型访问已被管理员停用':/UNCONFIGURED|MISSING/.test(modelCode)?'尚未配置模型访问':/EXPIRED|REJECTED/.test(modelCode)?'中央模型凭据已过期或被服务拒绝':modelCode==='MODEL_LEASE_INVALID'?'当前模型访问令牌已失效':modelCode.endsWith('MODEL_UNSUPPORTED')?'所选模型当前不可用':'中央模型访问暂不可用';
+    return `${modelCode}: ${reason}，请联系管理员检查授权后重新连接；当前任务不会自动重发。`;
+  }
+  return message.includes("disabled://read-only-shared-auth")
+    ? "CENTRAL_SHARED_AUTH_EXPIRED: 中央只读共享登录已过期，请由凭据所有者更新登录；隔离运行时不会刷新共享令牌。"
+    : message;
+}
+export interface RemoteWorkspaceBinding {
+  policy: typeof REMOTE_WORKSPACE_POLICY;
+  userId: string;
+  deviceId: string;
+  deviceKey: string;
+  workspaceRoot: string;
+}
+
+/** Platform routing identity is never taken from model-supplied tool arguments. */
+export function assertBinding(binding: RemoteWorkspaceBinding, current: RemoteWorkspaceBinding): void {
+  for (const key of ["policy", "userId", "deviceId", "deviceKey", "workspaceRoot"] as const) {
+    if (binding[key] !== current[key]) throw new Error(`REMOTE_WORKSPACE_CHANGED: ${key}; reconnect the original workspace or create a new conversation`);
+  }
+}
+
+/** Do not permit a UI payload to replace the worker's execution policy/configuration. */
+export function validateRemotePayload(payload: Record<string, unknown>): void {
+  for (const key of ["cwd", "sandbox", "sandboxPolicy", "approvalPolicy", "config", "baseInstructions", "developerInstructions", "dynamicTools", "mcpServers", "remoteWorkspace", "environment", "permissions", "serviceName"]) {
+    if (key in payload) throw new Error(`REMOTE_POLICY_OVERRIDE: ${key} is managed by the gateway`);
+  }
+}
+
+export function executionStatus(result: AgentRpcResponsePayload): string {
+  if (result.ok) return "succeeded";
+  const code = result.errorCode ?? result.error ?? "";
+  if (/RESULT_UNKNOWN|DISCONNECTED|CONNECTION|^TIMEOUT$/.test(code)) return "unknown";
+  if (/CANCEL/.test(code)) return "cancelled";
+  if (/TIMED_OUT|COMMAND_TIMEOUT|WORKSPACE_TIMEOUT/.test(code)) return "timed_out";
+  if (/DENIED|FORBIDDEN|NOT_ALLOWED|CONFLICT|VERSION|POLICY/.test(code)) return "denied";
+  if (/OFFLINE/.test(code)) return "offline";
+  return "failed";
+}
+
+const path = {type:"string", description:"Path relative to the bound client workspace; absolute paths and parent traversal are rejected."};
+export const WORKSPACE_TOOLS = [
+  {type:"function", name:"device_workspace_context", description:"Read actual client OS, shell, workspace and applicable AGENTS project rules. Read context for the target directory before editing.", inputSchema:{type:"object",properties:{path}}},
+  {type:"function", name:"device_workspace_search", description:"Search client workspace filenames or UTF-8 text with bounded pagination. No central filesystem is searched.",inputSchema:{type:"object",properties:{path,mode:{type:"string",enum:["files","text"]},query:{type:"string"},cursor:{type:"string"},limit:{type:"integer",minimum:1,maximum:200}},required:["mode","query"]}},
+  {type:"function", name:"device_workspace_read_text", description:"Read client UTF-8 project text with a content SHA256 version and bounded pages. Use that version for safe edits.",inputSchema:{type:"object",properties:{path,offset:{type:"integer",minimum:0},version:{type:"string"}},required:["path"]}},
+  {type:"function", name:"device_workspace_git_status", description:"Get actual client Git status; fails if the workspace is not a repository.",inputSchema:{type:"object",properties:{path}}},
+  {type:"function", name:"device_workspace_git_diff", description:"Get actual bounded client Git diff, never an inferred model diff. Includes truncation and exit status.",inputSchema:{type:"object",properties:{path,staged:{type:"boolean"}}}},
+  {type:"function", name:"device_workspace_apply_patch", description:"Apply a Codex patch on the client workspace after one-time user approval. Gateway prepares a client preview and captures SHA256 versions (missing for a new path) before requesting approval. Optional expectedVersions must match the preview. Client rechecks after approval; conflicts fail without applying stale edits. Multi-file failures report partial changes; never assume rollback.",inputSchema:{type:"object",properties:{patch:{type:"string"},expectedVersions:{type:"object",additionalProperties:{type:"string"}}},required:["patch"]}},
+] as const;

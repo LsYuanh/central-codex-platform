@@ -1,0 +1,134 @@
+{
+  "date": "2026-09-09",
+  "upstreamCommit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "binarySha256": "673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88",
+  "productionChanged": false,
+  "qaRoot": "/Users/operator/central-harness-qa-20260909",
+  "launcherSha256": "dc9e32141ca82899c4d180f4fc81cae149eaa6112a8f1f265b591f8033c04b47",
+  "sourceFinding": "OAuth authority refresh occurs before auth.json write; read-only shared link does not prevent token rotation",
+  "sharedAuthProtection": {
+    "mode": "shared-readonly",
+    "forcedRefreshEndpoint": "disabled://read-only-shared-auth",
+    "forcedRevokeEndpoint": "disabled://read-only-shared-auth",
+    "callerOverrideBlocked": true,
+    "exactSharedFileReadOnly": true,
+    "profileChanged": false,
+    "realSharedRefreshAttempted": false,
+    "secretsCopiedOrPrinted": false
+  },
+  "authProbe": {
+    "result": "HARNESS_AUTH_REFRESH_OK",
+    "realRust": true,
+    "realCredentials": false,
+    "realAuthority": false,
+    "strictOsProfile": true,
+    "root": "/Users/operator/central-harness-qa-20260909/auth-refresh-GTq3FU",
+    "unguardedFakeShared": {
+      "refreshRequests": 1,
+      "persisted": false
+    },
+    "isolatedFakeOwned": {
+      "refreshRequests": 1,
+      "persisted": true,
+      "reloadAfterRestart": true,
+      "extraRefreshAfterRestart": false
+    },
+    "guardedExpiredFakeShared": {
+      "refreshRequests": 0,
+      "callerOverrideBlocked": true,
+      "credentialUnchanged": true,
+      "model401Requests": 2,
+      "terminal": "failed",
+      "terminalMs": 119,
+      "nativeError": "builder error for url (disabled://read-only-shared-auth)"
+    }
+  },
+  "qaLifecycle": {
+    "status": "running for coordinated history/fault QA",
+    "controlScript": "qa-control.mjs",
+    "port": 4529,
+    "controls": true,
+    "historyFixtures": true,
+    "gatewayPackageSha256": "71fcb83ba2df5a9907e914a1e93b871c65dbbc235a5e5b35437a67a965c8ede4",
+    "dependencyLockUnchanged": true,
+    "startedAtUtc": "2026-09-09T05:30:23.407Z",
+    "gatewayPid": 74635,
+    "forkPid": 74644,
+    "stateFile": "/Users/operator/central-harness-qa-20260909/qa-control-state.json",
+    "gatewayCwd": "/Users/operator/central-harness-qa-20260909/gateway",
+    "forkCwd": "/Users/operator/central-harness-qa-20260909/live-data/remote-worker",
+    "productionBaseline": {
+      "pid": 90685,
+      "ok": true,
+      "clients": 1,
+      "devices": 2,
+      "sequence": 6620
+    },
+    "evidenceRetained": true,
+    "osProbeAfterRestart": {
+      "result": "HARNESS_OS_BOUNDARY_OK",
+      "actualProfile": "/Users/operator/central-harness-qa-20260909/worker.sb",
+      "allowed": "Independent probe worker read/write",
+      "denied": [
+        "External central sentinel read",
+        "External central sentinel write",
+        "/bin/sh execution"
+      ],
+      "interferedWithLiveGateway": false
+    },
+    "secondDeployment": {
+      "packageSha256": "f6e468648f8af6d9c1ceee4c8c6456d34c70bf699ab4dd8650d3e6cc4d7a593f",
+      "oldGatewayPid": 74635,
+      "oldForkPid": 74644,
+      "controlledStopPassed": true,
+      "oldPidsExited": true,
+      "portClosedBeforeUpdate": true,
+      "dependencyLockUnchanged": true,
+      "startedAtUtc": "2026-09-09T05:43:41.298Z",
+      "gatewayPid": 75844,
+      "forkPid": 75851,
+      "productionBaselineUnchanged": true,
+      "stateAndAuthPreserved": true
+    }
+  },
+  "notVerified": [
+    "Real shared-token refresh intentionally blocked",
+    "Dedicated real owned-login renewal",
+    "Keychain login",
+    "Multi-day soak",
+    "All TLS/proxy/authority failure variants"
+  ],
+  "macStateSmoke": {
+    "result": "HARNESS_STATE_SMOKE_OK",
+    "exitCode": 0,
+    "checksPassed": 15,
+    "platform": "central macOS",
+    "command": "node scripts/harness-state-smoke.mjs",
+    "cwd": "/Users/operator/central-harness-qa-20260909/gateway",
+    "actualFileSystem": true,
+    "checks": [
+      "missing-file-empty-without-write",
+      "legacy-v1-unknown-fields-roundtrip",
+      "reject-bad-json-preserve-bytes",
+      "reject-wrong-version-preserve-bytes",
+      "reject-users-array-preserve-bytes",
+      "reject-empty-user-preserve-bytes",
+      "reject-missing-summary-preserve-bytes",
+      "reject-empty-thread-preserve-bytes",
+      "reject-duplicate-one-user-preserve-bytes",
+      "reject-duplicate-multiple-users-preserve-bytes",
+      "unreadable-is-not-missing",
+      "serialization-failure-cleans-temp-preserves-commit",
+      "actual-invalid-parent-write-failure",
+      "injected-rename-failure-cleans-temp-preserves-commit",
+      "concurrent-reader-sees-only-complete-json"
+    ],
+    "concurrent": {
+      "reads": 11368,
+      "min": 0,
+      "max": 80,
+      "committedGeneration": 80,
+      "refusedCommits": 0
+    }
+  }
+}

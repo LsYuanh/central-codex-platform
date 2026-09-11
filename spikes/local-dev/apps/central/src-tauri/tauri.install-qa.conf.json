@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "远舟中央管理安装验收",
+  "identifier": "com.yuanzhou.central.installqa20260911",
+  "mainBinaryName": "yuanzhou-central-install-qa-20260911",
+  "version": "0.1.0",
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Yuanzhou QA",
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": { "type": "skip" },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "startMenuFolder": "远舟中央管理安装验收",
+        "installerHooks": "install-qa-hooks.nsh"
+      }
+    }
+  }
+}

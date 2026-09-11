@@ -1,0 +1,12 @@
+[
+  {
+    "path": "codex-rs/utils/home-dir/src/lib.rs",
+    "upstreamSha256": "1338259489ade54b01caa1468b6d25fc5a183657fa94cca0add8b91865635ef5",
+    "patchedSha256": "169f419f90a47a20f3b527a07f0fc92014326c296a4bb09947310467bde9973d"
+  },
+  {
+    "path": "codex-rs/utils/home-dir/src/windows_home.rs",
+    "upstreamSha256": null,
+    "patchedSha256": "846cbff7738ca048e506f8849fecc19772e0efdb339f0688ab7be1e384f50bd5"
+  }
+]

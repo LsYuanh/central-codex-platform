@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-10",
+  "scope": "Windows Central App model account import and native candidate service lifecycle",
+  "deployable": false,
+  "releaseCandidateStartEnabled": false,
+  "formal4510Modified": false,
+  "realLoginSourceRead": true,
+  "realLoginImportedThisRound": false,
+  "realModelCallsThisRound": 0,
+  "realLoginPublicStatus": "available",
+  "remoteVerified": false,
+  "tests": {
+    "centralAppUnit": {
+      "passed": 45,
+      "defaultIgnored": 4
+    },
+    "platformSecurityUnit": {
+      "passed": 26
+    },
+    "nativeActorSyntheticLifecycle": true,
+    "nativeControllerFullPackageSyntheticLifecycle": true,
+    "actualUserLoginPublicMetadata": true,
+    "gatewayNativeBootstrapSyntheticRuns": 3,
+    "centralTypeScriptCheck": true,
+    "centralViteBuild": true,
+    "tauriDebugResourcesBuild": true,
+    "rustFmt": true,
+    "tauriUiViewed": true,
+    "tauriUiRealLoginDiscovery": true,
+    "tauriStartupReadContentionRetryVerified": true,
+    "tauriWindowCloseNoRunningServiceVerified": true,
+    "centralCargoCheck": true,
+    "finalCentralAppProcessCount": 0
+  },
+  "package": {
+    "id": "windows-x64-node24-qa1-1211350ea468f9c1",
+    "manifestSha256": "1211350ea468f9c12a9f84e44344748d72e6ed820eed39c2edf76ae2143a5896",
+    "manifestBytes": 175831,
+    "files": 863,
+    "qualified": false,
+    "ready": false
+  },
+  "app": {
+    "profile": "com.yuanzhou.central.resource-qa-20260910",
+    "debugExecutableSha256": "1f45a4fb2f9244eaaa02d484093c789effa4ea7277f7b9f567e364aa3741e9b4",
+    "warnings": [
+      "unused internal credential serialization method",
+      "unused prepared package metadata fields"
+    ]
+  },
+  "gatewayEvidence": "spikes/local-dev/target/central-p0/central-service-host-SmY5Nk/result.json",
+  "gatewayChecks": [
+    "synthetic-memory-bootstrap-https-health-admin-login-model-status-and-owned-stop",
+    "restart-with-persisted-admin-and-wrong-instance-control-rejection",
+    "controller-eof-stops-service-with-receipt-exit-and-port-close",
+    "no-account-token-tls-or-admin-password-plaintext-in-run-directory",
+    "zero-workers-and-no-model-requests"
+  ],
+  "notVerified": [
+    "new Central App service with real model and Local Agent end-to-end",
+    "Tauri parent crash with active real Worker descendants",
+    "Mac Central and cross-machine matrix",
+    "installation upgrade rollback and production qualification"
+  ],
+  "knownLimits": [
+    "no automatic account refresh",
+    "account is default for all enabled users of the service instance",
+    "operation journal max 4096; UI stop requires writable journal; closing App independently stops owned service",
+    "preflight existing data compatibility still reports migration requirement"
+  ],
+  "handoff": "docs/中央管理App-账号与服务启停-2026-09-10.md"
+}

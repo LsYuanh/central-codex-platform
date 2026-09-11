@@ -1,0 +1,324 @@
+{
+  "date": "2026-09-09",
+  "scope": "P5 third batch: macOS Worker sandbox and central model credential broker; not released",
+  "modelBroker": {
+    "ok": true,
+    "fixtureOnly": true,
+    "checks": [
+      "Bindings inside Worker storage are refused, including nonexistent nested paths",
+      "All credential paths are checked against Worker storage, including canonical aliases and absent files",
+      "Loopback fixture provider is refused without explicit constructor test option",
+      "Missing user fails closed and each loopback lease is independently generated",
+      "Worker cannot select another user/provider through the body; successful SSE is streamed intact",
+      "ChatGPT authority headers are generated centrally and only bounded useful request headers pass",
+      "Provider-side history/file/template references are denied and storage/session/cache state is user-scoped",
+      "Unknown leases, query overrides, alternate paths, and non-POST methods never reach a provider",
+      "Upstream errors and redirects never disclose their bodies, headers, or credentials",
+      "Provider status and bad-request diagnostics use a closed safe code vocabulary only",
+      "Content type, compression, JSON and SSE failures have safe stage codes; split CRLF and DONE framing succeeds",
+      "Missing MIME accepts only requested, validated SSE; unknown MIME, HTML, error events and comment-only responses fail closed",
+      "Split SSE error diagnostics are suppressed while prior successful frames remain readable",
+      "Oversized bodies and encoded uploads are rejected before provider dispatch",
+      "Per-user concurrency and revocation stop all of A’s active traffic while B remains healthy",
+      "Disabled bindings fail explicitly; rebinding invalidates old leases and requires a fresh capability",
+      "Expired generated access credentials fail without refresh; replacement reloads without affecting B",
+      "Missing credentials and multiply linked files are refused (POSIX ownership/mode checked where available)",
+      "Overall request deadline aborts a stalled SSE stream and releases concurrency slots",
+      "Config disablement terminates an already running stream through periodic binding reload",
+      "Audit records contain metadata only, without raw credentials, leases, URLs, or model content",
+      "Automatic invalidation notifies only its owning user; normal lease release does not stop sibling Workers",
+      "Closing the broker invalidates leases and stops its listener"
+    ]
+  },
+  "osIsolation": {
+    "at": "2026-09-09T08:28:21.975Z",
+    "platform": "darwin",
+    "root": "/Users/operator/central-harness-qa-20260909/worker-isolation-k1HMmh",
+    "scope": "Actual macOS Seatbelt syscall tests with disposable canaries; no model credentials read",
+    "passed": true,
+    "checks": [
+      {
+        "name": "compile actual syscall probe",
+        "passed": true
+      },
+      {
+        "name": "alice: unsandboxed controls reach files, listeners and executable",
+        "passed": true
+      },
+      {
+        "name": "alice: own home/runtime read-write succeeds",
+        "passed": true
+      },
+      {
+        "name": "alice: other user sentinel/config/fake credential read-write denied",
+        "passed": true
+      },
+      {
+        "name": "alice: gateway fake secret read-write denied",
+        "passed": true
+      },
+      {
+        "name": "alice: symlink traversal and cross-user hardlink denied",
+        "passed": true
+      },
+      {
+        "name": "alice: arbitrary process execution denied",
+        "passed": true
+      },
+      {
+        "name": "alice: SecurityServer Mach lookup denied",
+        "passed": true
+      },
+      {
+        "name": "alice: broker TCP allowed and other TCP/Unix socket denied",
+        "passed": true
+      },
+      {
+        "name": "alice: inherited credential/SSH/proxy/DYLD env stripped",
+        "passed": true
+      },
+      {
+        "name": "bob: unsandboxed controls reach files, listeners and executable",
+        "passed": true
+      },
+      {
+        "name": "bob: own home/runtime read-write succeeds",
+        "passed": true
+      },
+      {
+        "name": "bob: other user sentinel/config/fake credential read-write denied",
+        "passed": true
+      },
+      {
+        "name": "bob: gateway fake secret read-write denied",
+        "passed": true
+      },
+      {
+        "name": "bob: symlink traversal and cross-user hardlink denied",
+        "passed": true
+      },
+      {
+        "name": "bob: arbitrary process execution denied",
+        "passed": true
+      },
+      {
+        "name": "bob: SecurityServer Mach lookup denied",
+        "passed": true
+      },
+      {
+        "name": "bob: broker TCP allowed and other TCP/Unix socket denied",
+        "passed": true
+      },
+      {
+        "name": "bob: inherited credential/SSH/proxy/DYLD env stripped",
+        "passed": true
+      },
+      {
+        "name": "cross-user and gateway canaries unchanged",
+        "passed": true
+      },
+      {
+        "name": "launch refuses paths outside worker root",
+        "passed": true
+      },
+      {
+        "name": "launch refuses permissive user directory",
+        "passed": true
+      },
+      {
+        "name": "launch refuses symlinked user base",
+        "passed": true
+      },
+      {
+        "name": "launch refuses old shared auth symlink",
+        "passed": true
+      },
+      {
+        "name": "launch refuses unmanaged previous configuration",
+        "passed": true
+      },
+      {
+        "name": "constructor rejects mismatched binary hash",
+        "passed": true
+      },
+      {
+        "name": "constructor rejects group-writable trusted binary",
+        "passed": true
+      },
+      {
+        "name": "launch refuses changed trusted artifact without fallback",
+        "passed": true
+      }
+    ]
+  },
+  "workers": {
+    "ok": true,
+    "checks": [
+      "real child processes and canonical homes separated",
+      "worker capacity enforced",
+      "per-user turn quota does not consume another user allowance",
+      "terminal event releases quota",
+      "crashed user restarts with saved history; other worker and active turn unaffected",
+      "bounded pending RPCs recover after timeout",
+      "global quota and idle reclaim preserve active worker",
+      "late old Turn completion cannot release the pending or identified new Turn reservation",
+      "completion preceding start response retains quota until the matching Turn ID is confirmed",
+      "bounded rotated durable audit survives reopen and append; unknown fields never reach disk",
+      "returned and persisted audit remove error text, unknown fields and control characters",
+      "truncated audit refuses startup without resetting history",
+      "invalid JSON, optional field types, missing fields, unknown fields, blank records and invalid UTF-8 fail closed",
+      "missing audit segment refuses startup",
+      "empty final segment from interrupted creation accepts the first complete record",
+      "oversized first record creates no skipped or invalid segment",
+      "audit open failure is surfaced and sticky without acknowledgement",
+      "stale reopened writer refuses changed segment instead of appending to an outdated view",
+      "short successful writes are completed before acknowledgement",
+      "partial write poisons the instance and restart detects the unacknowledged tail",
+      "fsync failure is not acknowledged or replayed; a complete uncertain record remains readable",
+      "acknowledged audit survives a real writer process killed without shutdown",
+      "recent cache is bounded while durable history remains intact"
+    ],
+    "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\workers-INwDex"
+  },
+  "routing": {
+    "ok": true,
+    "source": "real local TLS gateway with authenticated protocol-only App Server and Agent fixtures",
+    "checks": [
+      "offline owner approval is rejected on its Worker and never leaks to last-active foreign user",
+      "restarted Worker reusing upstream approval ID rejects stale UI response; current response reaches correct bridge",
+      "unknown central approval cannot be approved through the UI",
+      "audit failure stops Workers, rejects new authentication, and discards the next buffered tool message without Agent dispatch",
+      "legacy shared history refuses secure per-user startup before accepting connections",
+      "missing central model configuration fails before listening",
+      "protocol fixture refuses a LAN listening address",
+      "authenticated model worker refuses an unsupported OS"
+    ],
+    "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\worker-routing-eVlGDi"
+  },
+  "localNative": {
+    "ok": true,
+    "source": "real-TLS-native-vault-Windows-Agent-with-labelled-App-Server-fixture",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "cross-user Thread access and mutations denied",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session",
+      "no plaintext credentials in server state"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-FnfpeQ"
+  },
+  "central": {
+    "ok": true,
+    "source": "real-central-Rust-TLS-native-vault-Windows-Agent",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "cross-user Thread access and mutations denied",
+      "real model approval and events stay with owner; forged approval cannot write",
+      "distinct real central worker PIDs; worker and audit views admin-only",
+      "two users run concurrently; over-quota submission fails without unknown-state lock",
+      "one worker crash cancels its Windows command; other worker completes with same PID",
+      "worker recreation restores own history and preserves no-replay boundary",
+      "gateway restart retains audit IDs and per-user history without replay",
+      "model access disabled for owner; query cannot inspect another user; initialization fails explicitly",
+      "revoking one model lease leaves other real model and Windows command running",
+      "restored model binding creates a new lease, resumes own history and completes without replay",
+      "model proxy use is durably audited with user identity and no platform credentials",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-WQaQYU"
+  },
+  "validation": [
+    "npm run harness:check passed on final source",
+    "gateway TypeScript build passed",
+    "desktop TypeScript and Vite build passed",
+    "actual macOS sandbox checked on final deployed code",
+    "no Rust or frontend source changes in this batch"
+  ],
+  "cleanup": {
+    "qaSessionsRevoked": 30,
+    "workerPids": [
+      90365,
+      90472
+    ],
+    "bootstrapVault": {
+      "data": {
+        "removed": true
+      },
+      "ok": true
+    },
+    "port4529Closed": true,
+    "at": "2026-09-09T08:32:02.882Z",
+    "brokerListenerExitedWithGateway": true,
+    "qaPidsExited": true,
+    "evidenceRetained": true,
+    "localQaAgentAndNativeProbeExited": true,
+    "retained": "QA account hash state, model binding references, history and audit retained under the ignored central QA directory",
+    "gatewayPid": 90340,
+    "qaDevicesRevoked": 14
+  },
+  "production": {
+    "before": {
+      "pids": [
+        90685
+      ],
+      "health": {
+        "ok": true,
+        "service": "central-test-gateway",
+        "appServer": "stdio",
+        "clients": 1,
+        "devices": 2,
+        "controlsEnabled": true,
+        "sequence": 6624
+      }
+    },
+    "unchangedThisBatch": true,
+    "installedDesktopNotLaunchedThisBatch": true,
+    "installedConfigSha256": "4FD301EFADF939BF2E24E8E1B821C97461325C6529BE454FF7ED73A5C85FB178",
+    "after": {
+      "pids": [
+        90685
+      ],
+      "health": {
+        "ok": true,
+        "service": "central-test-gateway",
+        "appServer": "stdio",
+        "clients": 1,
+        "devices": 2,
+        "controlsEnabled": true,
+        "sequence": 6624
+      }
+    }
+  },
+  "baseline": {
+    "hashMismatches": 0,
+    "originalFilesChecked": 34,
+    "stashPreserved": "stash@{0}: On main: backup before Codexia worktree integration"
+  },
+  "artifacts": {
+    "gatewayPackage": "spikes/local-dev/target/harness-deploy/gateway-isolation.tar.gz",
+    "frontend": "index-CTX4ySJ_.js",
+    "gatewaySha256": "D1565F104464D62205A1FB776425992B3A0F47D6F79888284E61164970BABC55",
+    "qaControlSha256": "FBB181289E41DF4D9FF4706D36F7D916388DC1FA40EA010047E63438245A3E3E",
+    "centralRustSha256": "673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88"
+  },
+  "modelCredentialHandling": "Broker reads existing central login in place; never copies login into Worker/client and never calls refresh or revoke. Worker holds only its own revocable broker capability.",
+  "limitations": [
+    "Validated on macOS 26.3.1; same-UID unsandboxed operator, gateway and OS remain trusted",
+    "File metadata and existence are not hidden",
+    "Shared provider bindings share upstream billing and provider-wide quota/failures",
+    "Actual model credential was not forcibly expired or refreshed; credential lifecycle negative cases use generated fixtures",
+    "Per-user disable and restore exercised against real model and real Windows Agent",
+    "Model configuration changes require a single serial operator writer",
+    "Full mTLS, production history migration, installer/release and other central OS support remain separate",
+    "No native desktop GUI launch this batch; native credential probes and real Agents tested, UI lifecycle evidence belongs to prior batch"
+  ]
+}

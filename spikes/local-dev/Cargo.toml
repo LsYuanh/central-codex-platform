@@ -4,7 +4,10 @@
 resolver = "2"
 members = [
   "apps/desktop/src-tauri",
+  "apps/central/src-tauri",
   "crates/local-agent",
+  "crates/platform-security",
+  "crates/central-native-helper",
 ]
 
 [workspace.package]

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "id": "windows-x64-codex-0.153.4-qa1",
+      "label": "Windows x64 · Codex 0.153.4 验证候选",
+      "version": "0.153.4",
+      "platform": "win32",
+      "architecture": "x86_64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "upstreamCommit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+      "qualified": false,
+      "blockers": ["NODE_GATEWAY_MISSING", "PRODUCTION_WORKER_MISSING", "PACKAGE_NOT_QUALIFIED"],
+      "files": [
+        {
+          "name": "Codex App Server",
+          "path": "bin/codex-app-server.exe",
+          "sourcePath": "target/p0w/target/debug/codex-app-server.exe",
+          "bytes": 248785408,
+          "sha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b"
+        },
+        {
+          "name": "Apache 2.0 许可证",
+          "path": "licenses/LICENSE",
+          "sourcePath": "spikes/local-dev/harness/upstream/LICENSE",
+          "bytes": 10926,
+          "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+        },
+        {
+          "name": "第三方声明",
+          "path": "licenses/NOTICE",
+          "sourcePath": "spikes/local-dev/harness/upstream/NOTICE",
+          "bytes": 242,
+          "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+        }
+      ]
+    }
+  ]
+}

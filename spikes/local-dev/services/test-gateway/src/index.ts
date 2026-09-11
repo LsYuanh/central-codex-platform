@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
-import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID, constants as cryptoConstants } from "node:crypto";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import {
@@ -19,6 +20,20 @@ import {
 } from "@central-codex-spike/agentrpc-types";
 import { parseAttachments, prepareAttachments } from "./attachments.js";
 import { OutputBroker } from "./outputs.js";
+import { steerOrStart } from "./steering.js";
+import { WORKSPACE_TOOLS, REMOTE_WORKSPACE_POLICY, assertBinding, validateRemotePayload, executionStatus, explainRuntimeError, type RemoteWorkspaceBinding } from "./remote-workspace.js";
+import { readGatewayState, writeGatewayState, type GatewayState } from "./gateway-state.js";
+import { PlatformAuth, type Principal, type DeviceAuthMode } from "./platform-auth.js";
+import { DeviceCertificates } from "./device-certificates.js";
+import { WorkerManager, workerLimit, type WorkerBridge } from "./worker-manager.js";
+import { AuditJournal } from "./audit-journal.js";
+import { WorkerIsolation } from "./worker-isolation.js";
+import { WindowsWorkerBridge } from "./windows-worker-bridge.js";
+import { ModelCredentialBroker } from "./model-credential-broker.js";
+import { readNativeServiceHost } from "./native-service-host.js";
+import { collectServiceMetrics } from "./service-metrics.js";
+
+const nativeService=await readNativeServiceHost();
 
 type JsonObject = Record<string, unknown>;
 type JsonRpcMessage = JsonObject & { id?: number | string; method?: string; params?: unknown; result?: unknown; error?: unknown };
@@ -37,17 +52,24 @@ type GatewayRequest = {
     | "conversation.delete"
     | "conversation.rename"
     | "conversation.turn.create"
+    | "conversation.turn.steer"
     | "conversation.message.status"
     | "conversation.message.cancel"
     | "conversation.turn.cancel"
     | "conversation.list"
     | "conversation.output.retry"
     | "device.workspace.list"
+    | "device.workspace.context"
+    | "device.workspace.search"
+    | "device.workspace.read_text"
+    | "device.workspace.git_status"
+    | "device.workspace.git_diff"
     | "device.read_file"
     | "device.exec"
     | "device.file.stat"
     | "device.file.read_text"
-    | "test.approval.inject";
+    | "test.approval.inject"
+    | "test.history.legacy_create";
   payload?: JsonObject;
 };
 
@@ -60,6 +82,7 @@ type GatewayApprovalResponse = {
 type GatewayMessage = GatewayRequest | GatewayApprovalResponse;
 
 type ConnectedClient = {
+  principal?: Principal;
   id: string;
   socket: WebSocket;
   userId: string;
@@ -67,6 +90,7 @@ type ConnectedClient = {
 };
 
 type PendingServerRequest = {
+  bridge: WorkerBridge;
   clientId: string;
   upstreamId: number | string;
   userId: string;
@@ -79,11 +103,13 @@ type PendingAgentRequest = {
   resolve: (payload: AgentRpcResponsePayload) => void;
   timer: NodeJS.Timeout;
   deviceId: string;
+  socket: WebSocket;
   lastEventSequence: number;
   onEvent?: (event: AgentEventPayload) => void;
 };
 
 type AgentRequestOptions = {
+  binding?: RemoteWorkspaceBinding;
   taskId?: string;
   traceId?: string;
   timeoutMs?: number;
@@ -107,6 +133,7 @@ type PendingSyntheticApproval = {
 };
 
 type AgentSession = {
+  principal?: Principal;
   socket: WebSocket;
   deviceId: string;
   ready: boolean;
@@ -136,6 +163,7 @@ const MAX_COMMAND_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 // dynamic tools so app-server asks the connected desktop client to execute
 // them through its Local Agent instead of touching the Mac worker filesystem.
 const CLIENT_DEVICE_TOOLS = [
+  ...WORKSPACE_TOOLS,
   {
     type:"function", name:"device_write_file",
     description:"Write UTF-8 text to the client and return verified saved-file metadata. path is a client absolute path (or workspace-relative); omit path and set name to save in client Downloads/Codexia. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Never use a central path.",
@@ -171,7 +199,7 @@ const CLIENT_DEVICE_TOOLS = [
   {
     type: "function",
     name: "device_exec",
-    description: "Run a command on the user's local device with live stdout/stderr. Use PowerShell explicitly for shell operations. cwd may be a client absolute path in trusted LAN mode. timeoutMs defaults to 30 minutes and is capped at 2 hours. After creating output files use device_publish_file to verify/show them. The command executes only on the client.",
+    description: "Run a noninteractive command on the user's local device with live stdout/stderr. Always provide args (an empty array is valid). Use PowerShell explicitly for shell operations. cwd must be workspace-relative: omit it or use '.' for the bound workspace; absolute cwd and parent traversal are rejected. timeoutMs defaults to 30 minutes and is capped at 2 hours. After creating output files use device_publish_file to verify/show them. The command executes only on the client.",
     inputSchema: {
       type: "object",
       properties: {
@@ -180,7 +208,7 @@ const CLIENT_DEVICE_TOOLS = [
         cwd: { type: "string" },
         timeoutMs: { type: "integer", minimum: 1000, maximum: MAX_COMMAND_TIMEOUT_MS },
       },
-      required: ["program"],
+      required: ["program", "args"],
     },
   },
 ] as const;
@@ -190,10 +218,12 @@ const CLIENT_DEVICE_INSTRUCTIONS = [
   "The central machine is never the user's computer.",
   "Never use built-in shell, filesystem, process, git, or other host-system tools for user-device work.",
   "For files, Git, commands, disk, or other system information, use the provided device_* dynamic tools; they execute on the connected user's device through Local Agent.",
+  "Remote workspace policy also applies to older tool tables: device_exec always requires an args array, and cwd must be omitted or workspace-relative (use '.' for the root). Never pass an absolute client workspace as cwd, even if an old tool description permits it. The codexia.workspace broker operations also require workspace-relative paths.",
   "If a required device_* tool is unavailable or rejects an operation, explain that limitation instead of inspecting the central worker.",
-  "Generated imageGeneration outputs are automatically saved by the platform to the CLIENT Downloads/Codexia folder and displayed as image cards. The savedPath in a native image-generation tool result is CENTRAL ONLY; never pass that path to a client tool. Use device_list_outputs to obtain the real client file path and status before claiming a save succeeded.",
+  "Native image generation is unavailable in this remote harness. Previously saved imageGeneration outputs remain readable in history. Their native savedPath is CENTRAL ONLY; never pass it to a client tool. Use device_list_outputs to obtain a verified existing client output path and status before claiming a save succeeded.",
   "Use device_write_file for text, device_copy_file to save an existing output to a requested client path, and device_publish_file after creating files with device_exec. Only claim a file exists or was modified after a successful tool result. Prefer a new file when editing images unless the user explicitly requests overwriting.",
   "Compatibility for existing threads without the new tool names: device_exec accepts the reserved broker operation program='codexia.files', args=[operation, JSON.stringify(parameters)]. Supported operations: paths, list_outputs, write_text, publish, copy. This is a broker RPC routed to Local Agent, not a shell executable. Use it when new device tools are absent.",
+  "For older threads, program='codexia.workspace', args=[operation, JSON.stringify(parameters)] exposes context, search, read_text, git_status, git_diff and apply_patch through the same enforced client workspace handlers. This reserved name is never executed as a process. Patches require a client preview and single-invocation approval.",
 ].join(" ");
 
 const BLOCKED_CENTRAL_OPERATION_REQUESTS = new Set([
@@ -203,30 +233,45 @@ const BLOCKED_CENTRAL_OPERATION_REQUESTS = new Set([
 ]);
 
 class CodexStdioBridge {
+  private confirmClosed!:()=>void;
+  public readonly closed=new Promise<void>(resolve=>{this.confirmClosed=resolve;});
   private readonly child: ChildProcessWithoutNullStreams;
   private nextId = 1;
-  private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
+  private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
   private readonly listeners = new Set<(message: JsonRpcMessage) => void>();
   private initializedResult: unknown = undefined;
   private hasInitialized = false;
+  private runtimeAlive = true;
   private initializePromise: Promise<unknown> | undefined;
+  private releaseModelLease:(()=>void)|undefined;
 
-  public constructor() {
-    this.child = spawn(codexCommand, ["app-server"], {
+  public constructor(private readonly userId?:string, paths?:{home:string;directory:string}) {
+    const workerDirectory = paths?.directory ?? resolve(dirname(stateFile), "remote-worker");
+    mkdirSync(workerDirectory, { recursive: true });
+    const lease=userId&&modelBroker?modelBroker.createLease(userId):undefined;
+    this.releaseModelLease=lease?.release;
+    let launch:ReturnType<WorkerIsolation['launch']>|undefined;
+    try{if(isolation&&paths&&lease)launch=isolation.launch(paths,modelBroker!.url,lease.token);}
+    catch(error){lease?.release();throw error;}
+    this.child = spawn(launch?.command??codexCommand, launch?.args??["app-server"], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      cwd: launch?.cwd??workerDirectory,
+      env: launch?.env??{...process.env, CODEX_REMOTE_WORKSPACE: "1", ...(paths?{CODEX_HOME:paths.home,CODEX_REMOTE_WORKER_DIR:paths.directory}: {})},
     });
 
     const lines = createInterface({ input: this.child.stdout });
     lines.on("line", (line) => this.handleLine(line));
     this.child.stderr.on("data", (chunk) => {
       const message = String(chunk).trim();
-      if (message) console.warn(`[codex-app-server] ${message}`);
+      if (message) console.warn(isolation?'[codex-app-server] worker diagnostic omitted; inspect safe model access status':`[codex-app-server] ${message}`);
     });
-    this.child.on("error", (error) => this.rejectAll(error));
+    this.child.on("error", (error) => this.runtimeStopped(error));
     this.child.on("exit", (code, signal) => {
-      this.rejectAll(new Error(`Codex App Server exited (${code ?? "signal"} ${signal ?? ""})`.trim()));
+      try{this.runtimeStopped(new Error(`Codex App Server exited (${code ?? "signal"} ${signal ?? ""})`.trim()));}
+      finally{this.confirmClosed();}
     });
+    this.child.on("error",()=>{if(!this.child.pid)this.confirmClosed();});
   }
 
   public subscribe(listener: (message: JsonRpcMessage) => void): () => void {
@@ -234,7 +279,14 @@ class CodexStdioBridge {
     return () => this.listeners.delete(listener);
   }
 
+  public get enforcedRuntimeReady(): boolean { return this.hasInitialized; }
+  public get alive():boolean {return this.runtimeAlive;}
+  public get pid():number|undefined {return this.child.pid;}
+
   public request(method: string, params: unknown): Promise<unknown> {
+    if(this.userId&&modelBroker&&['turn/start','turn/steer'].includes(method)){
+      const access=modelBroker.status(this.userId);if(access.status!=='ready')return Promise.reject(Error(access.code??'MODEL_CREDENTIAL_UNAVAILABLE'));
+    }
     if (method === "initialize") {
       // App Server initializes once per process. Reconnects and additional UI
       // clients reuse the negotiated result instead of sending initialize again.
@@ -242,6 +294,10 @@ class CodexStdioBridge {
       if (this.initializePromise) return this.initializePromise;
       this.initializePromise = this.sendRequest(method, params).then(
         (result) => {
+          if (!isRecord(result) || typeof result.userAgent !== "string" || !result.userAgent.includes("yuan-zhou-remote-workspace/1")) {
+            this.initializePromise = undefined;
+            throw new Error("REMOTE_HARNESS_REQUIRED: central runtime did not attest remote-workspace enforcement; install the pinned harness build");
+          }
           this.initializedResult = result;
           this.hasInitialized = true;
           this.initializePromise = undefined;
@@ -254,16 +310,23 @@ class CodexStdioBridge {
       );
       return this.initializePromise;
     }
+    if (!this.hasInitialized) return Promise.reject(new Error("REMOTE_HARNESS_NOT_READY: initialize the enforced runtime first"));
     return this.sendRequest(method, params);
   }
 
   private sendRequest(method: string, params: unknown): Promise<unknown> {
+    if (!this.runtimeAlive) return Promise.reject(new Error("REMOTE_HARNESS_UNAVAILABLE: central runtime exited; restart the isolated gateway"));
     const id = this.nextId++;
     const payload = JSON.stringify({ id, method, params }) + "\n";
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`App Server response timeout (${method}); result unknown, reconcile before retry`));
+      }, 60_000);
+      this.pending.set(id, { resolve, reject, timer });
       this.child.stdin.write(payload, (error) => {
         if (!error) return;
+        clearTimeout(timer);
         this.pending.delete(id);
         reject(error);
       });
@@ -271,15 +334,17 @@ class CodexStdioBridge {
   }
 
   public respond(id: number | string, result: unknown): void {
+    if (!this.runtimeAlive || this.child.stdin.destroyed) return;
     this.child.stdin.write(`${JSON.stringify({ id, result })}\n`);
   }
 
-  public close(): void {
-    this.rejectAll(new Error("Gateway shutting down"));
+  public close(idle=false): void {
+    this.runtimeStopped(new Error("Worker stopped; reconcile unfinished operations"),!idle);
     this.child.kill();
   }
 
   private handleLine(line: string): void {
+    if(!this.runtimeAlive)return;
     if (!line.trim()) return;
     let message: JsonRpcMessage;
     try {
@@ -293,8 +358,9 @@ class CodexStdioBridge {
       const numericId = typeof message.id === "number" ? message.id : Number(message.id);
       const pending = Number.isFinite(numericId) ? this.pending.get(numericId) : undefined;
       if (pending) {
+        clearTimeout(pending.timer);
         this.pending.delete(numericId);
-        if (message.error) pending.reject(new Error(`App Server request failed: ${JSON.stringify(message.error)}`));
+        if (message.error) pending.reject(new Error(`App Server request failed: ${explainRuntimeError(JSON.stringify(message.error))}`));
         else pending.resolve(message.result);
         return;
       }
@@ -304,44 +370,63 @@ class CodexStdioBridge {
   }
 
   private rejectAll(error: Error): void {
-    for (const pending of this.pending.values()) pending.reject(error);
+    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
+    this.hasInitialized = false;
     this.pending.clear();
+  }
+
+  private runtimeStopped(error: Error, notify=true): void {
+    if(!this.runtimeAlive)return;
+    this.runtimeAlive = false;
+    this.releaseModelLease?.();this.releaseModelLease=undefined;
+    this.rejectAll(error);
+    if(notify)for (const listener of this.listeners) listener({method:"gateway/runtimeUnavailable",params:{error:error.message}});
   }
 }
 
-const bridge = new CodexStdioBridge();
 const clients = new Map<string, ConnectedClient>();
 const pendingServerRequests = new Map<string, PendingServerRequest>();
 const pendingAgentRequests = new Map<string, PendingAgentRequest>();
 const activeDeviceTools = new Map<string, ActiveDeviceTool>();
+const turnCancelVersions = new Map<string, number>();
+const stoppedNativeTurns = new Set<string>();
 const pendingSyntheticApprovals = new Map<string, PendingSyntheticApproval>();
+const pendingDeviceApprovals = new Map<string, {clientId:string; threadId:string; turnId?:string; finish:(error?:string)=>void}>();
 // Durable-for-process ownership fence: reconnects using the same userId retain
 // their Thread ownership, while a different user cannot enumerate or mutate it.
 const ownedThreadIdsByUser = new Map<string, Set<string>>();
 const threadOwnerById = new Map<string, string>();
 const threadSummaryById = new Map<string, JsonObject>();
 const agents = new Map<string, AgentSession>();
+// Observations from this gateway lifetime only; persisted registration is not
+// proof that a Local Agent is connected. Bound the history independently.
+const devicePresence = new Map<string, {userId:string;at:number}>();
+function observeAgent(session:AgentSession){
+  if(!session.ready||!session.principal)return;
+  devicePresence.delete(session.deviceId);
+  devicePresence.set(session.deviceId,{userId:session.principal.userId,at:Date.now()});
+  if(devicePresence.size>10000)devicePresence.delete(devicePresence.keys().next().value!);
+}
 const auditEvents: AuditEvent[] = [];
 let lastAppClientId: string | undefined;
 let sequence = 0;
-const controlsEnabled = process.env.TEST_GATEWAY_ENABLE_CONTROLS === "1";
+const controlsEnabled = process.env.TEST_GATEWAY_ENABLE_CONTROLS === "1" && !process.env.PLATFORM_AUTH_FILE;
 let activeAttachmentSubmissions = 0;
-
-type GatewayState = {
-  version: 1;
-  users: Record<string, Array<{ id: string; summary: JsonObject }>>;
-};
+let stateExtensions: JsonObject = {};
+const stateEntryExtensions = new Map<string, JsonObject>();
 
 function loadState(): void {
-  try {
-    const parsed = JSON.parse(readFileSync(stateFile, "utf8")) as Partial<GatewayState>;
-    if (parsed.version !== 1 || !isRecord(parsed.users)) return;
+    const parsed = readGatewayState(stateFile);
+    const {version:_version,users:_users,...extensions} = parsed;
+    stateExtensions = extensions;
     for (const [userId, entries] of Object.entries(parsed.users)) {
       if (!Array.isArray(entries)) continue;
       const owned = new Set<string>();
       for (const entry of entries) {
         if (!isRecord(entry) || typeof entry.id !== "string" || !isRecord(entry.summary)) continue;
         owned.add(entry.id);
+        const {id:_id,summary:_summary,...entryExtensions} = entry;
+        stateEntryExtensions.set(entry.id,entryExtensions);
         threadOwnerById.set(entry.id, userId);
         threadSummaryById.set(entry.id, entry.summary);
         if(Array.isArray(entry.summary.outputs)) for(const output of entry.summary.outputs) {
@@ -354,26 +439,84 @@ function loadState(): void {
       }
       ownedThreadIdsByUser.set(userId, owned);
     }
-  } catch {
-    // A missing or partially written state file should not prevent the gateway
-    // from starting; the next mutation will create a fresh file.
-  }
 }
 
 function persistState(): void {
-  const users: GatewayState["users"] = {};
+  const users = Object.create(null) as GatewayState["users"];
   for (const [userId, ids] of ownedThreadIdsByUser) {
-    users[userId] = [...ids].map((id) => ({ id, summary: threadSummaryById.get(id) ?? { id } }));
+    users[userId] = [...ids].map((id) => ({ ...stateEntryExtensions.get(id), id, summary: threadSummaryById.get(id) ?? { id } }));
   }
   try {
-    mkdirSync(dirname(stateFile), { recursive: true });
-    writeFileSync(stateFile, JSON.stringify({ version: 1, users } satisfies GatewayState, null, 2), "utf8");
+    writeGatewayState(stateFile, {...stateExtensions,version:1,users});
   } catch (error) {
     console.warn(`[gateway-state] failed to persist ${stateFile}: ${error instanceof Error ? error.message : String(error)}`);
+    // Do not acknowledge further inference/writes when ownership or the submission fence is not durable.
+    workers.close();
+    throw new Error("GATEWAY_STATE_UNAVAILABLE: metadata could not be saved; execution stopped, reconcile history after storage repair");
   }
 }
 
 loadState();
+const deviceAuthMode=process.env.PLATFORM_DEVICE_AUTH_MODE??"device-token-v1";
+if(!["device-token-v1","legacy-mtls-v1"].includes(deviceAuthMode))throw Error("AUTH_MODE_UNSUPPORTED");
+const auth = process.env.PLATFORM_AUTH_FILE ? new PlatformAuth(resolve(process.env.PLATFORM_AUTH_FILE),undefined,undefined,deviceAuthMode as DeviceAuthMode) : undefined;
+if(nativeService){if(!auth)throw Error('SERVICE_AUTH_REQUIRED');await nativeService.provision(auth);}
+if(auth){
+  if(threadOwnerById.size&&stateExtensions.workerLayout!=="per-user/v1")throw Error("WORKER_LAYOUT_MIGRATION_REQUIRED: shared runtime history was preserved; migrate explicitly or select a fresh QA state file");
+  stateExtensions.workerLayout="per-user/v1";
+}
+// Validate persisted ownership before starting any inference process.
+const journal = process.env.PLATFORM_AUTH_FILE || process.env.PLATFORM_AUDIT_DIR
+  ? new AuditJournal(resolve(process.env.PLATFORM_AUDIT_DIR ?? resolve(dirname(stateFile),"audit"))) : undefined;
+if(journal)auditEvents.push(...journal.recent as AuditEvent[]);
+let auditFailed=false;
+const protocolFixture=process.env.PLATFORM_WORKER_ISOLATION==='protocol-fixture';
+// Explicit native candidate admission only. Central App qualification remains a
+// separate gate; Windows must never fall back to a direct, unsandboxed child.
+const windowsWorker=process.env.PLATFORM_WORKER_ISOLATION==='windows-appcontainer-v1';
+if(windowsWorker&&(!auth||process.platform!=='win32'))throw Error('WINDOWS_WORKER_REQUIRES_AUTHENTICATED_WINDOWS');
+if(auth&&protocolFixture&&(!['127.0.0.1','::1'].includes(listenHost)||resolve(codexCommand)!==resolve(process.execPath)))throw Error('WORKER_FIXTURE_REQUIRES_LOOPBACK_NODE');
+if(auth&&!protocolFixture&&!process.env.PLATFORM_MODEL_BINDINGS)throw Error('MODEL_BINDINGS_REQUIRED: configure central model access before starting authenticated workers');
+const workerRoot=resolve(process.env.PLATFORM_WORKER_ROOT ?? resolve(dirname(stateFile),'workers'));
+const isolation=auth&&!protocolFixture&&!windowsWorker?new WorkerIsolation(workerRoot,process.env.PLATFORM_WORKER_BINARY??'',process.env.PLATFORM_WORKER_BINARY_SHA256??'',process.env.PLATFORM_WORKER_MODEL??'gpt-6-astra',nativeService?{path:process.env.PLATFORM_WORKER_PROFILE??'',sha256:process.env.PLATFORM_WORKER_PROFILE_SHA256??''}:undefined):undefined;
+if(auth&&deviceAuthMode==="legacy-mtls-v1"&&!protocolFixture&&!process.env.PLATFORM_DEVICE_CA_CONFIG)throw Error('DEVICE_CA_CONFIG_REQUIRED: initialize a private device CA outside Worker directories');
+const deviceCertificates=auth&&deviceAuthMode==="legacy-mtls-v1"&&process.env.PLATFORM_DEVICE_CA_CONFIG?await DeviceCertificates.load({configFile:resolve(process.env.PLATFORM_DEVICE_CA_CONFIG),forbiddenRoots:[workerRoot],protocolFixture}):undefined;
+if(deviceCertificates)auth!.setCertificates(deviceCertificates);
+// Default token mode uses server-authenticated TLS only. Legacy mTLS is explicit;
+// an inherited CA path cannot silently enable it or downgrade a client.
+const tlsOptions = auth ? {cert:nativeService?.tls.cert??readFileSync(process.env.PLATFORM_TLS_CERT ?? ""),key:nativeService?.tls.key??readFileSync(process.env.PLATFORM_TLS_KEY ?? ""),minVersion:"TLSv1.2" as const,...(deviceCertificates?{ca:deviceCertificates.caPem,requestCert:true,rejectUnauthorized:false,secureOptions:cryptoConstants.SSL_OP_NO_TICKET}: {})} : undefined;
+const modelBroker=isolation||windowsWorker?await ModelCredentialBroker.start({configFile:resolve(process.env.PLATFORM_MODEL_BINDINGS!),...(nativeService&&auth?{memorySource:nativeService.modelSource(auth)}:{}),forbiddenRoots:[workerRoot],onRevoke:userId=>workers.stopUser(userId),audit:event=>{audit(event.action,event.status,{userId:event.userId,errorCode:event.errorCode});if(auditFailed)throw Error('AUDIT_STORAGE_UNAVAILABLE');}}):undefined;
+const workers = new WorkerManager({
+  root:workerRoot,perUser:Boolean(auth),nativeManagedPaths:windowsWorker,
+  maxWorkers:workerLimit("PLATFORM_MAX_WORKERS",8),perUserTurns:workerLimit("PLATFORM_USER_TURNS",2),totalTurns:workerLimit("PLATFORM_TOTAL_TURNS",8),
+  maxRequests:workerLimit("PLATFORM_WORKER_REQUESTS",32),idleMs:workerLimit("PLATFORM_WORKER_IDLE_MS",300_000,100,86400_000),cooldownMs:workerLimit("PLATFORM_WORKER_RESTART_MS",1000,100,60_000),
+  create:async(userId,paths)=>{
+    try{
+      let bridge:CodexStdioBridge|WindowsWorkerBridge;
+      if(windowsWorker){
+        if(!userId||!paths||!modelBroker)throw Error('WINDOWS_WORKER_CONFIGURATION_INVALID');
+        const instanceId=randomUUID().replaceAll('-','');
+        const lease=await modelBroker.createPipeLease(userId,instanceId);
+        try{
+          bridge=new WindowsWorkerBridge({hostPath:process.env.PLATFORM_WORKER_HOST_BINARY??'',hostSha256:process.env.PLATFORM_WORKER_HOST_SHA256??'',
+            runtimePath:process.env.PLATFORM_WORKER_BINARY??'',runtimeSha256:process.env.PLATFORM_WORKER_BINARY_SHA256??'',
+            root:workerRoot,userKey:createHash('sha256').update(userId).digest('hex'),instanceId,model:process.env.PLATFORM_WORKER_MODEL??'gpt-6-astra',lease},
+          ()=>{const status=modelBroker.status(userId);if(status.status!=='ready')throw Error(status.code??'MODEL_CREDENTIAL_UNAVAILABLE');});
+        }catch(error){lease.release();await lease.closed;throw error;}
+      }else bridge=new CodexStdioBridge(userId,paths);
+      // Do not await native ready here: its ownership must reach WorkerManager
+      // before any startup failure so uncertain cleanup retains its capacity.
+      bridge.subscribe(message=>handleWorkerMessage(userId,bridge,message));return bridge;
+    }catch(error){audit('worker.start','failed',{userId,errorCode:/^[A-Z_]+/.exec(String((error as Error).message))?.[0]??'WORKER_START_FAILED'});throw error;}
+  },
+  event:(action,userId,status,errorCode)=>{audit(action,status,{userId,...(errorCode?{errorCode}:{})});if(auditFailed&&action==="worker.start")throw Error("AUDIT_STORAGE_UNAVAILABLE");},
+});
+auth?.setAudit((action,status,userId,errorCode)=>{audit(action,status,{userId,errorCode});if(auditFailed)throw Error("AUDIT_STORAGE_UNAVAILABLE");});
+auth?.setDevicePresence((deviceId,userId)=>{
+  const agent=agents.get(deviceId),seen=devicePresence.get(deviceId);
+  const lastSeenAt=seen?.userId===userId?seen.at:null;
+  return {online:!!(agent?.ready&&agent.principal?.userId===userId&&agent.socket.readyState===WebSocket.OPEN&&auth.valid(agent.principal)&&lastSeenAt&&Date.now()-lastSeenAt<30000),lastSeenAt};
+});
 
 const outputs = new OutputBroker({
   summary:threadId=>threadSummaryById.get(threadId),
@@ -386,16 +529,48 @@ const outputs = new OutputBroker({
 });
 
 function audit(action: string, status: AuditEvent["status"], fields: Omit<AuditEvent, "id" | "at" | "action" | "status"> = {}): void {
-  auditEvents.push({ id: randomUUID(), at: new Date().toISOString(), action, status, ...fields });
+  if(auditFailed)return;
+  let event:AuditEvent={ id: randomUUID(), at: new Date().toISOString(), action, status, ...fields };
+  try{if(journal)event=journal.append(event) as AuditEvent;}catch{auditFailed=true;console.error("AUDIT_STORAGE_UNAVAILABLE: execution stopped; repair journal before restart");auth?.failClosed();workers.close();for(const session of agents.values())session.socket.close(1011,"audit unavailable");return;}
+  auditEvents.push(event);
   if (auditEvents.length > 1000) auditEvents.splice(0, auditEvents.length - 1000);
 }
 
-bridge.subscribe((message) => {
+function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge, message:JsonRpcMessage) {
+  if(message.method!=="gateway/runtimeUnavailable"&&!bridge.alive)return;
+  workers.notification(workerUserId,bridge,message);
   const notification = isRecord(message.params) ? message.params : {};
+  const belongs=(threadId:string)=>!workerUserId||threadOwnerById.get(threadId)===workerUserId;
+  if (message.method === "gateway/runtimeUnavailable") {
+    for (const threadId of threadOwnerById.keys()) if(belongs(threadId))turnCancelVersions.set(threadId,(turnCancelVersions.get(threadId)??0)+1);
+    for (const approval of pendingDeviceApprovals.values()) if(belongs(approval.threadId))approval.finish("CANCELLED: central runtime stopped before approval");
+    for(const [id,pending] of pendingServerRequests)if(pending.bridge===bridge){clearTimeout(pending.timer);pendingServerRequests.delete(id);const client=clients.get(pending.clientId);if(client)send(client.socket,{type:"approval.resolved",requestId:id,status:"failed",sequence:++sequence});}
+    for (const tool of activeDeviceTools.values()) {
+      if(workerUserId&&(!tool.threadId||!belongs(tool.threadId)))continue;
+      cancelAgentRequest(tool.deviceId,tool.agentRequestId,tool.turnId,"central_runtime_stopped");
+      const pending = pendingAgentRequests.get(tool.agentRequestId);
+      if (pending) { clearTimeout(pending.timer); pendingAgentRequests.delete(tool.agentRequestId); pending.resolve({ok:false,error:"Central runtime stopped; client result unknown",errorCode:"RESULT_UNKNOWN",retryable:false}); }
+    }
+    for (const client of clients.values()) if(!workerUserId||client.userId===workerUserId)send(client.socket,{type:"event",eventType:"gateway.runtime_unavailable",name:message.method,data:{...notification,recoverable:Boolean(workerUserId)},sequence:++sequence});
+    return;
+  }
+  // A worker can only produce events/tools for its own platform Thread mapping.
+  const eventThread=typeof notification.threadId==="string"?notification.threadId:undefined;
+  if(workerUserId&&eventThread&&!belongs(eventThread)){
+    if(message.id!==undefined)bridge.respond(message.id,{success:false,decision:"reject",reason:"worker_thread_owner_mismatch"});
+    audit("worker.owner_mismatch","failed",{userId:workerUserId,errorCode:"WORKER_THREAD_OWNER_MISMATCH"});return;
+  }
   if (typeof notification.threadId === "string" && isRecord(notification.item) && notification.item.type === "imageGeneration") {
     void outputs.image(notification.threadId, typeof notification.turnId === "string" ? notification.turnId : undefined, notification.item);
   }
   if (message.method === "turn/completed" && typeof notification.threadId === "string" && isRecord(notification.turn)) {
+    if (["interrupted","failed"].includes(String(notification.turn.status))) {
+      if (typeof notification.turn.id === "string") {
+        stoppedNativeTurns.add(`${notification.threadId}:${notification.turn.id}`);
+        if (stoppedNativeTurns.size > 2000) stoppedNativeTurns.delete(stoppedNativeTurns.values().next().value!);
+      }
+      cancelDeviceTools(notification.threadId,typeof notification.turn.id === "string" ? notification.turn.id : undefined);
+    }
     void outputs.collect(notification.threadId,{turns:[notification.turn]});
   }
   if (message.id !== undefined && message.method && BLOCKED_CENTRAL_OPERATION_REQUESTS.has(message.method)) {
@@ -423,6 +598,12 @@ bridge.subscribe((message) => {
     // this prevents stale clients from leaving the central turn loading.
     const toolName = typeof params.tool === "string" ? params.tool : "";
     const toolMethods: Record<string, AgentRpcMethod> = {
+      device_workspace_context: "workspace/context",
+      device_workspace_search: "workspace/search",
+      device_workspace_read_text: "workspace/read_text",
+      device_workspace_git_status: "workspace/git_status",
+      device_workspace_git_diff: "workspace/git_diff",
+      device_workspace_apply_patch: "workspace/apply_patch",
       device_workspace_list: "workspace/list",
       device_read_file: "read_file",
       device_read_text: "file/read_text",
@@ -436,6 +617,17 @@ bridge.subscribe((message) => {
     let toolArgs = isRecord(params.arguments) ? params.arguments : {};
     let listOutputs = toolName === "device_list_outputs";
     let displayToolName = toolName;
+    if (toolName === "device_exec" && toolArgs.program === "codexia.workspace") {
+      try {
+        const args = toolArgs.args;
+        if (!Array.isArray(args) || !["context","search","read_text","git_status","git_diff","apply_patch"].includes(String(args[0]))) throw new Error("Unsupported workspace operation");
+        const parsed = JSON.parse(typeof args[1] === "string" ? args[1] : "{}");
+        if (!isRecord(parsed)) throw new Error("Invalid workspace parameters");
+        agentMethod = `workspace/${String(args[0])}` as AgentRpcMethod;
+        displayToolName = `device_workspace_${String(args[0])}`;
+        toolArgs = parsed;
+      } catch(error) { bridge.respond(message.id!, {success:false,contentItems:[{type:"inputText",text:String(error)}]}); return; }
+    }
     if (toolName === "device_exec" && toolArgs.program === "codexia.files") {
       try {
         const args=toolArgs.args;
@@ -448,14 +640,17 @@ bridge.subscribe((message) => {
         agentMethod=method;toolArgs=parsed;
       }catch(error){bridge.respond(message.id,{success:false,contentItems:[{type:"inputText",text:String(error)}]});return;}
     }
-    const requestId = `${client.id}:${String(message.id)}`;
+    const requestId = `${client.id}:${randomUUID()}:${String(message.id)}`;
     const turnId = typeof params.turnId === "string" ? params.turnId : undefined;
+    const toolCancelVersion = threadId ? turnCancelVersions.get(threadId) ?? 0 : 0;
+    const assertNotStopped = () => { if(auth)auth.assert(client.principal); if (threadId && ((turnCancelVersions.get(threadId) ?? 0) !== toolCancelVersion || stoppedNativeTurns.has(`${threadId}:${turnId}`))) throw new Error("CANCELLED: stopped before client dispatch"); };
     const startedAt = Date.now();
     const eventBase = {
       threadId,
       turnId,
       requestId,
       tool: displayToolName,
+      deviceId: client.deviceId,
       ...(agentMethod === "exec" && typeof toolArgs.program === "string" ? { program: toolArgs.program } : {}),
       ...(typeof toolArgs.cwd === "string" ? { cwd: toolArgs.cwd } : {}),
     };
@@ -485,6 +680,20 @@ bridge.subscribe((message) => {
       }
       let agentRequestId: string | undefined;
       try {
+        if (!threadId) throw new Error("REMOTE_BINDING_REQUIRED: tool has no owning thread");
+        const binding = await ensureRemoteBinding(client, threadId);
+        if (agentMethod === "workspace/apply_patch") {
+          const prepared = await sendAgentRequest(client.deviceId, agentMethod, {patch:toolArgs.patch,dryRun:true}, {binding});
+          if (!prepared.ok || !isRecord(prepared.result)) throw new Error(`${prepared.errorCode ?? "PATCH_PREPARE_FAILED"}: ${prepared.error ?? "Invalid patch preview"}`);
+          if (toolArgs.expectedVersions !== undefined) {
+            const expected = toolArgs.expectedVersions, actual = prepared.result.expectedVersions;
+            if (!isRecord(expected) || !isRecord(actual) || Object.keys(expected).length !== Object.keys(actual).length || Object.keys(actual).some(path => expected[path] !== actual[path])) throw new Error("VERSION_CONFLICT: file versions differ from the requested patch");
+          }
+          toolArgs = {patch:toolArgs.patch,patchHash:prepared.result.patchHash,expectedVersions:prepared.result.expectedVersions,dryRun:false};
+          assertNotStopped();
+          await approveDevicePatch(client, threadId, turnId, binding, toolArgs);
+          assertBinding(binding, await ensureRemoteBinding(client, threadId));
+        }
         if (threadId && threadSummaryById.get(threadId)?.deviceKey && threadSummaryById.get(threadId)?.deviceKey !== agents.get(client.deviceId)?.hello?.agent.deviceKey) throw new Error("来源设备身份不一致，拒绝读取同名路径");
         if(listOutputs){
           const result=await outputs.settled(threadId!);
@@ -492,7 +701,9 @@ bridge.subscribe((message) => {
           emitTool("completed", {status:"succeeded",durationMs:Date.now()-startedAt});return;
         }
         if(!agentMethod)throw new Error("Unsupported device operation");
+        assertNotStopped();
         const result = await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(toolArgs), {
+          binding,
           taskId: turnId,
           traceId: typeof params.callId === "string" ? params.callId : undefined,
           onRegistered: (id) => {
@@ -508,6 +719,9 @@ bridge.subscribe((message) => {
             ...(event.truncated !== undefined ? {truncated:event.truncated} : {}),
           }),
         }).finally(() => { if (agentRequestId) activeDeviceTools.delete(agentRequestId); });
+        if (agentMethod === "workspace/apply_patch" && isRecord(result.result) && result.result.outcome !== "completed") {
+          result.ok = false; result.errorCode = result.result.outcome === "unknown" ? "RESULT_UNKNOWN" : result.result.outcome === "partial" ? "PATCH_PARTIAL_FAILURE" : "PATCH_FAILED"; result.error = String(result.result.error ?? "Patch did not complete"); result.retryable = false;
+        }
         if(threadId && result.ok && isRecord(result.result) && ["file/write_text","file/publish","file/copy"].includes(agentMethod)) {
           const output=outputs.recordFile(threadId,typeof params.turnId==="string"?params.turnId:undefined,typeof params.callId==="string"?params.callId:String(message.id),client.deviceId,result.result);
           Object.assign(result,{output});
@@ -525,7 +739,9 @@ bridge.subscribe((message) => {
         audit("device.tool.response", result.ok ? "succeeded" : "failed", { userId: client.userId, deviceId: client.deviceId, requestId, ...(result.ok ? {} : { errorCode: result.errorCode ?? "AGENT_ERROR" }) });
         const resultRecord = isRecord(result.result) ? result.result : {};
         emitTool("completed", {
-          status: result.ok ? "succeeded" : /CANCELLED/.test(result.error ?? "") ? "cancelled" : "failed",
+          status: executionStatus(result),
+          errorCode: result.errorCode,
+          ...(["workspace/git_diff", "workspace/git_status", "workspace/apply_patch"].includes(agentMethod) ? { result: result.result } : {}),
           durationMs: Date.now() - startedAt,
           ...(typeof resultRecord.exitCode === "number" ? {exitCode:resultRecord.exitCode} : {}),
           ...(resultRecord.truncated === true ? {truncated:true} : {}),
@@ -536,19 +752,24 @@ bridge.subscribe((message) => {
         if (agentRequestId) activeDeviceTools.delete(agentRequestId);
         bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text }] });
         audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "DEVICE_TOOL_ERROR" });
-        emitTool("completed", { status:/CANCELLED/.test(text)?"cancelled":"failed", durationMs:Date.now()-startedAt, error:text });
+        emitTool("completed", { status:executionStatus({ok:false,errorCode:text.split(":")[0]}), errorCode:text.split(":")[0], durationMs:Date.now()-startedAt, error:text });
       }
     })();
     return;
   }
   if (message.id !== undefined && message.method) {
+    if(auth&&message.method!=='item/tool/requestUserInput'){
+      bridge.respond(message.id,{decision:'reject',reason:'unsupported_central_request'});
+      audit('approval.unsupported','failed',{userId:workerUserId,errorCode:'UNSUPPORTED_CENTRAL_REQUEST'});return;
+    }
     const params = isRecord(message.params) ? message.params : {};
     const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
     const ownerUserId = threadId ? threadOwnerById.get(threadId) : undefined;
+    if(auth&&!ownerUserId){bridge.respond(message.id,{decision:"reject",reason:"unattributed_platform_request"});return;}
     const client = [...clients.values()].find((candidate) => ownerUserId && candidate.userId === ownerUserId)
-      ?? (lastAppClientId ? clients.get(lastAppClientId) : undefined);
-    if (!client) return;
-    const requestId = `${client.id}:${String(message.id)}`;
+      ?? (!auth&&!workerUserId&&lastAppClientId ? clients.get(lastAppClientId) : undefined);
+    if (!client) {bridge.respond(message.id,{decision:"reject",reason:"owner_client_offline"});return;}
+    const requestId = `${client.id}:${randomUUID()}:${String(message.id)}`;
     const timer = setTimeout(() => {
       const timedOut = pendingServerRequests.get(requestId);
       if (!timedOut) return;
@@ -558,7 +779,7 @@ bridge.subscribe((message) => {
       const target = clients.get(timedOut.clientId);
       if (target) send(target.socket, { type: "approval.resolved", requestId, status: "timeout", sequence: ++sequence });
     }, 120_000);
-    pendingServerRequests.set(requestId, { clientId: client.id, upstreamId: message.id, userId: client.userId, method: message.method, data: message.params, timer });
+    pendingServerRequests.set(requestId, { bridge, clientId: client.id, upstreamId: message.id, userId: client.userId, method: message.method, data: message.params, timer });
     audit("approval.request", "requested", { userId: client.userId, requestId });
     send(client.socket, {
       type: "approval.request",
@@ -574,18 +795,24 @@ bridge.subscribe((message) => {
   const event = normalizeNotification(message);
   if (!event) return;
   const threadId = isRecord(event.data) && typeof event.data.threadId === "string" ? event.data.threadId : undefined;
+  if(auth&&!threadId)return;
   for (const client of clients.values()) {
     if (threadId ? threadOwnerById.get(threadId) === client.userId : client.id === lastAppClientId) send(client.socket, event);
   }
-});
+}
 
-const httpServer = createServer((request, response) => {
+const httpHandler = (request: IncomingMessage, response: ServerResponse) => {
+  if(nativeService)response.setHeader('x-central-service-instance',nativeService.serviceInstanceId);
   const url = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`);
+  if(auditFailed&&url.pathname!=="/healthz"){writeJson(response,503,{ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
+  if(auth && url.pathname.startsWith("/auth/")){void auth.http(request,response);return;}
   if (url.pathname === "/healthz") {
     writeJson(response, 200, {
-      ok: true,
+      ok: !auditFailed,
       service: "central-test-gateway",
       appServer: "stdio",
+      enforcedRuntimeReady: workers.enforcedRuntimeReady,
+      requiredHarness: "yuan-zhou-remote-workspace/1",
       clients: clients.size,
       devices: [...agents.values()].filter((agent) => agent.ready && agent.socket.readyState === WebSocket.OPEN).length,
       controlsEnabled,
@@ -594,31 +821,51 @@ const httpServer = createServer((request, response) => {
     return;
   }
   if (url.pathname === "/audit") {
+    if(auth){try{if(auth.bearer(request.headers.authorization).role!=="admin")throw Error();}catch{writeJson(response,404,{ok:false,error:"NOT_FOUND"});return;}}
     writeJson(response, 200, { ok: true, events: auditEvents });
     return;
   }
+  if(url.pathname==="/workers"){
+    if(!auth){writeJson(response,404,{ok:false,error:"NOT_FOUND"});return;}
+    try{const principal=auth.bearer(request.headers.authorization);if(principal.role!=="admin")throw Error();writeJson(response,200,{ok:true,workers:workers.snapshot()});}
+    catch{writeJson(response,404,{ok:false,error:"NOT_FOUND"});}return;
+  }
+  if(url.pathname==='/model-access'&&auth&&modelBroker&&request.method==='GET'){
+    try{const principal=auth.bearer(request.headers.authorization);writeJson(response,200,{ok:true,modelAccess:modelBroker.status(principal.userId)});}
+    catch{writeJson(response,401,{ok:false,error:'AUTH_REQUIRED'});}return;
+  }
   response.writeHead(404);
   response.end();
-});
+};
+const httpServer = tlsOptions ? createHttpsServer(tlsOptions,httpHandler) : createServer(httpHandler);
+httpServer.requestTimeout=15_000;
+httpServer.headersTimeout=10_000;
 
 const websocketServer = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 httpServer.on("upgrade", (request, socket, head) => {
+  if(auditFailed){socket.destroy();return;}
   const path = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`).pathname;
   if (path !== "/ws" && path !== "/ws/agent") {
     socket.destroy();
     return;
   }
+  let principal:Principal|undefined;
+  if(auth){try{principal=auth.upgrade(request,path==="/ws/agent"?"agent":"ui");}catch(error){
+    const code=error instanceof Error&&["AUTH_MODE_UNSUPPORTED","DEVICE_CERTIFICATE_REQUIRED","DEVICE_CERTIFICATE_INVALID","DEVICE_CERTIFICATE_EXPIRED","DEVICE_REVOKED"].includes(error.message)?error.message:"AUTH_REQUIRED";
+    socket.end(`HTTP/1.1 401 Unauthorized\r\nX-Yuan-Auth-Error: ${code}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);return;
+  }}
   websocketServer.handleUpgrade(request, socket, head, (client) => {
-    if (path === "/ws/agent") handleAgentConnection(client, request);
-    else handleClient(client, request);
+    if(principal)auth!.track(client,principal);
+    if (path === "/ws/agent") handleAgentConnection(client, request,principal);
+    else handleClient(client, request,principal);
   });
 });
 
-function handleClient(socket: WebSocket, _request: IncomingMessage): void {
+function handleClient(socket: WebSocket, _request: IncomingMessage, principal?:Principal): void {
   const query = new URL(_request.url ?? "/", `http://${listenHost}:${listenPort}`).searchParams;
-  const userId = query.get("userId")?.trim() || `session-${randomUUID()}`;
-  const deviceId = query.get("deviceId")?.trim() || "default-device";
-  const client: ConnectedClient = { id: randomUUID(), socket, userId, deviceId };
+  const userId = principal?.userId ?? (query.get("userId")?.trim() || `session-${randomUUID()}`);
+  const deviceId = principal?.deviceId ?? (query.get("deviceId")?.trim() || "default-device");
+  const client: ConnectedClient = { id: randomUUID(), socket, userId, deviceId,principal };
   clients.set(client.id, client);
   if (!ownedThreadIdsByUser.has(userId)) ownedThreadIdsByUser.set(userId, new Set());
   audit("client.connect", "connected", { userId, deviceId });
@@ -648,13 +895,14 @@ function handleClient(socket: WebSocket, _request: IncomingMessage): void {
 }
 
 function rehomePendingApprovals(disconnected: ConnectedClient): void {
+  for (const pending of pendingDeviceApprovals.values()) if (pending.clientId === disconnected.id) pending.finish("APPROVAL_DENIED: desktop disconnected before approval");
   const replacement = [...clients.values()].find((candidate) => candidate.id !== disconnected.id && candidate.userId === disconnected.userId && candidate.socket.readyState === WebSocket.OPEN);
   for (const [requestId, pending] of pendingServerRequests) {
     if (pending.clientId !== disconnected.id) continue;
     if (!replacement) {
       pendingServerRequests.delete(requestId);
       clearTimeout(pending.timer);
-      bridge.respond(pending.upstreamId, { decision: "reject", reason: "client_disconnected" });
+      pending.bridge.respond(pending.upstreamId, { decision: "reject", reason: "client_disconnected" });
       audit("approval.response", "failed", { userId: disconnected.userId, deviceId: disconnected.deviceId, requestId, errorCode: "CLIENT_DISCONNECTED" });
       continue;
     }
@@ -679,8 +927,18 @@ function rehomePendingApprovals(disconnected: ConnectedClient): void {
 }
 
 async function handleGatewayMessage(client: ConnectedClient, message: GatewayMessage | undefined): Promise<void> {
+  if(auth&&!auth.valid(client.principal!)){client.socket.close(4001,auth.failureReason(client.principal));return;}
   if (!message) return;
+  if(auditFailed){send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
+  const bridge=workers.forUser(client.userId);
   if (message.type === "approval.response") {
+    const deviceApproval = pendingDeviceApprovals.get(message.requestId);
+    if (deviceApproval) {
+      if (deviceApproval.clientId !== client.id) return;
+      const accepted = isRecord(message.result) && message.result.decision === "accept";
+      deviceApproval.finish(accepted ? undefined : "APPROVAL_DENIED: client operation was not approved for this invocation");
+      return;
+    }
     const synthetic = pendingSyntheticApprovals.get(message.requestId);
     if (synthetic) {
       if (synthetic.clientId !== client.id) {
@@ -703,7 +961,7 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
     }
     pendingServerRequests.delete(message.requestId);
     clearTimeout(pending.timer);
-    bridge.respond(pending.upstreamId, message.result);
+    pending.bridge.respond(pending.upstreamId, message.result);
     audit("approval.response", "resolved", { userId: client.userId, deviceId: client.deviceId, requestId: message.requestId });
     send(client.socket, { type: "approval.resolved", requestId: message.requestId, sequence: ++sequence });
     return;
@@ -731,6 +989,28 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
     audit(message.operation, "requested", { userId: client.userId, deviceId: client.deviceId, requestId: approvalRequestId });
     send(client.socket, { type: "approval.request", requestId: approvalRequestId, kind: "approval", method, data: payload.data ?? {}, sequence: ++sequence, synthetic: true, timeoutMs });
     send(client.socket, { type: "response", requestId: message.requestId, ok: true, data: { approvalRequestId, timeoutMs, synthetic: true } });
+    return;
+  }
+
+  if (message.operation === "test.history.legacy_create") {
+    try {
+      if (!controlsEnabled || process.env.TEST_GATEWAY_ENABLE_HISTORY_FIXTURES !== "1" || listenPort === 4510 || !client.userId.startsWith("harness-") || !client.deviceId.startsWith("harness-")) throw new Error("history fixture controls are disabled");
+      if (Object.keys(message.payload ?? {}).length) throw new Error("History fixtures use fixed policy and tools; payload overrides are forbidden");
+      const binding = await ensureRemoteBinding(client);
+      const context = await sendAgentRequest(client.deviceId, "workspace/context", {}, {binding});
+      if (!context.ok) throw new Error(`${context.errorCode}: ${context.error}`);
+      const legacyNames = ["device_workspace_list", "device_read_file", "device_exec"];
+      const result = await bridge.request("thread/start", {developerInstructions:CLIENT_DEVICE_INSTRUCTIONS + `\nClient context: ${JSON.stringify(context.result)}`, dynamicTools:CLIENT_DEVICE_TOOLS.filter(tool=>legacyNames.includes(tool.name))});
+      const id = threadIdFromResult(result);
+      if (!id) throw new Error("History fixture did not create a native Thread");
+      ownedThreadIdsByUser.get(client.userId)!.add(id);
+      threadOwnerById.set(id, client.userId);
+      const summary = isRecord(result) && isRecord(result.thread) ? sanitizeThreadMetadata(result.thread) as JsonObject : {id};
+      // Deliberately use the old v1 summary shape; resume must add its binding.
+      threadSummaryById.set(id, {...summary,deviceId:client.deviceId,deviceKey:binding.deviceKey});
+      persistState();
+      send(client.socket,{type:"response",requestId:message.requestId,ok:true,data:{...(sanitizeThreadMetadata(result) as JsonObject),legacyHistoryFixture:{tools:legacyNames,metadataVersion:1,remoteWorkspacePresent:false}}});
+    } catch(error) { send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:String(error)}); }
     return;
   }
 
@@ -765,26 +1045,36 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
   try {
     lastAppClientId = client.id;
     audit(message.operation, "started", { userId: client.userId, deviceId: client.deviceId, requestId: message.requestId });
-    if (["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.cancel"].includes(message.operation)) {
+    if(auditFailed)throw Error("AUDIT_STORAGE_UNAVAILABLE");
+    if (["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.steer", "conversation.turn.cancel"].includes(message.operation)) {
       assertOwnedThread(client, message.payload ?? {});
     }
     if (message.operation === "conversation.turn.cancel" && typeof message.payload?.threadId === "string") {
+      turnCancelVersions.set(message.payload.threadId, (turnCancelVersions.get(message.payload.threadId) ?? 0) + 1);
       cancelDeviceTools(message.payload.threadId, typeof message.payload.turnId === "string" ? message.payload.turnId : undefined);
     }
-    if (message.operation === "conversation.turn.create" && (message.payload?.clientMessageId !== undefined || message.payload?.attachments !== undefined)) {
-      const result = await submitAttachmentTurn(client, message.payload ?? {});
+    if (["conversation.create", "conversation.resume", "conversation.turn.create", "conversation.turn.steer"].includes(message.operation)) {
+      validateRemotePayload(message.payload ?? {});
+      await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined);
+    }
+    if (message.operation === "conversation.turn.steer" || (message.operation === "conversation.turn.create" && (message.payload?.clientMessageId !== undefined || message.payload?.attachments !== undefined))) {
+      const result = await submitAttachmentTurn(client, message.payload ?? {}, message.operation === "conversation.turn.steer");
       send(client.socket, {type:"response", requestId:message.requestId, ok:true, data:result});
       return;
     }
+    const context = ["conversation.create", "conversation.resume"].includes(message.operation)
+      ? await sendAgentRequest(client.deviceId, "workspace/context", {}, { binding: await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined) })
+      : undefined;
+    if (context && !context.ok) throw new Error(`${context.errorCode}: ${context.error}`);
+    const instructions = CLIENT_DEVICE_INSTRUCTIONS + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
     const appPayload = message.operation === "conversation.create"
       ? {
           ...(message.payload ?? {}),
-          approvalPolicy: "untrusted",
-          developerInstructions: CLIENT_DEVICE_INSTRUCTIONS,
+          developerInstructions: instructions,
           dynamicTools: CLIENT_DEVICE_TOOLS,
         }
       : message.operation === "conversation.resume"
-      ? {...(message.payload??{}), developerInstructions:CLIENT_DEVICE_INSTRUCTIONS}
+      ? {...(message.payload??{}), developerInstructions:instructions}
       : message.operation === "session.initialize"
         ? {
             ...(message.payload ?? {}),
@@ -799,7 +1089,7 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
     let result: unknown;
     try {
       result = agentMethod
-        ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}))
+        ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}), {binding: await ensureRemoteBinding(client)})
         : await bridge.request(method as string, appPayload);
     } catch (error) {
       // Older/archived sessions may no longer have a live rollout in the
@@ -826,13 +1116,16 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
           )
         : result)
       : result;
+    if (message.operation === "session.initialize" && isRecord(visibleResult)) visibleResult = {...visibleResult, platformCapabilities:{remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
     if (message.operation === "conversation.create") {
       const createdId = threadIdFromResult(result);
       if (createdId) {
+        if(threadOwnerById.has(createdId)&&threadOwnerById.get(createdId)!==client.userId)throw Error("WORKER_THREAD_ID_COLLISION: ownership preserved");
         ownedThreadIdsByUser.get(client.userId)?.add(createdId);
         threadOwnerById.set(createdId, client.userId);
         const createdRecord = isRecord(result) && isRecord(result.thread) ? sanitizeThreadMetadata(result.thread) as JsonObject : undefined;
-        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId });
+        const binding = await ensureRemoteBinding(client);
+        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId, deviceKey: binding.deviceKey, remoteWorkspace: binding });
         persistState();
       }
     }
@@ -881,7 +1174,7 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
     send(client.socket, { type: "response", requestId: message.requestId, ok: true, data: visibleResult });
   } catch (error) {
     audit(message.operation, "failed", { userId: client.userId, deviceId: client.deviceId, requestId: message.requestId, errorCode: "REQUEST_FAILED" });
-    send(client.socket, { type: "response", requestId: message.requestId, ok: false, error: error instanceof Error ? error.message : String(error) });
+    send(client.socket, { type: "response", requestId: message.requestId, ok: false, error: explainRuntimeError(error instanceof Error ? error.message : String(error)) });
   }
 }
 
@@ -897,6 +1190,7 @@ function operationMethod(operation: GatewayRequest["operation"]): string | undef
     "conversation.delete": "thread/delete",
     "conversation.rename": "thread/name/set",
     "conversation.turn.create": "turn/start",
+    "conversation.turn.steer": "turn/steer",
     "conversation.turn.cancel": "turn/interrupt",
     "conversation.list": "thread/list",
   };
@@ -925,7 +1219,8 @@ function reconcileSubmissions(threadId: string, result: JsonObject): void {
   persistState();
 }
 
-async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject): Promise<unknown> {
+async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject, steering = false): Promise<unknown> {
+  const bridge=workers.forUser(client.userId);
   const threadId = String(payload.threadId);
   const summary = threadSummaryById.get(threadId)!;
   if (summary.deviceId && summary.deviceId !== client.deviceId) throw new Error("此 Thread 绑定另一台设备，请连接原设备或新建对话");
@@ -933,13 +1228,18 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   if (typeof id !== "string" || !/^[a-zA-Z0-9-]{8,128}$/.test(id)) throw new Error("clientMessageId 无效");
   const entries = submissionsFor(threadId);
   const existing = entries.find((entry) => entry.clientMessageId === id);
-  if (existing?.status === "sent") return {turn:{id:existing.turnId}, submission:existing};
-  if (existing && existing.status !== "failed") throw new Error("提交结果尚未确认，请先核对历史，勿重复发送");
-  if (entries.some((entry) => ["preparing", "submitting", "unknown"].includes(entry.status))) throw new Error("该 Thread 仍有提交待确认，请先核对历史");
+  if (existing && ((existing.kind ?? "start") !== (steering ? "steer" : "start") || (steering && existing.expectedTurnId !== payload.expectedTurnId))) throw new Error("消息 ID 已用于另一项提交");
   const refs = parseAttachments(payload.attachments);
   if (!Array.isArray(payload.input) || payload.input.some((v) => !isRecord(v) || v.type !== "text" || typeof v.text !== "string")) throw new Error("平台仅接受正文和附件引用");
   const content = payload.input.map((v: {text:string}) => v.text).join("");
+  if (existing && existing.content !== content) throw new Error("消息 ID 对应的正文不一致");
+  if (steering && (refs.length || !content.trim())) throw new Error("运行中追加目前仅支持非空文字，请移除附件后重试");
+  if (steering && (typeof payload.expectedTurnId !== "string" || !payload.expectedTurnId.trim())) throw new Error("缺少当前 Turn ID，请刷新对话后重试");
+  if (steering && Object.keys(payload).some(key => !["threadId", "expectedTurnId", "input", "clientMessageId", "attachments"].includes(key))) throw new Error("追加要求不能修改模型或运行配置");
   if (content.length > 128_000) throw new Error("正文过长");
+  if (existing?.status === "sent") return {turn:{id:existing.turnId}, turnId:existing.turnId, ...(steering ? {started:existing.turnId !== existing.expectedTurnId} : {}), submission:existing};
+  if (existing && existing.status !== "failed") throw new Error("提交结果尚未确认，请先核对历史，勿重复发送");
+  if (entries.some((entry) => ["preparing", "submitting", "unknown"].includes(entry.status))) throw new Error("该 Thread 仍有提交待确认，请先核对历史");
   if (refs.length && !agents.get(client.deviceId)?.hello?.agent.capabilities.includes("attachments/v1")) throw new Error("Local Agent 离线或需要升级附件能力");
   const deviceKey = agents.get(client.deviceId)?.hello?.agent.deviceKey;
   if (payload.deviceKey !== undefined && payload.deviceKey !== deviceKey) throw new Error("连接的是另一台同名设备，拒绝发送本机附件");
@@ -950,19 +1250,26 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   let released = false;
   const release = () => { if (!released) { released = true; activeAttachmentSubmissions -= 1; } };
   summary.deviceId = client.deviceId;
-  const entry: AttachmentSubmission = {clientMessageId:id, content, attachments:[], status:"preparing"};
+  const entry: AttachmentSubmission = {clientMessageId:id, kind:steering ? "steer" : "start", ...(steering ? {expectedTurnId:payload.expectedTurnId as string} : {}), content, attachments:[], status:"preparing"};
+  const cancelVersion = turnCancelVersions.get(threadId) ?? 0;
   if (existing) entries.splice(entries.indexOf(existing),1,entry); else entries.push(entry);
   persistState();
   const progress = (stage: string) => send(client.socket, {type:"event", eventType:"attachment.progress", name:"attachment/progress", data:{threadId, clientMessageId:id, stage}, sequence:++sequence});
   try {
     const prepared = await prepareAttachments(refs, client.deviceId, (method, params) => sendAgentRequest(client.deviceId, method, params), () => client.socket.readyState === WebSocket.OPEN && entry.status === "preparing" && agents.get(client.deviceId)?.hello?.agent.deviceKey === deviceKey, progress);
     entry.attachments = prepared.attachments;
+    if (steering && (turnCancelVersions.get(threadId) ?? 0) !== cancelVersion) throw new Error("当前任务已请求停止，追加未发送");
     entry.status = "submitting";
     persistState();
     progress("正在提交中央模型");
     // Platform fields are consumed here. Client paths never become localImage.path.
     const { attachments: _attachments, clientMessageId: _id, deviceKey: _deviceKey, ...upstream } = payload;
-    const task = bridge.request("turn/start", {...upstream, input:[...payload.input, {type:"text",text:`[platform-message:${id}]`}, ...prepared.input, {type:"text",text:"Platform file output support: imageGeneration results are automatically saved to the client's Downloads/Codexia and shown as image cards. Verify real client paths with device_list_outputs before claiming save success. If that tool is absent in this older thread, call device_exec with program='codexia.files' and args=['list_outputs','{}']. The same broker operation supports paths, write_text, publish and copy with a JSON parameters string. Never use a native image-generation savedPath (central path) as a client path."}]}).then((result) => {
+    const input = [...payload.input, {type:"text",text:`[platform-message:${id}]`}, ...prepared.input];
+    const upstreamTask = steering
+      ? steerOrStart((method, params) => bridge.request(method, params), {threadId, expectedTurnId:payload.expectedTurnId as string, input}, () => (turnCancelVersions.get(threadId) ?? 0) !== cancelVersion)
+        .then(result => ({turn:{id:result.turnId}, turnId:result.turnId, started:result.started}))
+      : bridge.request("turn/start", {...upstream, input:[...input, {type:"text",text:"Platform file output support: native image generation is currently unavailable; existing saved artifacts remain supported. Verify real client paths with device_list_outputs before claiming save success. If that tool is absent in this older thread, call device_exec with program='codexia.files' and args=['list_outputs','{}']. The same broker operation supports paths, write_text, publish and copy with a JSON parameters string. Never use a native image-generation savedPath (central path) as a client path."}]});
+    const task = upstreamTask.then((result) => {
       const turn = isRecord(result) && isRecord(result.turn) ? result.turn : undefined;
       if (typeof turn?.id !== "string") throw new Error("App Server 未返回 turn.id，需核对历史");
       entry.status="sent"; entry.turnId=turn.id; delete entry.error; persistState();
@@ -983,7 +1290,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
     } finally {if(timer) clearTimeout(timer);}
   } catch (error) {
     if (entry.status === "preparing" || entry.status === "failed") release();
-    const explicitRejection = error instanceof Error && error.message.startsWith("App Server request failed:");
+    const explicitRejection = error instanceof Error && /^(App Server request failed:|MODEL_|TURN_LIMIT:|THREAD_BUSY:|WORKER_(CAPACITY|REQUEST_LIMIT|RESTART_BACKOFF|STOPPING):)/.test(error.message);
     if (entry.status !== "sent") entry.status = entry.status === "submitting" && !explicitRejection ? "unknown" : "failed";
     entry.error = error instanceof Error ? error.message : String(error);
     persistState(); throw error;
@@ -993,6 +1300,11 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
 function deviceOperationMethod(operation: GatewayRequest["operation"]): AgentRpcMethod | undefined {
   const methods: Partial<Record<GatewayRequest["operation"], AgentRpcMethod>> = {
     "device.workspace.list": "workspace/list",
+    "device.workspace.context": "workspace/context",
+    "device.workspace.search": "workspace/search",
+    "device.workspace.read_text": "workspace/read_text",
+    "device.workspace.git_status": "workspace/git_status",
+    "device.workspace.git_diff": "workspace/git_diff",
     "device.read_file": "read_file",
     "device.exec": "exec",
     "device.file.stat": "file/stat",
@@ -1002,10 +1314,33 @@ function deviceOperationMethod(operation: GatewayRequest["operation"]): AgentRpc
 }
 
 function validateDeviceParams(params: JsonObject): JsonObject {
-  for (const forbidden of ["deviceId", "workspaceId", "workspaceRoot"]) {
+  for (const forbidden of ["deviceId", "workspaceId", "workspaceRoot", "__remoteWorkspace"]) {
     if (forbidden in params) throw new Error(`${forbidden} is selected by the central broker and cannot be supplied by the client`);
   }
   return params;
+}
+
+async function ensureRemoteBinding(client: ConnectedClient, threadId?: string): Promise<RemoteWorkspaceBinding> {
+  if(auth){auth.assert(client.principal);auth.device(client.principal!,client.deviceId);}
+  const session = agents.get(client.deviceId);
+  if (!session?.ready || session.socket.readyState !== WebSocket.OPEN) throw new Error("AGENT_OFFLINE: reconnect the original client device");
+  const agent = session.hello?.agent;
+  if (!agent?.capabilities.includes(REMOTE_WORKSPACE_POLICY) || !agent.deviceKey || !agent.workspaceRoot) throw new Error("AGENT_UPGRADE_REQUIRED: remote-workspace/v1 and stable workspace identity are required");
+  const binding: RemoteWorkspaceBinding = {policy:REMOTE_WORKSPACE_POLICY,userId:client.userId,deviceId:client.deviceId,deviceKey:agent.deviceKey,workspaceRoot:agent.workspaceRoot};
+  if (threadId) {
+    assertOwnedThread(client, {threadId});
+    const summary = threadSummaryById.get(threadId)!;
+    if (summary.deviceId && summary.deviceId !== binding.deviceId) throw new Error("REMOTE_WORKSPACE_CHANGED: thread belongs to another device");
+    if (summary.deviceKey && summary.deviceKey !== binding.deviceKey) throw new Error("REMOTE_WORKSPACE_CHANGED: device installation changed");
+    if (summary.remoteWorkspace) assertBinding(summary.remoteWorkspace as RemoteWorkspaceBinding, binding);
+    else {
+      // Additive migration: preserve native history and pin the existing source device.
+      summary.remoteWorkspace = binding;
+      summary.deviceKey = binding.deviceKey;
+      persistState();
+    }
+  }
+  return binding;
 }
 
 function agentState(deviceId: string): "online" | "offline" {
@@ -1026,13 +1361,20 @@ function sendAgentRequest(
   params: JsonObject,
   options: AgentRequestOptions = {},
 ): Promise<AgentRpcResponsePayload> {
+  if(auditFailed)return Promise.resolve({ok:false,error:"Audit storage unavailable",errorCode:"AUDIT_STORAGE_UNAVAILABLE",retryable:false});
   const session = agents.get(deviceId);
   const socket = session?.socket;
+  if(auth&&(!session?.principal||!auth.valid(session.principal)))return Promise.resolve({ok:false,error:"Device authorization expired or revoked",errorCode:auth.failureReason(session?.principal),retryable:false});
   if (!socket || socket.readyState !== WebSocket.OPEN || !session.ready) {
     return Promise.resolve({ ok: false, error: "Local Agent is offline", errorCode: "AGENT_OFFLINE", retryable: true });
   }
-  if (method.startsWith("file/") && !session.hello?.agent.capabilities.includes(method)) {
+  if ((method.startsWith("file/") || (method.startsWith("workspace/") && method !== "workspace/list")) && !session.hello?.agent.capabilities.includes(method)) {
     return Promise.resolve({ok:false, error:"需要升级 Local Agent 才能发送附件", errorCode:"AGENT_UPGRADE_REQUIRED"});
+  }
+  if (options.binding) {
+    const agent = session.hello?.agent;
+    if (options.binding.deviceKey !== agent?.deviceKey || options.binding.workspaceRoot !== agent?.workspaceRoot) return Promise.resolve({ok:false,error:"Bound workspace identity changed",errorCode:"REMOTE_WORKSPACE_CHANGED",retryable:false});
+    if (method === "exec" || method.startsWith("workspace/")) params = {...params, __remoteWorkspace:options.binding};
   }
 
   const requestId = randomUUID();
@@ -1045,9 +1387,10 @@ function sendAgentRequest(
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pendingAgentRequests.delete(requestId);
-      resolve({ ok: false, error: "Local Agent request timed out", errorCode: "TIMEOUT", retryable: true });
+      cancelAgentRequest(deviceId, requestId, options.taskId, "broker_timeout");
+      resolve({ ok: false, error: "Local Agent response timed out; execution result is unknown, reconcile before retrying", errorCode: "RESULT_UNKNOWN", retryable: false });
     }, options.timeoutMs ?? (method === "exec" ? commandTimeoutMs(params) + 10_000 : 60_000));
-    pendingAgentRequests.set(requestId, { resolve, timer, deviceId, lastEventSequence: 0, onEvent: options.onEvent });
+    pendingAgentRequests.set(requestId, { resolve, timer, deviceId, socket, lastEventSequence: 0, onEvent: options.onEvent });
     send(socket, envelope as unknown as JsonObject);
   });
 }
@@ -1059,27 +1402,44 @@ function cancelAgentRequest(deviceId: string, requestId: string, taskId: string 
 }
 
 function cancelDeviceTools(threadId: string, turnId?: string): void {
+  for (const pending of pendingDeviceApprovals.values()) if (pending.threadId === threadId && (!turnId || !pending.turnId || pending.turnId === turnId)) pending.finish("CANCELLED: stopped before patch approval");
   for (const tool of activeDeviceTools.values()) {
     if (tool.threadId !== threadId || (turnId && tool.turnId && tool.turnId !== turnId)) continue;
     cancelAgentRequest(tool.deviceId, tool.agentRequestId, tool.turnId, "turn_interrupted");
   }
 }
 
-function handleAgentConnection(socket: WebSocket, request: IncomingMessage): void {
+function approveDevicePatch(client: ConnectedClient, threadId: string, turnId: string | undefined, binding: RemoteWorkspaceBinding, params: JsonObject): Promise<void> {
+  const requestId = `device-approval:${randomUUID()}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => finish("APPROVAL_DENIED: patch approval timed out"), 120_000);
+    const finish = (error?: string) => {
+      if (!pendingDeviceApprovals.delete(requestId)) return;
+      clearTimeout(timer);
+      send(client.socket, {type:"approval.resolved",requestId,status:error?"declined":"accepted",sequence:++sequence});
+      audit("device.patch.approval", error?"failed":"resolved", {userId:client.userId,deviceId:client.deviceId,requestId});
+      if (error) reject(new Error(error)); else resolve();
+    };
+    pendingDeviceApprovals.set(requestId, {clientId:client.id,threadId,turnId,finish});
+    send(client.socket, {type:"approval.request",requestId,kind:"approval",method:"device/fileChange/requestApproval",data:{threadId,turnId,deviceId:binding.deviceId,workspaceRoot:binding.workspaceRoot,patch:params.patch,expectedVersions:params.expectedVersions,scope:"this invocation only; client rechecks versions after approval"},sequence:++sequence});
+  });
+}
+
+function handleAgentConnection(socket: WebSocket, request: IncomingMessage, principal?:Principal): void {
   const query = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`).searchParams;
-  const requestedDeviceId = query.get("deviceId")?.trim() || "default-device";
+  const requestedDeviceId = principal?.deviceId ?? (query.get("deviceId")?.trim() || "default-device");
   const previous = agents.get(requestedDeviceId);
   if (previous?.socket.readyState === WebSocket.OPEN) {
     socket.close(1013, "device already connected");
     return;
   }
-  const session: AgentSession = { socket, deviceId: requestedDeviceId, ready: false };
+  const session: AgentSession = { socket, deviceId: requestedDeviceId, ready: false,principal };
   agents.set(requestedDeviceId, session);
   audit("device.connect", "connected", { deviceId: requestedDeviceId });
   socket.on("message", (data) => handleAgentMessage(socket, data, requestedDeviceId, session));
   socket.on("close", () => {
-    rejectAgentRequestsForDevice(requestedDeviceId, "Local Agent connection closed", "AGENT_DISCONNECTED");
     if (agents.get(requestedDeviceId)?.socket === socket) {
+      rejectAgentRequestsForDevice(requestedDeviceId, "Local Agent connection closed; execution result unknown", "AGENT_DISCONNECTED");
       agents.delete(requestedDeviceId);
       audit("device.disconnect", "disconnected", { deviceId: requestedDeviceId });
       broadcastDeviceStatus(requestedDeviceId);
@@ -1089,13 +1449,16 @@ function handleAgentConnection(socket: WebSocket, request: IncomingMessage): voi
 }
 
 function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requestedDeviceId: string, session: AgentSession): void {
+  if(auth&&!auth.valid(session.principal!)){socket.close(4001,auth.failureReason(session.principal));return;}
   const parsed = parseEnvelope(toText(data));
   if ("error" in parsed) {
     send(socket, { type: "gateway.error", code: parsed.error.code, error: parsed.error.message });
     return;
   }
   const envelope = parsed.envelope;
+  observeAgent(session);
   if (envelope.type === "agent.hello") {
+    if (session.ready) { socket.close(1008, "device identity cannot change during a connection"); return; }
     const payload = envelope.payload as unknown as Record<string, unknown>;
     const agent = payload.agent;
     if (!isRecord(agent) || typeof agent.version !== "string" || !Array.isArray(agent.capabilities)) {
@@ -1104,6 +1467,7 @@ function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requeste
       return;
     }
     const helloDeviceId = typeof payload.deviceId === "string" && payload.deviceId.trim() ? payload.deviceId.trim() : requestedDeviceId;
+    if(auth && agent.deviceKey!==session.principal?.deviceKey){socket.close(1008,"device key mismatch");return;}
     if (helloDeviceId !== requestedDeviceId) {
       send(socket, { type: "gateway.error", code: "DEVICE_MISMATCH", error: "agent deviceId does not match connection" });
       socket.close(1008, "device mismatch");
@@ -1112,6 +1476,7 @@ function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requeste
     session.hello = payload as unknown as AgentHelloPayload;
     session.ready = true;
     session.lastHeartbeatAt = new Date().toISOString();
+    observeAgent(session);
     send(socket, createEnvelope("agent.hello_ack", {
       accepted: true,
       server: "central-test-gateway",
@@ -1131,7 +1496,7 @@ function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requeste
   if (envelope.type === "agent.event") {
     if (!session.ready || !envelope.requestId) return;
     const pending = pendingAgentRequests.get(envelope.requestId);
-    if (!pending || pending.deviceId !== requestedDeviceId) return;
+    if (!pending || pending.deviceId !== requestedDeviceId || pending.socket !== socket) return;
     const payload = envelope.payload as unknown as AgentEventPayload;
     if (payload.sequence <= pending.lastEventSequence) return;
     pending.lastEventSequence = payload.sequence;
@@ -1143,7 +1508,7 @@ function handleAgentMessage(socket: WebSocket, data: WebSocket.RawData, requeste
     const payload = envelope.payload as unknown as AgentRpcResponsePayload;
     if (typeof payload.ok !== "boolean" || !envelope.requestId) return;
     const pending = pendingAgentRequests.get(envelope.requestId);
-    if (!pending) return;
+    if (!session.ready || !pending || pending.deviceId !== requestedDeviceId || pending.socket !== socket) return;
     clearTimeout(pending.timer);
     pendingAgentRequests.delete(envelope.requestId);
     pending.resolve({ ...payload, id: payload.id ?? envelope.requestId });
@@ -1155,7 +1520,7 @@ function rejectAgentRequestsForDevice(deviceId: string, error: string, errorCode
     if (pending.deviceId !== deviceId) continue;
     clearTimeout(pending.timer);
     pendingAgentRequests.delete(requestId);
-    pending.resolve({ ok: false, error, errorCode, retryable: true, id: requestId });
+    pending.resolve({ ok: false, error, errorCode, retryable: false, id: requestId });
   }
 }
 
@@ -1232,7 +1597,7 @@ function sanitizeThreadMetadata(value: unknown): unknown {
   for (const [key, nested] of Object.entries(value)) {
     if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath"].includes(key)) continue;
     if (["url", "image_url", "imageUrl"].includes(key) && typeof nested === "string" && nested.startsWith("data:image/")) continue;
-    sanitized[key] = sanitizeThreadMetadata(nested);
+    sanitized[key] = ["message", "error"].includes(key) && typeof nested === "string" ? explainRuntimeError(nested) : sanitizeThreadMetadata(nested);
   }
   if (typeof value.id === "string") {
     const entries = threadSummaryById.get(value.id)?.attachmentSubmissions as AttachmentSubmission[] | undefined;
@@ -1274,7 +1639,7 @@ function normalizeNotification(message: JsonRpcMessage): JsonObject | undefined 
   const params = isRecord(message.params) ? message.params : {};
   const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
   if (message.method === "item/agentMessage/delta") {
-    return { type: "event", eventType: "assistant.delta", data: { threadId, delta: params.delta ?? params.text ?? "" }, sequence: ++sequence };
+    return { type: "event", eventType: "assistant.delta", data: { threadId, itemId: params.itemId, turnId: params.turnId, delta: params.delta ?? params.text ?? "" }, sequence: ++sequence };
   }
   if (message.method === "turn/completed") {
     return { type: "event", eventType: "turn.completed", data: { threadId, turn: sanitizeThreadMetadata(params.turn) }, sequence: ++sequence };
@@ -1312,20 +1677,34 @@ function isRecord(value: unknown): value is JsonObject {
 }
 
 httpServer.listen(listenPort, listenHost, () => {
-  console.log(`Central test gateway listening on ws://${listenHost}:${listenPort}/ws (App Server via stdio)`);
+  console.log(`Central test gateway listening on ${auth?"wss":"ws"}://${listenHost}:${listenPort}/ws (App Server via stdio; platformAuth=${Boolean(auth)})`);
+  if(nativeService&&!nativeService.isStopping)void nativeService.emit('ready').then(()=>nativeService.startMetrics(()=>collectServiceMetrics(agents.values(),workers.snapshot()))).catch(()=>nativeService.stop());
 });
 
-process.on("SIGINT", () => {
+let shutdownPromise:Promise<void>|undefined;
+async function shutdown():Promise<void>{
+  nativeService?.stopMetrics();
   rejectAllAgentRequests("Gateway shutting down", "GATEWAY_SHUTDOWN");
-  for (const session of agents.values()) session.socket.close();
-  bridge.close();
-  httpServer.close();
-  process.exit(0);
-});
-process.on("SIGTERM", () => {
-  rejectAllAgentRequests("Gateway shutting down", "GATEWAY_SHUTDOWN");
-  for (const session of agents.values()) session.socket.close();
-  bridge.close();
-  httpServer.close();
-  process.exit(0);
-});
+  for(const socket of websocketServer.clients)socket.close(1001,"Gateway shutting down");
+  const serverClosed=new Promise<void>((resolve,reject)=>httpServer.close(error=>error?reject(error):resolve()));
+  // HTTP close does not close upgraded sockets. Allow a short WebSocket handshake.
+  const forceConnections=setTimeout(()=>{for(const socket of websocketServer.clients)socket.terminate();httpServer.closeAllConnections();},1000);
+  const graceMs=Math.max(1,nativeService?.config.shutdown.graceMs??20_000);
+  const deadline=setTimeout(()=>{console.error("GATEWAY_SHUTDOWN_TIMEOUT: cleanup remains unverified");process.exit(1);},graceMs+5000);
+  try{
+    const drained=workers.drain(graceMs);
+    await Promise.all([drained,modelBroker?.close(),serverClosed]);
+    auth?.close();nativeService?.clear();await nativeService?.emit('stopped');
+    process.exitCode=0;
+  }catch{
+    console.error("GATEWAY_SHUTDOWN_FAILED: process cleanup remains unverified");process.exitCode=1;
+    await nativeService?.emit('failed','SERVICE_SHUTDOWN_FAILED').catch(()=>{});
+  }finally{
+    clearTimeout(forceConnections);clearTimeout(deadline);
+    for(const socket of websocketServer.clients)socket.terminate();
+    httpServer.closeAllConnections();websocketServer.close();
+  }
+  process.exit(process.exitCode??1);
+}
+for(const signal of ["SIGINT","SIGTERM"] as const)process.on(signal,()=>{shutdownPromise??=shutdown();});
+nativeService?.bindStop(()=>{shutdownPromise??=shutdown();});

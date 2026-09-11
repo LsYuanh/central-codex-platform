@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Central Codex Local Workbench",
+  "productName": "远舟",
   "version": "0.1.0",
   "identifier": "com.centralcodex.localspike",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Central Codex Local Workbench",
+        "title": "远舟",
         "width": 1040,
         "height": 760,
         "minWidth": 760,

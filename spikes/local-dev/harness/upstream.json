@@ -1,0 +1,51 @@
+{
+  "repository": "https://github.com/openai/codex",
+  "tag": "rust-v0.153.4",
+  "annotatedTag": "042fb41b7c813ac7999105e886b2b7aa715b5081",
+  "commit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "version": "0.153.4",
+  "marker": "yuan-zhou-remote-workspace/1",
+  "archive": {
+    "url": "https://codeload.github.com/openai/codex/tar.gz/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+    "sha256": "bbbf66ffa30846f1e9bc3ae8a87a5aa0bb768efee8dbb94759dc9eb64bb4aa3a"
+  },
+  "patch": {
+    "path": "remote-workspace.patch",
+    "sha256": "bad9d4c5f4a73fbce8f61654ef0ec3575dcb908083065ccf071fd73170b1cdfa"
+  },
+  "schema": {
+    "stable": {
+      "path": "schema/app-server-exports-stable.json.zst",
+      "sha256": "90cc88760f6b43c84d1266f5ddd6791d1e6971e7c402f591883aa85c7b406a28"
+    },
+    "experimental": {
+      "path": "schema/app-server-exports-experimental.json.zst",
+      "sha256": "05948c1ae7d50d2ec2d01153eeb4eb9b82cf6f7d851acb576ebb5fb201c38b2c"
+    }
+  },
+  "licenses": [
+    {
+      "path": "upstream/LICENSE",
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+    },
+    {
+      "path": "upstream/NOTICE",
+      "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+    }
+  ],
+  "rust": {
+    "requested": "1.95.0",
+    "verifiedCompiler": "1.98.0 (existing central compiler; exact 1.95.0 not yet tested)"
+  },
+  "lockfileAdjustment": "Only source-less workspace package versions 0.0.0 -> 0.153.4; third-party versions and checksums unchanged.",
+  "windowsPatch": {
+    "path": "windows-home.patch",
+    "sha256": "104ad03dc5db0678b2ceb1250f22079e51d5c3f767e18814e30fab50a47d7981",
+    "scope": "Windows remote AppContainer CODEX_HOME canonicalization only"
+  },
+  "windowsModelPatch": {
+    "path": "windows-model.patch",
+    "sha256": "9d22bc3e6456c936831c54dce2f4fe8e1d531efdf07163a05410fa57e0bd38b9",
+    "scope": "Windows remote AppContainer model-only authenticated TLS named pipe transport"
+  }
+}

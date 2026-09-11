@@ -1,0 +1,43 @@
+{
+  "scope": "session-protocol-lifecycle-with-fake-node-launcher",
+  "passed": true,
+  "realRuntime": false,
+  "realIsolation": false,
+  "realModel": false,
+  "credentialsUsed": false,
+  "cargoStarted": false,
+  "checks": [
+    {
+      "scenario": "malformed-with-queued-tool",
+      "passed": true,
+      "callbackCount": 0,
+      "closedSettled": true,
+      "childExited": true,
+      "elapsedMs": 86
+    },
+    {
+      "scenario": "tool-queued-before-malformed",
+      "passed": true,
+      "callbackCount": 0,
+      "closedSettled": true,
+      "childExited": true,
+      "elapsedMs": 69
+    },
+    {
+      "scenario": "throwing-tool-callback",
+      "passed": true,
+      "callbackCount": 1,
+      "closedSettled": true,
+      "childExited": true,
+      "elapsedMs": 64
+    },
+    {
+      "scenario": "rpc-timeout",
+      "passed": true,
+      "callbackCount": 0,
+      "closedSettled": true,
+      "childExited": true,
+      "elapsedMs": 30021
+    }
+  ]
+}

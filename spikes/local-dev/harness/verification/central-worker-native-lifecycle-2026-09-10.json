@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "scope": "real-windows-native-host-metadata-and-lifecycle",
+  "realCredentialsUsed": false,
+  "realModelVerified": false,
+  "threadWithMessagesPersistenceVerified": false,
+  "productionGateEnabled": false,
+  "formal4510Modified": false,
+  "hostSha256": "03928c4cc4c768408c4c79bae9a43e42fa62d2cc767726b0caee61fd4e3ab8b8",
+  "runtimeSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+  "helperSha256": "88547d7577c579d2435b65d36a19f1225018b1547986096708fee5b81e70cc1d",
+  "checks": [
+    "real-host-initialize-marker-and-concurrent-single-flight-thread-list",
+    "distinct-users-have-distinct-native-processes-and-home-directories",
+    "same-user-restart-retains-home-directory-and-thread-list",
+    "manager-drain-requires-native-close-evidence-and-process-disappearance",
+    "wrong-host-hash-rejected-before-spawn",
+    "synthetic-broker-closed-with-zero-model-requests"
+  ],
+  "diagnostics": [],
+  "instanceCount": 3,
+  "upstreamRequests": 0
+}

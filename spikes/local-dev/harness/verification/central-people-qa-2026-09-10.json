@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-10",
+  "scope": "Central App users and devices management",
+  "candidateId": "windows-x64-node24-qa1-ed2082f1f2b34662",
+  "manifestSha256": "ed2082f1f2b346626fb8d577fae1e32bd0c57461a1a26f9bb0af799f1b685cd2",
+  "appSha256": "847694b6dfc48c050fdeb4964d4a5f212cbd0fdcbb6fea5f8d780fb47757bffd",
+  "checks": {
+    "gatewayBuild": "passed",
+    "centralTypeScript": "passed",
+    "viteAndTauriDebugBuild": "passed",
+    "cargoCheck": "passed",
+    "cargoFmtCheck": "passed",
+    "centralRustTests": {"passed": 53, "ignored": 5, "failed": 0, "context": "Windows current-user synthetic fixtures"},
+    "sandboxFirstRun": {"passed": 35, "failed": 17, "ignored": 4, "cause": "ACL/DPAPI/resource ownership under sandbox user; current-user rerun passed"},
+    "nativeOwnedGatewayPeopleTlsQa": {"passed": true, "seconds": 34.93, "syntheticOnly": true, "realGatewayPackage": true},
+    "peopleUiDtoState": {"passed": 15},
+    "peopleGatewayTlsProtocolAgent": {"passed": 8, "evidence": "target/central-p0/central-people-536l1m/result.json"},
+    "platformAuthRegression": {"passed": 13},
+    "deviceTokenRegression": {"passed": 21, "evidence": "target/device-token-smoke-xHL9ga/result.json"},
+    "packageDistributionSmoke": {"passed": 9}
+  },
+  "tauriVisual": {
+    "profile": "com.yuanzhou.central.resource-qa-20260910",
+    "verified": ["overview navigation", "people stopped state", "native status refresh terminal", "return to overview", "closed app process count zero"],
+    "authenticatedFormsInteractionVerified": false
+  },
+  "limits": {
+    "realModelCallsThisRound": 0,
+    "realLocalAgentTestThisRound": false,
+    "formal4510Changed": false,
+    "productionQualified": false,
+    "macCentralVerified": false
+  }
+}

@@ -4,7 +4,7 @@
     "active": true,
     "externalBin": ["binaries/local-agent"],
     "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
-    "shortDescription": "Codexia 中央工作台客户端",
+    "shortDescription": "远舟远程工作台客户端",
     "category": "DeveloperTool",
     "windows": {
       "nsis": {

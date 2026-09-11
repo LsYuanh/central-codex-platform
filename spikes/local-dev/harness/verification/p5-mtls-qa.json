@@ -1,0 +1,413 @@
+{
+  "date": "2026-09-09",
+  "scope": "P5 fourth batch device certificates and mTLS; not released",
+  "status": "completed-isolated-qa-not-released",
+  "deviceCertificates": {
+    "ok": true,
+    "platform": "win32",
+    "fixtureOnly": true,
+    "checks": [
+      "RSA2048 certificate is client-only, non-CA and key bound",
+      "Reissuance has a distinct random serial and fingerprint",
+      "P256 SPKI accepted",
+      "Weak RSA and unsupported curve rejected",
+      "Malformed key and DN injection rejected",
+      "No certificate, unauthorized TLS, plaintext and reused sessions rejected",
+      "CA certificate rejected as Agent identity",
+      "Foreign CA certificate rejected even with claimed authorized socket",
+      "Expired and not-yet-valid device certificate rejected",
+      "CA startup refuses expired authority",
+      "Worker-root CA and hard-linked key rejected",
+      "CA initialization never overwrites existing directory",
+      "Short lifetime configuration rejects invalid renewal window",
+      "Real TLS admits owned client certificate and denies absent or foreign identity"
+    ]
+  },
+  "platformMtls": {
+    "ok": true,
+    "checks": [
+      "TLS bootstrap pairs client-generated keys; returns public certificates only",
+      "missing certificate and foreign device certificate denied despite valid ticket",
+      "untrusted CA cannot forge an authenticated device",
+      "three genuine mTLS device channels admitted",
+      "renewal requires mTLS plus matching device and platform session",
+      "early renewal is idempotent",
+      "renewal reauthorizes only its channel without disconnecting active peers",
+      "renewed certificate reconnects successfully",
+      "revoking one device closes all its channels and blocks renewal; other devices remain online",
+      "restart restores device certificate bindings and revocations",
+      "reauthorized channel survives its original handshake certificate expiry",
+      "unrenewed certificate expiry closes channel and denies reconnect and renewal",
+      "expired device can explicitly re-pair using fresh client keys",
+      "durable auth records contain neither TLS private keys nor login secrets"
+    ],
+    "source": "real TLS and platform auth; no model fixture",
+    "root": "C:\\Users\\developer\\AppData\\Local\\Temp\\device-mtls-DATZhH"
+  },
+  "nativeAgent": {
+    "ok": true,
+    "source": "real-TLS-native-vault-Windows-Agent-with-labelled-App-Server-fixture",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "native Agent automatically renews certificate during a Windows command",
+      "Windows command completes across original certificate expiry without Agent disconnect; other device remains online",
+      "cross-user Thread access and mutations denied",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session",
+      "no plaintext credentials in server state"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-so7YLl"
+  },
+  "otherChecks": {
+    "harnessCheck": true,
+    "platformAuth": 13,
+    "workerRouting": 8,
+    "rustChecks": [
+      "platform-security",
+      "local-agent",
+      "desktop-spike"
+    ],
+    "rustTests": {
+      "localAgent": 19,
+      "deviceCertificate": 2
+    },
+    "rustFmt": true,
+    "threadRecoverySmoke": true,
+    "finalDesktopTypeScriptAndVite": true,
+    "finalDesktopQaBuild": true
+  },
+  "upload": {
+    "destination": "operator@192.0.2.10:/Users/operator/central-harness-qa-20260909/",
+    "files": [
+      {
+        "path": "target/harness-deploy/gateway-mtls.tar.gz",
+        "sha256": "5A6E2E06D07C6CED1EA5A6524D8EFA4C16400ACEAEF1C39CE66EB89EBA83E0B9"
+      },
+      {
+        "path": "harness/qa-control.mjs",
+        "sha256": "53E80BF647F164D6467EE9D04595225C0B270A359C25D1D30B43DA832CC67C45"
+      },
+      {
+        "path": "harness/prepare-mtls-qa.mjs",
+        "sha256": "540D3814FDB5447D3A1B4C89F0D32D849347F447F1647E0F0ADD775C3CA6039E"
+      }
+    ],
+    "contents": "project build code, npm manifests, tests and QA scripts only; no credentials, private keys, databases or logs",
+    "approved": true,
+    "reviewRejection": "Existing exact-payload approvals cover the first three batches, not this new mTLS payload",
+    "approval": "User replied 继续 to the explicit fourth-batch filenames/destination/4529 upload approval request",
+    "remoteHashVerified": true
+  },
+  "pending": [],
+  "baseline": {
+    "central4510": {
+      "pid": 90685,
+      "clients": 1,
+      "devices": 2,
+      "sequence": 6624
+    },
+    "qa4529Stopped": true,
+    "installedConfigSha256": "4FD301EFADF939BF2E24E8E1B821C97461325C6529BE454FF7ED73A5C85FB178",
+    "originalRepositoryFiles": 34,
+    "originalFilesMatch": true,
+    "stashPreserved": true
+  },
+  "nativeBinaries": [
+    {
+      "path": "target/harness-agent/debug/local-agent.exe",
+      "sha256": "D06619D93A2FCB1D63D37283DC586F49EBC916FFA2663A9F85643B7A020C34CC"
+    },
+    {
+      "path": "target/harness-agent/debug/examples/platform-acceptance.exe",
+      "sha256": "9E6229F4820CE9D12858ACDB1BF3CF91F8CD4905F4A52F7A31E3397FB8379B6E"
+    },
+    {
+      "path": "target/harness-agent/debug/desktop-spike.exe",
+      "sha256": "87E9F9CA952B888881A20D0FDCE15BCD07BF2AA9894D7B4EE71C54911A5247A1"
+    }
+  ],
+  "localCleanup": {
+    "normalFinallyCompleted": true,
+    "interruptedQaCredentialCleanup": "spikes/local-dev/target/harness-deploy/p5-mtls-interrupted-local-cleanup.json",
+    "remainingP5QaCredentialEntries": 0,
+    "remainingQaAgentProcesses": 0,
+    "bootstrap": {
+      "data": {
+        "removed": true
+      },
+      "ok": true
+    }
+  },
+  "centralCertificates": {
+    "ok": true,
+    "platform": "darwin",
+    "fixtureOnly": false,
+    "checks": [
+      "RSA2048 certificate is client-only, non-CA and key bound",
+      "Reissuance has a distinct random serial and fingerprint",
+      "P256 SPKI accepted",
+      "Weak RSA and unsupported curve rejected",
+      "Malformed key and DN injection rejected",
+      "No certificate, unauthorized TLS, plaintext and reused sessions rejected",
+      "CA certificate rejected as Agent identity",
+      "Foreign CA certificate rejected even with claimed authorized socket",
+      "Expired and not-yet-valid device certificate rejected",
+      "CA startup refuses expired authority",
+      "Worker-root CA and hard-linked key rejected",
+      "Unix public-readable CA config rejected",
+      "CA initialization never overwrites existing directory",
+      "Short lifetime configuration rejects invalid renewal window",
+      "Real TLS admits owned client certificate and denies absent or foreign identity"
+    ]
+  },
+  "centralAgent": {
+    "ok": true,
+    "source": "real-central-Rust-TLS-native-vault-Windows-Agent",
+    "checks": [
+      "untrusted TLS rejected",
+      "native TLS rejects untrusted central certificate before login",
+      "native vault login and device pairing for two users",
+      "target gateway denies missing and forged mTLS certificate even with valid signed device tickets",
+      "WSS rejects forged identity and foreign device",
+      "real Agent files remain on their own devices",
+      "native Agent automatically renews certificate during a Windows command",
+      "Windows command completes across original certificate expiry without Agent disconnect; other device remains online",
+      "cross-user Thread access and mutations denied",
+      "real model approval and events stay with owner; forged approval cannot write",
+      "revocation stops actual process without affecting other user",
+      "native logout revokes device session"
+    ],
+    "fixture": "C:\\Users\\developer\\AppData\\Local\\Temp\\platform-live-soajuf"
+  },
+  "finalCentral": {
+    "before": {
+      "record": {
+        "version": 1,
+        "secure": true,
+        "perUser": true,
+        "isolated": true,
+        "mtls": true,
+        "startedAt": "2026-09-09T09:18:20.679Z",
+        "gateway": {
+          "pid": 94647,
+          "command": "/Users/operator/central-codex-platform/artifacts/macos-tools/node/bin/node services/test-gateway/dist/index.js",
+          "cwd": "/Users/operator/central-harness-qa-20260909/gateway",
+          "started": "Wed Sep  9 17:18:20 2026"
+        },
+        "forks": [],
+        "status": "running",
+        "health": {
+          "ok": true,
+          "service": "central-test-gateway",
+          "appServer": "stdio",
+          "enforcedRuntimeReady": false,
+          "requiredHarness": "yuan-zhou-remote-workspace/1",
+          "clients": 0,
+          "devices": 0,
+          "controlsEnabled": false,
+          "sequence": 0
+        },
+        "productionBaseline": {
+          "pids": [
+            90685
+          ],
+          "health": {
+            "ok": true,
+            "service": "central-test-gateway",
+            "appServer": "stdio",
+            "clients": 1,
+            "devices": 2,
+            "controlsEnabled": true,
+            "sequence": 6624
+          }
+        }
+      },
+      "qaListeners": [
+        94647
+      ],
+      "qaHealth": {
+        "ok": true,
+        "service": "central-test-gateway",
+        "appServer": "stdio",
+        "enforcedRuntimeReady": true,
+        "requiredHarness": "yuan-zhou-remote-workspace/1",
+        "clients": 0,
+        "devices": 0,
+        "controlsEnabled": false,
+        "sequence": 58
+      },
+      "productionListeners": [
+        90685
+      ],
+      "productionHealth": {
+        "ok": true,
+        "service": "central-test-gateway",
+        "appServer": "stdio",
+        "clients": 1,
+        "devices": 2,
+        "controlsEnabled": true,
+        "sequence": 6624
+      }
+    },
+    "stopped": {
+      "status": "stopped",
+      "qaPidsExited": true,
+      "port4529Closed": true,
+      "production": {
+        "pids": [
+          90685
+        ],
+        "health": {
+          "ok": true,
+          "service": "central-test-gateway",
+          "appServer": "stdio",
+          "clients": 1,
+          "devices": 2,
+          "controlsEnabled": true,
+          "sequence": 6624
+        }
+      },
+      "evidenceRetained": true
+    },
+    "cleaned": {
+      "ok": true,
+      "sessionsRevoked": 5,
+      "devicesRevoked": 4,
+      "scope": "stopped fourth-batch mTLS QA identities only"
+    },
+    "after": {
+      "record": {
+        "version": 1,
+        "secure": true,
+        "perUser": true,
+        "isolated": true,
+        "mtls": true,
+        "startedAt": "2026-09-09T09:18:20.679Z",
+        "gateway": {
+          "pid": 94647,
+          "command": "/Users/operator/central-codex-platform/artifacts/macos-tools/node/bin/node services/test-gateway/dist/index.js",
+          "cwd": "/Users/operator/central-harness-qa-20260909/gateway",
+          "started": "Wed Sep  9 17:18:20 2026"
+        },
+        "forks": [
+          {
+            "pid": 95439,
+            "command": "/Users/operator/central-harness-qa-20260909/codex-3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/target/debug/codex-app-server",
+            "cwd": "/Users/operator/central-harness-qa-20260909/live-data/mtls-workers/5870b3d180fbcba1866c479426f7c33792b16f9235c8ff8de3c7c1c06960f7e3/runtime",
+            "started": "Wed Sep  9 17:29:11 2026"
+          }
+        ],
+        "status": "stopped",
+        "health": {
+          "ok": true,
+          "service": "central-test-gateway",
+          "appServer": "stdio",
+          "enforcedRuntimeReady": false,
+          "requiredHarness": "yuan-zhou-remote-workspace/1",
+          "clients": 0,
+          "devices": 0,
+          "controlsEnabled": false,
+          "sequence": 0
+        },
+        "productionBaseline": {
+          "pids": [
+            90685
+          ],
+          "health": {
+            "ok": true,
+            "service": "central-test-gateway",
+            "appServer": "stdio",
+            "clients": 1,
+            "devices": 2,
+            "controlsEnabled": true,
+            "sequence": 6624
+          }
+        },
+        "stoppedAt": "2026-09-09T09:31:52.176Z",
+        "productionAfter": {
+          "pids": [
+            90685
+          ],
+          "health": {
+            "ok": true,
+            "service": "central-test-gateway",
+            "appServer": "stdio",
+            "clients": 1,
+            "devices": 2,
+            "controlsEnabled": true,
+            "sequence": 6624
+          }
+        }
+      },
+      "qaListeners": [],
+      "qaHealth": null,
+      "productionListeners": [
+        90685
+      ],
+      "productionHealth": {
+        "ok": true,
+        "service": "central-test-gateway",
+        "appServer": "stdio",
+        "clients": 1,
+        "devices": 2,
+        "controlsEnabled": true,
+        "sequence": 6624
+      }
+    }
+  },
+  "desktop": {
+    "verified": true,
+    "product": "远舟 Harness QA 20260909",
+    "pid": 16076,
+    "connection": {
+      "gateway": "online",
+      "agent": "online"
+    },
+    "certificate": {
+      "state": "valid",
+      "displayedExpiresAt": "2026/9/9 17:31:11",
+      "autoRenewalNoticeVisible": true
+    },
+    "repairedThreadRestoration": {
+      "foreignDeviceThreadRejected": true,
+      "gatewayRemainsOnline": true,
+      "agentRemainsOnline": true,
+      "chineseRepairNoticeVisible": true,
+      "newConversationActionClearsNotice": true,
+      "bindingBypass": false
+    },
+    "online": {
+      "ok": true,
+      "service": "central-test-gateway",
+      "appServer": "stdio",
+      "enforcedRuntimeReady": true,
+      "requiredHarness": "yuan-zhou-remote-workspace/1",
+      "clients": 1,
+      "devices": 1,
+      "controlsEnabled": false,
+      "sequence": 58
+    },
+    "closed": {
+      "desktopProcesses": 0,
+      "agentProcesses": 0,
+      "centralClients": 0,
+      "centralDevices": 0
+    },
+    "cleanup": {
+      "at": "2026-09-09T09:30:36.813Z",
+      "remoteLogoutConfirmed": true,
+      "localCredentialsRemoved": true,
+      "configurationRestored": true
+    },
+    "frontendAsset": "index-Bvvr8WOM.js"
+  },
+  "limitations": [
+    "Not deployed to formal4510 or installed clients",
+    "macOS native desktop client not rerun in this batch; macOS central CA/permissions/TLS and Windows native client were verified",
+    "CA trust-chain rotation and distribution remain an operator task"
+  ]
+}

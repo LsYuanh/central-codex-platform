@@ -1,0 +1,147 @@
+{
+  "source": "C:/Workplace/central-codex-platform",
+  "commit": "e3b9c730b58f3db21b806b673992e0bbb832a618",
+  "date": "2026-09-09",
+  "stash": "stash@{0}: On main: backup before Codexia worktree integration (untouched)",
+  "excluded": [
+    "spikes/local-dev/apps/desktop/src-tauri/gen/schemas/capabilities.json (generated)"
+  ],
+  "files": [
+    {
+      "path": "docs/对话任务用时实施与验收-2026-09-07.md",
+      "sha256": "791D2078A1ACF89585E212CD43F171AEB74F965A28CD6F60422A5F7931681063"
+    },
+    {
+      "path": "docs/开源Codex-Harness改造计划-2026-09-09.md",
+      "sha256": "1662F341A70C3A1D913E425B444539012A1C6DA8B57EECC763E5BA206FDC0653"
+    },
+    {
+      "path": "docs/客户端UI设计规范-V0.1-2026-09-07.md",
+      "sha256": "AFD8D3EEFA58B43D9D6D4E63987CEB54BCDD791290C0AEEF402A2EE466EEF303"
+    },
+    {
+      "path": "docs/客户端UI与Local-Agent开发交接文档-2026-09-02.md",
+      "sha256": "FA818ACF6C0C5C6F019493ADAF8360207507E5691ED0452E0D66AB9C9056229F"
+    },
+    {
+      "path": "docs/客户端UI重构实施与验收-2026-09-07.md",
+      "sha256": "4671A492DA4F613D033EE240E1ECA9D04379DEB8A27111E3784D0CB27BB9764A"
+    },
+    {
+      "path": "docs/远舟Windows重新打包与安装-2026-09-07.md",
+      "sha256": "1EA33F28CC9A2234B1E8D35A8AB2F82C66026CFB8C0636D8ED0212E217AB9062"
+    },
+    {
+      "path": "docs/运行中追加要求实施与验收-2026-09-07.md",
+      "sha256": "81566B02EF89E910E16A61D8C0D386DF3C3B33E40D940AEF68ED978E7420DC6A"
+    },
+    {
+      "path": "spikes/local-dev/AGENTRPC.md",
+      "sha256": "F6EA43FA6CD4AC293070A8EC48C8009B8690240E3B81F4345FE71C7FE461E177"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/index.html",
+      "sha256": "94F94742F9CFEB25C9742EF88658C3A58299DA30F241302289449B2D94976933"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src-tauri/capabilities/default.json",
+      "sha256": "AD5E9A23C458001D8BE7E9D076757D3EBE19DB9B874A413075A3AA493D02E0C5"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src-tauri/tauri.bundle.conf.json",
+      "sha256": "DC17C074D4E9ACB4CAE41807CB9A2BFF240B97A17F40DF005E17F1CC9B29BF19"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src-tauri/tauri.conf.json",
+      "sha256": "EBE683EA1C2EC55D77187AB77EB8239E0DEB6FF4CBAA33F517F25F9FC945DF70"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/App.tsx",
+      "sha256": "2D7D7EAC58B1C20406E47153A7C6F428A057C28BBB304226E9B47AF8478C759C"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/chat-stream.ts",
+      "sha256": "B12502C9E4D29A8FB2256338A4754359B8EDF2415652CA7D51EF2F21F2F3B20C"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/codexia-gateway-adapter.ts",
+      "sha256": "C59D2CF68B0706981D85EABE012DE605C458D5B766EA9108C0ACABF5E4879D82"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/main.tsx",
+      "sha256": "44E8A641F22E66085B333AD63787E7EBBD5C5B7E2F171D38BEF236F6832130B1"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/platform-gateway-client.ts",
+      "sha256": "C76FC64B58EFCC743BEDAEEE791FF9F0A4F054B38E73A008C0122C2A3E7317E8"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/runtime-settings.tsx",
+      "sha256": "357FA1E3C1724B38DCD95E8F52B5A7A8F049A16D16C1CCC4E235F280960A1462"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/styles.css",
+      "sha256": "65DEC50E01EC096B607C1B6E21DC3A9D939DECCC497023698B58A2BD1D6EE123"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/theme.ts",
+      "sha256": "8B82293D818AD135EB01492DC5AF4FEE44B96B62DED628204814E02ED4E93F6B"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/ThemePicker.tsx",
+      "sha256": "61FA75B936D64E0F25AF7C2C30F75A14D3CE16A3186C4C4382C5885C36B8BE06"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/thread-history.ts",
+      "sha256": "EC1A5B552D6C7F46494B98BF0EB5DD9616EEC04960FE1C700818B991B31C1238"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/turn-timing.ts",
+      "sha256": "2911EDF80D5EFCB0B88CBEA8908E2C3C59807A9403F0CD4211774E8989F8BF6F"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/UiIcon.tsx",
+      "sha256": "F30ED125B497537A9F6611F9EAA056501375483C98D34EDF498CE04FCB966031"
+    },
+    {
+      "path": "spikes/local-dev/apps/desktop/src/WorkspacePanel.tsx",
+      "sha256": "3F75D293DF2C888F2E13366443223AEAB06A3C9DC0ADD7B52A0F869AFA3BB6AB"
+    },
+    {
+      "path": "spikes/local-dev/package.json",
+      "sha256": "A50D5BE2B7BCB42F3E5FAFAB0353A74C7326D3091E5AA850DBAFD7C5415F0190"
+    },
+    {
+      "path": "spikes/local-dev/packages/agentrpc-types/src/index.ts",
+      "sha256": "6E1207806792FD9910D271451A5DCF4048DDA5D0D284E7BD1314DB6352A89F55"
+    },
+    {
+      "path": "spikes/local-dev/README.md",
+      "sha256": "2FA99E8DD7588247D02A55A0BF5F02709B2DD2AD0BECA345BBE50AB845709AAE"
+    },
+    {
+      "path": "spikes/local-dev/scripts/steering-gateway-smoke.mjs",
+      "sha256": "562EC5F159299265A6133AE0CED82D66950D517F5244C4FBBC1AA88C48F162E5"
+    },
+    {
+      "path": "spikes/local-dev/scripts/steering-live-smoke.mjs",
+      "sha256": "E1621A30AC7CF7C943671253E07EB497608C39AB7BA45376193D50C8E038DC6D"
+    },
+    {
+      "path": "spikes/local-dev/scripts/steering-smoke.ts",
+      "sha256": "01F9297592A6D3B78C917783B7BE9B0093C890AEA41CD2684BACF4D038AD0C49"
+    },
+    {
+      "path": "spikes/local-dev/scripts/turn-timing-smoke.ts",
+      "sha256": "44072A4A709FA64ACF9E266BE103E6C400E0209820B466C53300916938268B07"
+    },
+    {
+      "path": "spikes/local-dev/services/test-gateway/src/index.ts",
+      "sha256": "8D377D3FE99179C49D8579951D263AA456EA529ADFCE7F73827746C1A7373586"
+    },
+    {
+      "path": "spikes/local-dev/services/test-gateway/src/steering.ts",
+      "sha256": "CBAA15B9FDF3555E7CF587EF6A17A1BD13AAF1BBF362CCF968470A9C04C43FA6"
+    }
+  ]
+}

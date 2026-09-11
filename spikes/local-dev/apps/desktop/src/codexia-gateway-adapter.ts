@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 import type { AppServerMessage, JsonRpcId } from "./app-server-client";
-import type { RpcClient } from "./platform-gateway-client";
+import type { RpcClient, DeviceMethod } from "./platform-gateway-client";
+import { clientGitDiff, normalizeGatewayUiEvent, type ClientGitDiff, type GatewayUiEvent } from "./gateway-ui-events";
 
 /**
  * Codexia-compatible service boundary. The UI speaks in Thread/Turn terms;
@@ -11,8 +12,8 @@ import type { RpcClient } from "./platform-gateway-client";
 export class CodexiaGatewayAdapter {
   public constructor(public readonly transport: RpcClient) {}
 
-  public subscribe(listener: (message: AppServerMessage) => void): () => void {
-    return this.transport.subscribe(listener);
+  public subscribeUi(listener: (event: GatewayUiEvent) => void): () => void {
+    return this.transport.subscribe(message => listener(normalizeGatewayUiEvent(message)));
   }
 
   public async initialize(): Promise<AppServerMessage> {
@@ -64,9 +65,20 @@ export class CodexiaGatewayAdapter {
     return this.transport.request("turn/interrupt", params);
   }
 
-  public async requestDevice(method: "workspace/list" | "read_file" | "exec", params: Record<string, unknown> = {}): Promise<AppServerMessage> {
+  public async turnSteer(params: Record<string, unknown>): Promise<AppServerMessage> {
+    return this.transport.request("turn/steer", params);
+  }
+
+  public async requestDevice(method: DeviceMethod, params: Record<string, unknown> = {}): Promise<AppServerMessage> {
     if (!this.transport.requestDevice) throw new Error("当前传输不支持客户端设备操作");
     return this.transport.requestDevice(method, params);
+  }
+
+  public async workspaceDiff(path: string, staged = false): Promise<ClientGitDiff> {
+    const response = await this.requestDevice("workspace/git_diff", {path, staged});
+    const payload = response.result as {ok?: boolean; result?: unknown; error?: unknown; errorCode?: string} | undefined;
+    if (payload?.ok === false) throw new Error(`${payload.errorCode ?? "DIFF_FAILED"}: ${String(payload.error ?? "无法读取客户端 diff")}`);
+    return clientGitDiff(payload?.result ?? payload);
   }
 
   public respond(id: JsonRpcId, result: unknown): void {

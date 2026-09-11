@@ -1,0 +1,70 @@
+{
+  "scope": "real-windows-worker-wall-clock-lease-expiry-synthetic-model",
+  "passed": true,
+  "automaticExpiryTested": true,
+  "realModelVerified": false,
+  "realDeviceVerified": false,
+  "productionWindowsWorkerEnabled": false,
+  "deployable": false,
+  "checks": [
+    "Real isolated Worker initializes with the unchanged wall-clock lease TTL",
+    "Actual expiry closes the active upstream and automatically reaps the exact Worker Job and profile",
+    "Later-issued sibling lease and Worker continue without replaying the expired request",
+    "Expired listener refuses a new connection; no extra upstream request is admitted"
+  ],
+  "launcherSha256": "5357cf20c19de63484313cf50d2d5bb7bd78001d76edec81a91753f9e4118a98",
+  "runtimeSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+  "leaseDurationMs": 65001,
+  "leaseClosedAfterExpiryMs": 18,
+  "workerClosedAfterExpiryMs": 91,
+  "upstreamClosedAfterExpiryMs": 19,
+  "sessions": [
+    {
+      "launcherPid": 23048,
+      "stopped": true,
+      "failureCode": null,
+      "stdoutBytes": 4300,
+      "stderrBytes": 0,
+      "toolCalls": 0,
+      "diagnosticCategories": [],
+      "terminalStatuses": [],
+      "agentMessages": [],
+      "cleanup": {
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 1,
+        "modelPipeTailDrains": 1,
+        "modelPipeTailDrainCancels": 0
+      }
+    },
+    {
+      "launcherPid": 18340,
+      "stopped": true,
+      "failureCode": null,
+      "stdoutBytes": 6353,
+      "stderrBytes": 0,
+      "toolCalls": 0,
+      "diagnosticCategories": [],
+      "terminalStatuses": [
+        "completed"
+      ],
+      "agentMessages": [
+        {
+          "utf8Bytes": 33,
+          "sha256": "0af5953e22e7602c9d79244985263a7e641df065c27f054df42bd29c7145cf93"
+        }
+      ],
+      "cleanup": {
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 1,
+        "modelPipeTailDrains": 1,
+        "modelPipeTailDrainCancels": 0
+      }
+    }
+  ],
+  "upstreamCounts": {
+    "alice": 1,
+    "bob": 1
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "date": "2026-09-10",
+  "scope": "Central App public diagnostics projection, settings summary, native JSON export",
+  "candidateId": "windows-x64-node24-qa1-74b3e6f43896219f",
+  "gatewayChanged": false,
+  "regression": {
+    "centralRust": {"passed": 67, "failed": 0, "ignored": 7, "context": "actual Windows user"},
+    "newNativeTests": 4,
+    "diagnosticsUiSmoke": 11,
+    "typeScript": "passed",
+    "vite": "passed",
+    "cargoFmt": "passed",
+    "independentReview": "passed after adding the existing-target error mapping"
+  },
+  "report": {
+    "schemaVersion": 1,
+    "publicProjectionOnly": true,
+    "containsPathsOrConnectionAddresses": false,
+    "containsUserDeviceOrProcessIds": false,
+    "readsCredentialsOrRawLogs": false,
+    "overwritesExistingFiles": false,
+    "automaticallyUploads": false,
+    "automaticallyPolls": false,
+    "configurationMeaning": "saved settings, not necessarily the active service configuration",
+    "serviceHistoryMeaning": "current owned service snapshot, not a complete historical log"
+  },
+  "tauriUi": {
+    "status": "passed",
+    "elapsedSeconds": 244.21,
+    "normalFrontendAndNativeIpc": true,
+    "runningSnapshotAndSavedSettings": true,
+    "jsonPreview": true,
+    "manualRefresh": true,
+    "existingConfigurationNavigation": true,
+    "nativeSaveAndSuccessNotice": true,
+    "escapeCancellationAndNoSaveNotice": true,
+    "exportResult": "target/central-p0/central-diagnostics-ui-20260910-run1/report.json",
+    "exportBytes": 884,
+    "exportSha256": "3c8632c91ec41ea5bae914283d9e71f41b06c90165c769d3dee52a62c1f80c4d",
+    "automationRecovery": "accessible cancel index triggered save; actual save verified by file, cancellation separately verified using Escape",
+    "syntheticProfileRetained": true,
+    "windowCloseCleanupVerified": true,
+    "qaProcessesRemaining": 0,
+    "qaListenersRemaining": 0
+  },
+  "finalApp": {
+    "status": "passed",
+    "path": "target/debug/central-app.exe",
+    "sha256": "70e8a28b7b2cdb097ddc5de83c1a31d6f97649ccc907ab94d8b687d4951145e4",
+    "profile": "com.yuanzhou.central.resource-qa-20260910",
+    "frontendAsset": "index-CDutJm9K.js",
+    "installerBuilt": false
+  },
+  "limits": {
+    "realModelRerun": false,
+    "realRemoteDeviceVerified": false,
+    "formal4510Changed": false,
+    "productionQualified": false,
+    "macCentralVerified": false,
+    "installationUpgradeRollbackVerified": false
+  }
+}

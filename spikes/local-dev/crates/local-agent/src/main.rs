@@ -28,6 +28,9 @@ mod command_output;
 mod outputs;
 mod process;
 mod runtime;
+#[cfg(windows)]
+mod windows_job;
+mod workspace;
 
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 30 * 60 * 1000;
@@ -121,6 +124,8 @@ impl RequestEnvelope {
 
 #[tokio::main]
 async fn main() -> AgentResult<()> {
+    #[cfg(windows)]
+    windows_job::install()?;
     let config = parse_args()?;
     eprintln!("Local Agent workspace: {}", config.workspace_root.display());
     let files = Arc::new(Mutex::new(attachments::Attachments::new(
@@ -139,6 +144,9 @@ async fn main() -> AgentResult<()> {
     loop {
         match run_connection(&config, &files, &activity).await {
             Ok(()) => eprintln!("Gateway connection closed; retrying"),
+            Err(error) if platform_security::device_token::is_terminal(&error.to_string()) => {
+                return Err(error);
+            }
             Err(error) => eprintln!("Gateway connection failed: {error}; retrying"),
         }
         time::sleep(Duration::from_secs(2)).await;
@@ -169,13 +177,28 @@ fn parse_args() -> AgentResult<Config> {
     }
 
     let mut gateway_url = gateway_url.ok_or("--gateway-url is required")?;
-    let device_key = local_device_key()?;
+    let device_key;
     let mut parsed = url::Url::parse(&gateway_url)?;
     let mut device_id = parsed
         .query_pairs()
         .find(|(key, _)| key == "deviceId")
         .map(|(_, value)| value.into_owned())
         .unwrap_or_else(|| "default-device".into());
+    if parsed.scheme() == "wss" {
+        let namespace = env::var("YUAN_PLATFORM_NAMESPACE")
+            .map_err(|_| "authenticated Agent requires desktop namespace")?;
+        let credential = platform_security::device_token::load(
+            &platform_security::device_token::directory_from_env()?,
+            &namespace,
+            &gateway_url,
+        )?;
+        if credential.device_id != device_id || credential.device_key.is_empty() {
+            return Err("paired device identity mismatch".into());
+        }
+        device_key = credential.device_key.clone();
+    } else {
+        device_key = local_device_key()?;
+    }
     // Migrate the shared desktop default to a persistent per-installation identity.
     // Explicit development device IDs retain their existing routing semantics.
     if attachment_stdio && device_id == "desktop-device" {
@@ -194,7 +217,7 @@ fn parse_args() -> AgentResult<Config> {
     }
     let loopback =
         gateway_url.starts_with("ws://127.0.0.1:") || gateway_url.starts_with("ws://localhost:");
-    if !loopback && !allow_insecure_lan {
+    if parsed.scheme() != "wss" && !loopback && !allow_insecure_lan {
         return Err("non-loopback ws:// gateway requires --allow-insecure-lan".into());
     }
 
@@ -213,7 +236,17 @@ async fn run_connection(
     files: &Arc<Mutex<attachments::Attachments>>,
     activity: &Arc<runtime::Activity>,
 ) -> AgentResult<()> {
-    let (socket, _) = connect_async(&config.gateway_url).await?;
+    let socket = if config.gateway_url.starts_with("wss://") {
+        platform_security::device_token::agent_socket(
+            &platform_security::device_token::directory_from_env()?,
+            &env::var("YUAN_PLATFORM_NAMESPACE")?,
+            &config.gateway_url,
+            &env::var("YUAN_PLATFORM_CA").unwrap_or_default(),
+        )
+        .await?
+    } else {
+        connect_async(&config.gateway_url).await?.0
+    };
     let (mut socket_writer, mut reader) = socket.split();
     let (outbound, mut outbound_rx) = mpsc::unbounded_channel::<Value>();
     let mut writer = tokio::spawn(async move {
@@ -232,7 +265,8 @@ async fn run_connection(
                 "version": env!("CARGO_PKG_VERSION"),
                 "os": env::consts::OS,
                 "arch": env::consts::ARCH,
-                "capabilities": ["workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
+                "workspaceRoot": outputs::display_path(&config.workspace_root),
+                "capabilities": ["remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
                 "absolutePaths": config.allow_absolute
             }
         }),
@@ -246,7 +280,6 @@ async fn run_connection(
     heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let cancellations = Arc::new(Mutex::new(HashMap::<String, watch::Sender<bool>>::new()));
     let mut tasks = JoinSet::new();
-
     let connection_result: AgentResult<()> = loop {
         tokio::select! {
             _ = heartbeat.tick() => {
@@ -260,7 +293,13 @@ async fn run_connection(
                     break Ok(());
                 };
                 let incoming = match incoming { Ok(value) => value, Err(error) => break Err(error.into()) };
-                if incoming.is_close() {
+                if let Message::Close(frame) = &incoming {
+                    if let Some(frame) = frame {
+                        let reason = frame.reason.as_str();
+                        if platform_security::device_token::is_terminal(reason) {
+                            break Err(reason.to_string().into());
+                        }
+                    }
                     break Ok(());
                 }
                 if !incoming.is_text() {
@@ -306,6 +345,18 @@ async fn run_connection(
                     }
                 };
                 let request_id = request.id.clone();
+                if let Some(binding) = request.params.get("__remoteWorkspace") {
+                    if binding["policy"].as_str() != Some("remote-workspace/v1")
+                        || binding["workspaceRoot"].as_str() != Some(outputs::display_path(&config.workspace_root).as_str())
+                        || binding["deviceId"].as_str() != Some(config.device_id.as_str())
+                        || binding["deviceKey"].as_str() != Some(config.device_key.as_str())
+                        || binding["userId"].as_str().is_none_or(str::is_empty)
+                    {
+                        let response = versioned_message("agent.response", json!({"ok":false,"error":"WORKSPACE_BINDING_MISMATCH: device identity or workspace changed","errorCode":"WORKSPACE_BINDING_MISMATCH"}), Some(&request_id), request.task_id.as_deref(), request.trace_id.as_deref());
+                        let _ = outbound.send(response);
+                        continue;
+                    }
+                }
                 let (cancel_tx, cancel_rx) = watch::channel(false);
                 if cancellations.lock().unwrap().contains_key(&request_id) {
                     let response = versioned_message("agent.response", json!({"ok":false,"error":"duplicate requestId","errorCode":"DUPLICATE_REQUEST"}), Some(&request_id), request.task_id.as_deref(), request.trace_id.as_deref());
@@ -392,35 +443,52 @@ async fn handle_request(
 ) -> Value {
     let request_id = request.id.clone();
     let admission = activity.enter();
+    let mut command_failure: Option<process::CommandFailure> = None;
     let result = match admission.as_ref() {
         Err(error) => Err(error.clone()),
         Ok(_) => match request.method.as_str() {
             "workspace/list" => list_workspace(workspace_root, &request.params),
             "read_file" => read_file(workspace_root, &request.params),
-            "exec" => {
-                execute_command(workspace_root, allow_absolute, &request.params, cancel, {
-                    let request_id = request.id.clone();
-                    let task_id = request.task_id.clone();
-                    let trace_id = request.trace_id.clone();
-                    Arc::new(move |event: process::StreamEvent| {
-                        let message = versioned_message(
-                            "agent.event",
-                            json!({
-                                "stream":event.stream,
-                                "sequence":event.sequence,
-                                "chunk":event.chunk,
-                                "done":event.done,
-                                "truncated":event.truncated,
-                            }),
-                            Some(&request_id),
-                            task_id.as_deref(),
-                            trace_id.as_deref(),
-                        );
-                        let _ = outbound.send(message);
-                    })
+            "workspace/git_status" | "workspace/git_diff" => {
+                workspace::git(workspace_root, &request.method, &request.params, cancel).await
+            }
+            method if method.starts_with("workspace/") => {
+                let root = workspace_root.to_path_buf();
+                let method = method.to_owned();
+                let params = request.params.clone();
+                tokio::task::spawn_blocking(move || {
+                    workspace::call(&root, &method, &params, &cancel)
                 })
                 .await
+                .unwrap_or_else(|error| Err(format!("WORKSPACE_RESULT_UNKNOWN: {error}")))
             }
+            "exec" => execute_command(workspace_root, allow_absolute, &request.params, cancel, {
+                let request_id = request.id.clone();
+                let task_id = request.task_id.clone();
+                let trace_id = request.trace_id.clone();
+                Arc::new(move |event: process::StreamEvent| {
+                    let message = versioned_message(
+                        "agent.event",
+                        json!({
+                            "stream":event.stream,
+                            "sequence":event.sequence,
+                            "chunk":event.chunk,
+                            "done":event.done,
+                            "truncated":event.truncated,
+                        }),
+                        Some(&request_id),
+                        task_id.as_deref(),
+                        trace_id.as_deref(),
+                    );
+                    let _ = outbound.send(message);
+                })
+            })
+            .await
+            .map_err(|failure| {
+                let message = failure.message.clone();
+                command_failure = Some(failure);
+                message
+            }),
             method if method.starts_with("file/") => {
                 files.lock().unwrap().call(method, &request.params, false)
             }
@@ -431,7 +499,18 @@ async fn handle_request(
     let response = match result {
         Ok(result) => json!({ "id": request_id, "ok": true, "result": result }),
         Err(error) => {
-            json!({ "id": request_id, "ok": false, "error": error, "errorCode": "AGENT_ERROR" })
+            let code = error
+                .split(':')
+                .next()
+                .filter(|code| {
+                    !code.is_empty() && code.chars().all(|c| c.is_ascii_uppercase() || c == '_')
+                })
+                .unwrap_or("AGENT_ERROR");
+            if let Some(failure) = command_failure {
+                json!({ "id": request_id, "ok": false, "error": error, "errorCode": if failure.code == "AGENT_ERROR" { code } else { failure.code }, "result": failure.result })
+            } else {
+                json!({ "id": request_id, "ok": false, "error": error, "errorCode": code })
+            }
         }
     };
     versioned_message(
@@ -595,7 +674,7 @@ async fn execute_command(
     params: &Value,
     cancel: watch::Receiver<bool>,
     sink: process::EventSink,
-) -> Result<Value, String> {
+) -> Result<Value, process::CommandFailure> {
     let program = required_string(params, "program")?;
     let args = params
         .get("args")
@@ -616,7 +695,9 @@ async fn execute_command(
         .and_then(Value::as_u64)
         .unwrap_or(DEFAULT_COMMAND_TIMEOUT_MS)
         .clamp(1_000, MAX_COMMAND_TIMEOUT_MS);
-    let cwd = if allow_absolute && Path::new(requested_cwd).is_absolute() {
+    let cwd = if params.get("__remoteWorkspace").is_some() {
+        workspace::resolve(workspace_root, requested_cwd)?
+    } else if allow_absolute && Path::new(requested_cwd).is_absolute() {
         outputs::validate_path(requested_cwd)?;
         Path::new(requested_cwd)
             .canonicalize()
@@ -634,7 +715,7 @@ async fn execute_command(
     // client absolute cwd, subject to this OS user's permissions.
     let mut command = Command::new(program);
     command.args(&args).current_dir(cwd);
-    process::run_command(
+    process::run_command_detailed(
         command,
         program,
         &args,

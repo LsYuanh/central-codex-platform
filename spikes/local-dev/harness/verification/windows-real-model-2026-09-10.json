@@ -1,0 +1,135 @@
+{
+  "scope": "windows-appcontainer-real-model-same-host-local-agent-qa",
+  "passed": true,
+  "model": "gpt-6-astra",
+  "realCredentialsUsed": true,
+  "realModelVerified": true,
+  "realLocalAgentLoopVerified": true,
+  "realRemoteDeviceVerified": false,
+  "productionDeviceBrokerVerified": false,
+  "productionWindowsWorkerEnabled": false,
+  "deployable": false,
+  "formal4510Modified": false,
+  "checks": [
+    "Actual Local Agent connects with the expected isolated workspace and device binding",
+    "Real AppContainer App Server initializes; central credential file and command RPCs remain denied",
+    "Real model uses actual client context, reads a random fixture, executes the exact PowerShell test, reads its output and returns both markers",
+    "Revoking the model lease terminates its Worker; Agent and temporary listeners are closed"
+  ],
+  "launcherSha256": "5357cf20c19de63484313cf50d2d5bb7bd78001d76edec81a91753f9e4118a98",
+  "runtimeSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+  "agentSha256": "700837cc5dba17ed7712005e657ccd5eddfbd9fb806daaf7ec897dd6e94c8e7c",
+  "credentialStatus": {
+    "status": "ready"
+  },
+  "command": {
+    "pid": 25988,
+    "machineSha256": "77d754aedd1e066cf57aae97b911b795dffd589c2486aa74e09236ccef819840",
+    "proofSha256": "270ac70e07450014e66980b29f6eba3a216173963fd7b078eec04f7511a3d7d5",
+    "streamEvents": 4,
+    "nonemptyStdoutEvents": 2,
+    "streamedStdoutSha256": "48a7cdb0169ea995e4f9f74042b77164502d2978b158dba380a609c1091c7298"
+  },
+  "terminalStatus": "completed",
+  "finalAnswer": {
+    "sameTurn": true,
+    "inputMarkerMatched": true,
+    "commandMarkerMatched": true
+  },
+  "markers": {
+    "inputSha256": "d3957088bed8b213f45d54452234e5ae543f6916003885c39ac43d8f317d3df7",
+    "commandSha256": "270ac70e07450014e66980b29f6eba3a216173963fd7b078eec04f7511a3d7d5",
+    "bothReproducedByModel": true
+  },
+  "broker": {
+    "counts": {
+      "model.pipe_tls_handshake:succeeded": 5,
+      "model.pipe_http_request:succeeded": 5,
+      "model.request:succeeded": 5
+    },
+    "failureCodes": []
+  },
+  "toolCalls": [
+    {
+      "name": "device_workspace_context",
+      "succeeded": true,
+      "streamEvents": 0
+    },
+    {
+      "name": "device_workspace_read_text",
+      "path": "input.txt",
+      "succeeded": true,
+      "streamEvents": 0
+    },
+    {
+      "name": "device_exec",
+      "succeeded": true,
+      "streamEvents": 4
+    },
+    {
+      "name": "device_workspace_read_text",
+      "path": "proof.txt",
+      "succeeded": true,
+      "streamEvents": 0
+    }
+  ],
+  "worker": {
+    "launcherPid": 18640,
+    "stopped": true,
+    "failureCode": null,
+    "stdoutBytes": 36772,
+    "stderrBytes": 0,
+    "toolCalls": 4,
+    "diagnosticCategories": [
+      "REMOTE_WORKSPACE_UNSUPPORTED"
+    ],
+    "terminalStatuses": [
+      "completed"
+    ],
+    "agentMessages": [
+      {
+        "utf8Bytes": 62,
+        "sha256": "ec61ef58af116455e1fd6ca0b8faaf8c5dda9387df569e6c737699182aca861d"
+      },
+      {
+        "utf8Bytes": 98,
+        "sha256": "874a7f886b63fb9572c867a28747cd2bfc32dd8345c6e290b874e77a96947dd7"
+      }
+    ],
+    "cleanup": {
+      "profileCleaned": true,
+      "jobCloseVerified": true,
+      "modelPipeConnections": 5,
+      "modelPipeTailDrains": 0,
+      "modelPipeTailDrainCancels": 0
+    }
+  },
+  "agent": {
+    "scope": "local-agent-loopback-qa-adapter",
+    "realLocalAgent": true,
+    "productionDeviceBroker": false,
+    "connections": 1,
+    "requests": 4,
+    "responses": 4,
+    "streamEvents": 4,
+    "cancelSent": 0,
+    "cancelAccepted": 0,
+    "rejectedFrames": 0,
+    "duplicateResponses": 0,
+    "unknownResults": 0,
+    "replayedRequests": 0,
+    "stderrBytes": 233,
+    "stdoutBytes": 0,
+    "agentExited": true,
+    "listenerClosed": true,
+    "pendingRequests": 0,
+    "helloChecks": {
+      "firstHello": true,
+      "validKey": true,
+      "workspaceMatches": true,
+      "windows": true,
+      "absolutePathsDisabled": true,
+      "missingCapabilities": []
+    }
+  }
+}

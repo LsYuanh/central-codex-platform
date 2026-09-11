@@ -44,6 +44,12 @@ export type AgentRpcMethod =
   | "file/read_image"
   | "file/read_chunk"
   | "file/close_transfer"
+  | "workspace/context"
+  | "workspace/search"
+  | "workspace/read_text"
+  | "workspace/git_status"
+  | "workspace/git_diff"
+  | "workspace/apply_patch"
   | "workspace/list"
   | "workspace/stat"
   | "read_file"
@@ -72,6 +78,8 @@ export interface AgentHelloPayload {
   deviceId?: string;
   agent: {
     deviceKey?: string;
+    /** Canonical client workspace identity for remote-workspace/v1. */
+    workspaceRoot?: string;
     version: string;
     os: string;
     arch: string;
@@ -263,6 +271,7 @@ export function legacyRequestFrom(value: unknown): LegacyAgentRequest | undefine
 export const AGENTRPC_METHODS: readonly AgentRpcMethod[] = [
   "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths",
   "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer",
+  "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch",
   "workspace/list",
   "workspace/stat",
   "read_file",
@@ -292,6 +301,8 @@ export interface MessageAttachment extends AttachmentRef {
 }
 export interface AttachmentSubmission {
   clientMessageId: string;
+  kind?: "start" | "steer";
+  expectedTurnId?: string;
   turnId?: string;
   content: string;
   attachments: MessageAttachment[];

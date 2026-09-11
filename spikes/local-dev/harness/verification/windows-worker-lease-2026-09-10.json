@@ -1,0 +1,181 @@
+{
+  "scope": "two-real-windows-workers-synthetic-model-lease-lifecycle",
+  "passed": true,
+  "realModelVerified": false,
+  "realDeviceVerified": false,
+  "deployable": false,
+  "checks": [
+    "Two real AppContainer Workers hold independent synthetic model streams concurrently",
+    "Lease closure stops Alice Job/profile; repeated release leaves Bob PID and requests intact",
+    "Replacement Alice rejects old CA/token and survives old-generation lifecycle calls",
+    "Broker close propagates to both remaining Worker Jobs, profiles and active upstreams"
+  ],
+  "launcherSha256": "5357cf20c19de63484313cf50d2d5bb7bd78001d76edec81a91753f9e4118a98",
+  "runtimeSha256": "117549a4f5fde94b376ab4c1cdd821706030289362e0055e836c97cc973b986b",
+  "aliceUpstreamCloseMs": 31,
+  "aliceWorkerCloseMs": 64,
+  "sessions": [
+    {
+      "launcherPid": 19756,
+      "stopped": true,
+      "failureCode": null,
+      "stdoutBytes": 4322,
+      "stderrBytes": 0,
+      "toolCalls": 0,
+      "diagnosticCategories": [],
+      "terminalStatuses": [],
+      "agentMessages": [],
+      "cleanup": {
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 1,
+        "modelPipeTailDrains": 1,
+        "modelPipeTailDrainCancels": 0
+      }
+    },
+    {
+      "launcherPid": 20320,
+      "stopped": true,
+      "failureCode": null,
+      "stdoutBytes": 11791,
+      "stderrBytes": 0,
+      "toolCalls": 0,
+      "diagnosticCategories": [],
+      "terminalStatuses": [
+        "completed",
+        "completed"
+      ],
+      "agentMessages": [
+        {
+          "utf8Bytes": 23,
+          "sha256": "452503325a181a2ed79b4b5672649e6f15e969c01184159e660b88002464f04c"
+        },
+        {
+          "utf8Bytes": 23,
+          "sha256": "452503325a181a2ed79b4b5672649e6f15e969c01184159e660b88002464f04c"
+        }
+      ],
+      "cleanup": {
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 3,
+        "modelPipeTailDrains": 2,
+        "modelPipeTailDrainCancels": 0
+      }
+    },
+    {
+      "launcherPid": 18596,
+      "stopped": true,
+      "failureCode": null,
+      "stdoutBytes": 8072,
+      "stderrBytes": 0,
+      "toolCalls": 0,
+      "diagnosticCategories": [],
+      "terminalStatuses": [
+        "completed"
+      ],
+      "agentMessages": [
+        {
+          "utf8Bytes": 25,
+          "sha256": "a01f40b50449e5b8cae6a05f22765f1239653f32cabcc73401c05724489590a5"
+        }
+      ],
+      "cleanup": {
+        "profileCleaned": true,
+        "jobCloseVerified": true,
+        "modelPipeConnections": 2,
+        "modelPipeTailDrains": 2,
+        "modelPipeTailDrainCancels": 0
+      }
+    }
+  ],
+  "residualKnownLaunchers": 0,
+  "requests": {
+    "alice": 3,
+    "bob": 3
+  },
+  "finalCleanup": [
+    {
+      "stopped": true,
+      "evidence": {
+        "launcherPid": 19756,
+        "stopped": true,
+        "failureCode": null,
+        "stdoutBytes": 4322,
+        "stderrBytes": 0,
+        "toolCalls": 0,
+        "diagnosticCategories": [],
+        "terminalStatuses": [],
+        "agentMessages": [],
+        "cleanup": {
+          "profileCleaned": true,
+          "jobCloseVerified": true,
+          "modelPipeConnections": 1,
+          "modelPipeTailDrains": 1,
+          "modelPipeTailDrainCancels": 0
+        }
+      }
+    },
+    {
+      "stopped": true,
+      "evidence": {
+        "launcherPid": 20320,
+        "stopped": true,
+        "failureCode": null,
+        "stdoutBytes": 11791,
+        "stderrBytes": 0,
+        "toolCalls": 0,
+        "diagnosticCategories": [],
+        "terminalStatuses": [
+          "completed",
+          "completed"
+        ],
+        "agentMessages": [
+          {
+            "utf8Bytes": 23,
+            "sha256": "452503325a181a2ed79b4b5672649e6f15e969c01184159e660b88002464f04c"
+          },
+          {
+            "utf8Bytes": 23,
+            "sha256": "452503325a181a2ed79b4b5672649e6f15e969c01184159e660b88002464f04c"
+          }
+        ],
+        "cleanup": {
+          "profileCleaned": true,
+          "jobCloseVerified": true,
+          "modelPipeConnections": 3,
+          "modelPipeTailDrains": 2,
+          "modelPipeTailDrainCancels": 0
+        }
+      }
+    },
+    {
+      "stopped": true,
+      "evidence": {
+        "launcherPid": 18596,
+        "stopped": true,
+        "failureCode": null,
+        "stdoutBytes": 8072,
+        "stderrBytes": 0,
+        "toolCalls": 0,
+        "diagnosticCategories": [],
+        "terminalStatuses": [
+          "completed"
+        ],
+        "agentMessages": [
+          {
+            "utf8Bytes": 25,
+            "sha256": "a01f40b50449e5b8cae6a05f22765f1239653f32cabcc73401c05724489590a5"
+          }
+        ],
+        "cleanup": {
+          "profileCleaned": true,
+          "jobCloseVerified": true,
+          "modelPipeConnections": 2,
+          "modelPipeTailDrains": 2,
+          "modelPipeTailDrainCancels": 0
+        }
+      }
+    }
+  ]
+}

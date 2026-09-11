@@ -274,18 +274,66 @@ async fn capture_stream<R: AsyncRead + Unpin>(
     capture
 }
 
+#[derive(Debug)]
+pub struct CommandFailure {
+    pub message: String,
+    pub code: &'static str,
+    pub result: Option<Value>,
+}
+impl From<String> for CommandFailure {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            code: "AGENT_ERROR",
+            result: None,
+        }
+    }
+}
+impl From<&str> for CommandFailure {
+    fn from(message: &str) -> Self {
+        message.to_owned().into()
+    }
+}
+
+// Preserve callers that consume the legacy error text, while the wire dispatcher
+// uses detailed failures sourced directly from the actual child ExitStatus.
 pub async fn run_command(
+    command: Command,
+    program: &str,
+    args: &[String],
+    timeout: Duration,
+    cancel: watch::Receiver<bool>,
+    sink: EventSink,
+) -> Result<Value, String> {
+    run_command_detailed(command, program, args, timeout, cancel, sink)
+        .await
+        .map_err(|failure| failure.message)
+}
+
+pub async fn run_command_detailed(
     mut command: Command,
     program: &str,
     args: &[String],
     timeout: Duration,
     mut cancel: watch::Receiver<bool>,
     sink: EventSink,
-) -> Result<Value, String> {
+) -> Result<Value, CommandFailure> {
+    if *cancel.borrow() {
+        return Err(CommandFailure {
+            message: "COMMAND_CANCELLED: cancelled before process start".into(),
+            code: "COMMAND_CANCELLED",
+            result: None,
+        });
+    }
     command
+        // Commands are noninteractive. In desktop mode stdin is the private
+        // attachment IPC pipe and must never be inherited by a spawned tool.
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -321,10 +369,12 @@ pub async fn run_command(
         changed = cancel.changed() => if changed.is_ok() && *cancel.borrow() { End::Cancelled } else { End::Failed("command cancellation channel closed".into()) },
         _ = time::sleep(timeout) => End::TimedOut,
     };
-    if !matches!(end, End::Exited(_)) {
+    let exit_status = if let End::Exited(status) = &end {
+        Some(*status)
+    } else {
         terminate_process_tree(pid, &mut child).await;
-        let _ = child.wait().await;
-    }
+        child.wait().await.ok()
+    };
 
     let stdout = finish_capture(&mut stdout_task).await;
     let stderr = finish_capture(&mut stderr_task).await;
@@ -335,28 +385,40 @@ pub async fn run_command(
         || stdout_text.truncated
         || stderr_text.truncated;
 
-    match end {
-        End::Exited(status) if status.success() => Ok(json!({
-            "program": program,
-            "args": args,
-            "exitCode": status.code(),
-            "stdout": stdout_text.text,
-            "stderr": stderr_text.text,
-            "truncated": truncated
-        })),
-        End::Exited(status) => Err(format!(
-            "COMMAND_FAILED (exit {:?}): {}{}",
-            status.code(),
-            stderr_text.text,
-            stdout_text.text
-        )),
-        End::Cancelled => Err("COMMAND_CANCELLED: 用户已中断本机命令".into()),
-        End::TimedOut => Err(format!(
-            "COMMAND_TIMEOUT: 本机命令超过 {} 秒",
-            timeout.as_secs()
-        )),
-        End::Failed(error) => Err(error),
-    }
+    let result = json!({
+        "program": program,
+        "args": args,
+        "exitCode": exit_status.and_then(|status| status.code()),
+        "stdout": stdout_text.text,
+        "stderr": stderr_text.text,
+        "truncated": truncated
+    });
+    let (message, code) = match end {
+        End::Exited(status) if status.success() => return Ok(result),
+        End::Exited(status) => (
+            format!(
+                "COMMAND_FAILED (exit {:?}): {}{}",
+                status.code(),
+                stderr_text.text,
+                stdout_text.text
+            ),
+            "COMMAND_FAILED",
+        ),
+        End::Cancelled => (
+            "COMMAND_CANCELLED: 用户已中断本机命令".into(),
+            "COMMAND_CANCELLED",
+        ),
+        End::TimedOut => (
+            format!("COMMAND_TIMEOUT: 本机命令超过 {} 秒", timeout.as_secs()),
+            "COMMAND_TIMEOUT",
+        ),
+        End::Failed(error) => (error, "WORKSPACE_RESULT_UNKNOWN"),
+    };
+    Err(CommandFailure {
+        message,
+        code,
+        result: Some(result),
+    })
 }
 
 async fn finish_capture(handle: &mut JoinHandle<Capture>) -> Capture {
@@ -375,15 +437,14 @@ async fn finish_capture(handle: &mut JoinHandle<Capture>) -> Capture {
 async fn terminate_process_tree(pid: Option<u32>, child: &mut Child) {
     #[cfg(windows)]
     if let Some(pid) = pid {
-        let _ = time::timeout(
-            Duration::from_secs(3),
-            Command::new("taskkill")
-                .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status(),
-        )
-        .await;
+        let mut killer = Command::new("taskkill");
+        killer
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(0x08000000);
+        let _ = time::timeout(Duration::from_secs(3), killer.status()).await;
     }
     #[cfg(unix)]
     if let Some(pid) = pid {
@@ -400,6 +461,51 @@ async fn terminate_process_tree(pid: Option<u32>, child: &mut Child) {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[tokio::test]
+    async fn failed_command_preserves_actual_exit_and_both_streams() {
+        let mut command = if cfg!(windows) {
+            Command::new("powershell")
+        } else {
+            Command::new("sh")
+        };
+        if cfg!(windows) {
+            command.args(["-NoProfile", "-Command", "[Console]::Out.WriteLine('before failure'); [Console]::Error.WriteLine('failure detail'); exit 7"]);
+        } else {
+            command.args([
+                "-c",
+                "printf 'before failure\\n'; printf 'failure detail\\n' >&2; exit 7",
+            ]);
+        }
+        let (_sender, cancel) = watch::channel(false);
+        let failure = run_command_detailed(
+            command,
+            "test-shell",
+            &[],
+            Duration::from_secs(10),
+            cancel,
+            Arc::new(|_| {}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(failure.code, "COMMAND_FAILED");
+        assert!(failure.message.contains("COMMAND_FAILED"));
+        let result = failure.result.unwrap();
+        assert_eq!(result["exitCode"], 7);
+        assert!(
+            result["stdout"]
+                .as_str()
+                .unwrap()
+                .contains("before failure")
+        );
+        assert!(
+            result["stderr"]
+                .as_str()
+                .unwrap()
+                .contains("failure detail")
+        );
+        assert_eq!(result["truncated"], false);
+    }
 
     #[tokio::test]
     async fn streams_lines_before_process_exit() {

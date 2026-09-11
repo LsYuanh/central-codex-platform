@@ -7,8 +7,10 @@ export interface RestoredChatMessage {
   role: RestoredChatRole;
   content: string;
   createdAt?: string;
+  turnId?: string;
   attachments?: import("./attachments").MessageAttachment[];
   outputs?: import("./outputs").OutputArtifact[];
+  delivery?: "sending" | "sent" | "failed" | "unknown";
 }
 
 /** Normalize the supported App Server thread/read history shapes for the UI. */
@@ -32,28 +34,37 @@ export function messagesFromThreadRead(result: unknown): RestoredChatMessage[] {
   if (flatItems.length > 0) itemGroups.push({ items: flatItems });
 
   const restored: RestoredChatMessage[] = [];
+  const shownSubmissions = new Set<string>();
   for (const group of itemGroups) {
+    const groupSubmissions = submissions.filter(s => s.turnId === group.turnId && s.status === "sent");
+    const userItems = group.items.filter(value => { const row = asRecord(value); return roleFromItem(asRecord(row?.item) ?? row) === "user"; });
     for (const itemValue of group.items) {
       const wrapper = asRecord(itemValue);
       const item = asRecord(wrapper?.item) ?? wrapper;
       const output=outputs.find(value=>value.id===item?.id);
       if(output){
-        restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output],createdAt:group.createdAt});
+        restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output],createdAt:group.createdAt,turnId:group.turnId});
         shownOutputs.add(output.id);
       }
       if(item?.type==="imageGeneration")continue;
       const raw = extractItemText(item);
       const role = roleFromItem(item);
-      const submission = role === "user" ? submissions.find(s => (s.turnId && s.turnId === group.turnId) || raw.includes(`[platform-message:${s.clientMessageId}]`)) : undefined;
-      const content = submission?.content ?? raw;
+      const submission = role === "user" ? submissions.find(s => raw.includes(`[platform-message:${s.clientMessageId}]`))
+        ?? (userItems.length === 1 && groupSubmissions.length === 1 && !raw.includes("[platform-message:") ? groupSubmissions[0] : undefined) : undefined;
+      if (submission && shownSubmissions.has(submission.clientMessageId)) continue;
+      if (submission) shownSubmissions.add(submission.clientMessageId);
+      const content = submission?.content ?? raw.replace(/\[platform-message:[a-zA-Z0-9-]+\]/g, "").trim();
       if (!content.trim() && !submission?.attachments.length) continue;
-      restored.push({ id: submission?.clientMessageId ?? crypto.randomUUID(), role, content, attachments: submission?.attachments, createdAt: dateFromRecord(item) ?? group.createdAt });
+      restored.push({ id: submission?.clientMessageId ?? (typeof item?.id === "string" ? `${role === "assistant" ? "assistant-" : ""}${item.id}` : crypto.randomUUID()), role, content, attachments: submission?.attachments, createdAt: dateFromRecord(item) ?? group.createdAt, turnId:group.turnId ?? (typeof item?.turnId === "string" ? item.turnId : undefined), ...(submission?.kind === "steer" ? {delivery:"sent" as const} : {}) });
     }
     for(const output of outputs.filter(value=>value.turnId===group.turnId&&!shownOutputs.has(value.id))){
-      restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output],createdAt:group.createdAt});shownOutputs.add(output.id);
+      restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output],createdAt:group.createdAt,turnId:group.turnId});shownOutputs.add(output.id);
     }
   }
-  for(const output of outputs.filter(value=>!shownOutputs.has(value.id)))restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output]});
+  for (const submission of submissions.filter(s => s.kind === "steer" && !shownSubmissions.has(s.clientMessageId))) {
+    restored.push({id:submission.clientMessageId,role:"user",content:submission.content,turnId:submission.turnId,delivery:submission.status === "sent" ? "sent" : submission.status === "failed" ? "failed" : "unknown"});
+  }
+  for(const output of outputs.filter(value=>!shownOutputs.has(value.id)))restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output],turnId:output.turnId});
   return restored;
 }
 

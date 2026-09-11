@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "远舟 RC 20260909",
+  "version": "0.2.0-rc.1",
+  "identifier": "com.centralcodex.harnessqa.rc20260909",
+  "mainBinaryName": "yuan-zhou-rc",
+  "bundle": {
+    "publisher": "Central Codex RC QA",
+    "shortDescription": "远舟隔离发布候选验收客户端",
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "certificateThumbprint": null,
+      "signCommand": null,
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "rc-installer-hooks.nsh"
+      }
+    },
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

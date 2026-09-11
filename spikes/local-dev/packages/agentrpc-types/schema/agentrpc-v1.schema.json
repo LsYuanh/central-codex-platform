@@ -34,7 +34,7 @@
             "additionalProperties": false,
             "required": ["method", "params"],
             "properties": {
-              "method": { "type": "string", "enum": ["file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths", "workspace/list", "workspace/stat", "read_file", "exec", "fs/list_dir", "fs/read_file", "process/exec", "process/cancel", "git/status", "git/diff"] },
+              "method": { "type": "string", "enum": ["file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "workspace/stat", "read_file", "exec", "fs/list_dir", "fs/read_file", "process/exec", "process/cancel", "git/status", "git/diff"] },
               "params": { "type": "object" },
               "operationId": { "type": "string", "minLength": 1 },
               "idempotencyKey": { "type": "string", "minLength": 1 }

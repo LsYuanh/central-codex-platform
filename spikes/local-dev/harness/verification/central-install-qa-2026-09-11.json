@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-11",
+  "kind": "central-windows-install-qa",
+  "status": "passed-with-scope-limits",
+  "profile": "debug",
+  "qualified": false,
+  "signed": false,
+  "identifier": "com.yuanzhou.central.installqa20260911",
+  "installMode": "currentUser",
+  "packageId": "windows-x64-node24-qa1-74b3e6f43896219f",
+  "manifestSha256": "74b3e6f43896219f00d4e3fd8dffafe8f98ffc8c91c50e097a2d60d3f27a8449",
+  "serviceFileCount": 864,
+  "resourceFileCount": 865,
+  "packages": [
+    {
+      "version": "0.1.0",
+      "buildDirectory": "target/central-install-qa/0.1.0/1789090708124-642f3650-d875-4197-869d-53ee93fddd43",
+      "installerBytes": 69374077,
+      "installerSha256": "80913b1e8883a8b9ff23cfa8c401a519d377f07b1f9c6243b9ad33157a82d922",
+      "installedBinarySha256": "ea16885064be4e4dc7a49d2a0e047a29e51352a155fe3f94a8f6be85580b7000"
+    },
+    {
+      "version": "0.1.1",
+      "buildDirectory": "target/central-install-qa/0.1.1/1789090948819-3d0fca56-9444-47b6-a651-5cce46f45ef0",
+      "installerBytes": 69371114,
+      "installerSha256": "cf15201024cb2041f9fd530a4e30d7dd40ad0fe213dd1d55a6b39fdb690f7208",
+      "installedBinarySha256": "f1983dc792e5e973d67927d1a93de86c5b80bad332079f1195a0ee9f5e422f93"
+    }
+  ],
+  "installerChecks": {
+    "initialInstallExitCode": 0,
+    "sameVersionExitCode": 0,
+    "upgradeExitCode": 0,
+    "runningSameVersionExitCode": 10,
+    "runningUpgradeExitCode": 10,
+    "runningUninstallExitCode": 10,
+    "runningProcessesPreserved": true,
+    "downgradeExitCode": 12,
+    "uninstallExitCode": 0,
+    "installDirectoryAndRegistryRemoved": true,
+    "reinstallExitCode": 0
+  },
+  "retention": {
+    "sameVersionAndUpgradeFiles": 8,
+    "sameVersionAndUpgradeHashesUnchanged": true,
+    "downgradeBlockedHashesUnchanged": true,
+    "uninstallAndReinstallFiles": 10,
+    "uninstallAndReinstallHashesUnchanged": true,
+    "separateBaselinesAroundServiceOperations": true,
+    "configRevision": 1,
+    "syntheticUsers": 2,
+    "dpapiAccountUsable": true,
+    "tlsCertificateUsable": true
+  },
+  "nativeChecks": {
+    "regressionPassed": 67,
+    "regressionIgnored": 9,
+    "prepareSeconds": 35.61,
+    "verifyAfterUpgradeSeconds": 33.22,
+    "verifyAfterReinstallSeconds": 33.26,
+    "explicitInstallationRunsPassed": 3,
+    "sourceTestHarnessUsingInstalledResources": true
+  },
+  "installedGuiChecks": {
+    "actualTauriWindow": true,
+    "diagnosticsVersion010": true,
+    "diagnosticsVersion011": true,
+    "retainedAccountSelected": true,
+    "serviceRunningFromInstalledResources": true,
+    "workingDirectoryOutsideSource": true,
+    "pathExcludesGlobalNode": true,
+    "zeroLoadMetrics": true,
+    "windowCloseStopsAppAndGateway": true,
+    "loopbackPortReleased": true
+  },
+  "binaryVerification": {
+    "onlyUniqueTauriUnkToNssMarkerNormalized": true,
+    "remainingBytesExactlyEqual": true,
+    "crossVersionComparisonRejected": true
+  },
+  "realModelCalled": false,
+  "realCodexLoginRead": false,
+  "formalCentral4510Changed": false,
+  "finalState": {
+    "qaInstalledVersion": "0.1.1",
+    "qaAppProcesses": 0,
+    "qaGatewayProcesses": 0,
+    "qaListeners": 0,
+    "originalClientRegistryVersionAndLocationUnchanged": true,
+    "syntheticDataRetained": true
+  },
+  "limitations": [
+    "Existing WebView2 runtime; no clean-machine runtime installation",
+    "Launched from Codex MSIX host; ordinary Explorer launch environment still unverified",
+    "Same gateway package across app versions; no runtime or data schema migration",
+    "Unsigned Debug QA; Release qualification remains false",
+    "Remote client, cross-user migration, and macOS central not exercised"
+  ]
+}

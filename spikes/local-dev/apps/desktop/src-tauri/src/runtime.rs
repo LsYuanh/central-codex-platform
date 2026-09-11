@@ -59,8 +59,8 @@ pub struct DesktopRuntime(pub RwLock<RuntimeInner>);
 
 pub fn normalize_gateway(raw: &str, agent: bool) -> Result<String, String> {
     let mut url = Url::parse(raw.trim()).map_err(|_| "请输入有效的中央网关地址")?;
-    if url.scheme() != "ws" || url.host_str().is_none() {
-        return Err("当前局域网版本使用 ws:// 中央网关地址".into());
+    if !["ws", "wss"].contains(&url.scheme()) || url.host_str().is_none() {
+        return Err("请输入 ws:// 或 wss:// 中央网关地址".into());
     }
     if !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() {
         return Err("网关地址不能包含密码、用户凭据或片段".into());
@@ -102,9 +102,15 @@ fn validate_identifier(label: &str, value: &str) -> Result<String, String> {
 pub fn ui_url(config: &DesktopConfig) -> String {
     let mut url = Url::parse(&config.gateway_url).expect("validated gateway");
     url.set_path("/ws");
-    url.query_pairs_mut()
-        .append_pair("userId", &config.user_id)
-        .append_pair("deviceId", &config.device_id);
+    if url.scheme() == "wss" {
+        url.set_query(None);
+        url.query_pairs_mut()
+            .append_pair("deviceId", &config.device_id);
+    } else {
+        url.query_pairs_mut()
+            .append_pair("userId", &config.user_id)
+            .append_pair("deviceId", &config.device_id);
+    }
     url.to_string()
 }
 
@@ -443,7 +449,7 @@ fn identifier_slug(value: &str) -> String {
 }
 
 #[cfg(windows)]
-fn computer_name() -> Option<String> {
+pub(crate) fn computer_name() -> Option<String> {
     use windows_sys::Win32::System::WindowsProgramming::GetComputerNameW;
     let mut buffer = [0u16; 256];
     let mut length = buffer.len() as u32;
@@ -452,7 +458,7 @@ fn computer_name() -> Option<String> {
 }
 
 #[cfg(not(windows))]
-fn computer_name() -> Option<String> {
+pub(crate) fn computer_name() -> Option<String> {
     unsafe extern "C" {
         fn gethostname(name: *mut std::ffi::c_char, len: usize) -> std::ffi::c_int;
     }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use serde_json::{Value, json};
 use std::{
@@ -9,6 +9,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use tauri::Manager;
+mod platform;
 mod runtime;
 use runtime::{DesktopConfig, DesktopRuntime};
 use std::{
@@ -217,6 +218,18 @@ fn spawn_local_agent(config: &DesktopConfig) -> Result<Child, String> {
     let gateway = runtime::agent_url(config);
     let workspace_text = workspace.to_string_lossy().into_owned();
     let mut command = Command::new(executable);
+    if config.gateway_url.starts_with("wss://") {
+        let (namespace, directory) = platform::LAUNCH_CONTEXT.get().ok_or("平台应用标识不可用")?;
+        let c = platform_security::device_token::load(directory, namespace, &config.gateway_url)?;
+        if c.device_id != config.device_id || c.user.id != config.user_id {
+            return Err("请先用中央配对码配对并应用设备身份".into());
+        }
+        command.env("YUAN_PLATFORM_NAMESPACE", &namespace);
+        command.env("YUAN_PLATFORM_DATA_DIR", directory);
+        let ca = platform::PlatformState::new(namespace.clone(), directory.clone())
+            .ca(&config.gateway_url)?;
+        command.env("YUAN_PLATFORM_CA", ca);
+    }
     command
         .args([
             "--workspace-root",
@@ -241,6 +254,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            let namespace = app.config().identifier.clone();
+            let directory = app.path().app_config_dir()?;
+            let _ = platform::LAUNCH_CONTEXT.set((namespace.clone(), directory.clone()));
+            app.manage(platform::PlatformState::new(namespace, directory));
             let suggested_workspace = app
                 .path()
                 .document_dir()
@@ -258,7 +275,10 @@ fn main() {
             attachment_device_id,
             desktop_config,
             apply_desktop_config,
-            select_workspace_directory
+            select_workspace_directory,
+            platform::platform_account,
+            platform::platform_ws_open,
+            platform::platform_ws_send
         ])
         .on_window_event(move |window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {

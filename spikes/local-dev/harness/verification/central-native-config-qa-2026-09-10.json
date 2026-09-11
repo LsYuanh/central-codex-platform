@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-10",
+  "scope": "Windows central preparatory configuration and partial runtime inspection",
+  "status": "native-ui-save-inspect-restart-passed",
+  "nativeUnitTestsPassed": 11,
+  "frontendBuildPassed": true,
+  "frontendDraftSmokePassed": true,
+  "frontendManagementSmokePassed": true,
+  "managementContractSmokeChecksPassed": 46,
+  "cargoFmtPassed": true,
+  "cargoCheckPassed": true,
+  "nativeUi": {
+    "qaApplicationId": "com.yuanzhou.central.native-config-qa-20260910",
+    "saveRevision": 1,
+    "persistedReceipts": 1,
+    "configRestoredAfterAppRestart": true,
+    "normalApplicationConfigCreated": false,
+    "requestedDataDirectoryCreated": false,
+    "inspectionComponents": 6,
+    "systemAndPortPassed": true,
+    "packageTlsDirectoryIsolationNotFullyChecked": true,
+    "portReleased": true,
+    "qaPort": 14522,
+    "qaApplicationClosed": true
+  },
+  "limitations": {
+    "effectiveRuntimeConfigurationApplied": false,
+    "serviceStartStopImplemented": false,
+    "accountAccessImplemented": false,
+    "windowsWorkerProductionEnabled": false,
+    "macosNativeStorageEnabled": false,
+    "credentialStorageSecurityQualified": false,
+    "sameUserMaliciousDirectoryMutationIsolationClaimed": false,
+    "maxStoredReceipts": 1024,
+    "maxStoreBytes": 4194304
+  },
+  "formal4510Modified": false,
+  "installedClientModified": false,
+  "realCredentialsReadThisBatch": false
+}

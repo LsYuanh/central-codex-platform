@@ -2,6 +2,9 @@
 
 import type { AppServerClientInfo, AppServerMessage, JsonRpcId } from "./app-server-client";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { NativeGatewaySocket } from "./native-gateway-socket";
+import {gatewayAuthCode,gatewayAuthNotice} from "./gateway-auth-error";
+import {centralTransportNotice} from "./platform-pairing-state";
 
 type GatewayEnvelope = {
   type?: string;
@@ -33,19 +36,27 @@ type PendingRequest = {
 };
 
 type MessageListener = (message: AppServerMessage) => void;
+function connectionError(message:string):string {
+  const code=gatewayAuthCode(message);
+  return code?gatewayAuthNotice(code):centralTransportNotice(message)??message;
+}
+function terminalIdentityError(message:string):boolean {
+  return gatewayAuthCode(message)!==undefined||/请先登录|请应用/.test(message);
+}
+export type DeviceMethod = "workspace/list" | "read_file" | "exec" | "workspace/git_diff";
 
 export interface RpcClient {
   readonly connected: boolean;
   subscribe(listener: MessageListener): () => void;
   connect(): Promise<AppServerMessage>;
   request(method: string, params?: Record<string, unknown>): Promise<AppServerMessage>;
-  requestDevice?(method: "workspace/list" | "read_file" | "exec", params?: Record<string, unknown>): Promise<AppServerMessage>;
+  requestDevice?(method: DeviceMethod, params?: Record<string, unknown>): Promise<AppServerMessage>;
   respond(id: JsonRpcId, result: unknown): void;
   close(): void;
 }
 
 export class PlatformGatewayClient implements RpcClient {
-  private socket: WebSocket | undefined;
+  private socket: WebSocket | NativeGatewaySocket | undefined;
   private nextId = 1;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly listeners = new Set<MessageListener>();
@@ -93,32 +104,40 @@ export class PlatformGatewayClient implements RpcClient {
       if (target.searchParams.get("deviceId") !== identity.deviceId) throw new Error("中央连接设备 ID 与本机 Local Agent 不一致，请检查连接设置");
     }
     if (this.closedByUser) throw new Error("中央连接已取消");
-    const socket = new WebSocket(target);
+    if(target.protocol==="wss:"&&!isTauri())throw Error("平台登录连接需要桌面客户端");
+    const socket = target.protocol==="wss:" ? new NativeGatewaySocket() : new WebSocket(target);
     this.socket = socket;
     // Install all handlers before awaiting `open`: gateway.ready and device
     // status may be sent immediately after the WebSocket handshake.
-    socket.addEventListener("message", (event) => this.handleMessage(String(event.data)));
+    socket.addEventListener("message", (event) => {
+      if (this.socket === socket) this.handleMessage(String((event as MessageEvent).data));
+    });
     socket.addEventListener("close", () => this.handleClose(socket));
     socket.addEventListener("error", () => undefined);
     try {
       await new Promise<void>((resolve, reject) => {
-        const timeout = window.setTimeout(() => reject(new Error("中央测试网关连接超时")), 8_000);
+        const cleanup=()=>{window.clearTimeout(timeout);socket.removeEventListener("open",onOpen);socket.removeEventListener("error",onError);socket.removeEventListener("close",onClose);};
+        const timeout = window.setTimeout(() => {cleanup();reject(new Error("中央测试网关连接超时"));}, 8_000);
         const onOpen = () => {
-          window.clearTimeout(timeout);
+          cleanup();
           resolve();
         };
         const onError = () => {
-          window.clearTimeout(timeout);
-          reject(new Error(`无法连接中央测试网关：${this.url}`));
+          cleanup();
+          if(socket instanceof NativeGatewaySocket && terminalIdentityError(socket.failureError))this.stopReconnect();
+          reject(new Error(socket instanceof NativeGatewaySocket && socket.failureError ? connectionError(socket.failureError) : `无法连接中央测试网关：${this.url}`));
         };
+        const onClose=()=>{cleanup();reject(new Error(socket instanceof NativeGatewaySocket&&socket.failureError?connectionError(socket.failureError):"中央连接在建立前关闭"));};
         socket.addEventListener("open", onOpen, { once: true });
         socket.addEventListener("error", onError, { once: true });
+        socket.addEventListener("close", onClose, { once: true });
       });
 
       const initialized = await this.request("initialize", {
         clientInfo: this.clientInfo,
         capabilities: {},
       });
+      this.emit({method:"gateway/capabilities", params:asRecord(initialized.result).platformCapabilities});
       const wasReconnect = this.everConnected;
       this.everConnected = true;
       this.reconnectAttempt = 0;
@@ -139,7 +158,7 @@ export class PlatformGatewayClient implements RpcClient {
   }
 
   /** Device Broker operations intentionally use a separate stable namespace from App Server methods. */
-  public async requestDevice(method: "workspace/list" | "read_file" | "exec", params: Record<string, unknown> = {}): Promise<AppServerMessage> {
+  public async requestDevice(method: DeviceMethod, params: Record<string, unknown> = {}): Promise<AppServerMessage> {
     const operation = deviceOperationForMethod(method);
     if (!operation) throw new Error(`中央 Device Broker 不支持 ${method}`);
     return this.requestOperation(operation, params);
@@ -166,21 +185,27 @@ export class PlatformGatewayClient implements RpcClient {
   }
 
   public close(): void {
-    this.closedByUser = true;
-    if (this.reconnectTimer !== undefined) {
-      window.clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = undefined;
-    }
+    this.stopReconnect();
     this.rejectPending(new Error("中央测试网关客户端已断开"));
     this.socket?.close();
     this.socket = undefined;
   }
 
-  private handleClose(socket: WebSocket): void {
+  private stopReconnect():void {
+    this.closedByUser = true;
+    if (this.reconnectTimer !== undefined) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+  }
+
+  private handleClose(socket: WebSocket | NativeGatewaySocket): void {
     if (this.socket !== socket) return;
-    this.rejectPending(new Error("中央测试网关连接已关闭"));
+    const code=socket instanceof NativeGatewaySocket?gatewayAuthCode(socket.failureError):undefined;
+    if(code)this.stopReconnect();
+    this.rejectPending(new Error(code?gatewayAuthNotice(code):"中央测试网关连接已关闭"));
     this.socket = undefined;
-    this.emit({ method: "gateway/disconnected", params: { url: this.url } });
+    this.emit({ method: "gateway/disconnected", params: { url: this.url,...(code?{code,error:gatewayAuthNotice(code),retryable:false}:{}) } });
     if (this.options.autoReconnect !== false && this.everConnected && !this.closedByUser) {
       this.scheduleReconnect();
     }
@@ -212,7 +237,13 @@ export class PlatformGatewayClient implements RpcClient {
       if (!pending) return;
       window.clearTimeout(pending.timer);
       this.pending.delete(message.requestId);
-      if (message.ok === false) pending.reject(new Error(message.error ?? "中央测试网关请求失败"));
+      if (message.ok === false) {
+        const error=message.error??"中央测试网关请求失败";
+        if(terminalIdentityError(error))this.stopReconnect();
+        pending.reject(new Error(connectionError(error)));
+        const code=gatewayAuthCode(error);
+        if(code&&this.socket instanceof NativeGatewaySocket){this.socket.failureError=code;this.socket.close();}
+      }
       else pending.resolve({ result: message.data });
       return;
     }
@@ -271,6 +302,7 @@ function operationForMethod(method: string): string | undefined {
     "thread/delete": "conversation.delete",
     "thread/name/set": "conversation.rename",
     "turn/start": "conversation.turn.create",
+    "turn/steer": "conversation.turn.steer",
     "turn/interrupt": "conversation.turn.cancel",
     "message/status": "conversation.message.status",
     "message/cancel": "conversation.message.cancel",
@@ -284,6 +316,7 @@ function deviceOperationForMethod(method: string): string | undefined {
     "workspace/list": "device.workspace.list",
     read_file: "device.read_file",
     exec: "device.exec",
+    "workspace/git_diff": "device.workspace.git_diff",
   }[method];
 }
 

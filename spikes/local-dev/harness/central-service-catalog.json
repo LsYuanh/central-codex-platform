@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "id": "windows-x64-node24-qa1-74b3e6f43896219f",
+      "label": "Windows 中央服务 · Node 24 完整验证候选",
+      "version": "0.153.4",
+      "platform": "win32",
+      "architecture": "x86_64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 176002,
+        "sha256": "74b3e6f43896219f00d4e3fd8dffafe8f98ffc8c91c50e097a2d60d3f27a8449"
+      },
+      "fileCount": 864,
+      "entrypoint": "app/gateway/dist/index.js",
+      "node": "bin/node.exe",
+      "host": "bin/windows-worker-host.exe",
+      "appServer": "bin/codex-app-server.exe",
+      "privateHelper": "bin/central-native-helper.exe",
+      "blockers": [
+        "AUTHENTICATED_RUNTIME_ACCEPTANCE_PENDING",
+        "FULL_NETWORK_ISOLATION_ACCEPTANCE_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-f9da69601a5bf94e",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 175632,
+        "sha256": "f9da69601a5bf94ebe6aeb290c55fee933d2733a0881ac1580c28d772161b264"
+      },
+      "fileCount": 863,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
+    }
+  ]
+}

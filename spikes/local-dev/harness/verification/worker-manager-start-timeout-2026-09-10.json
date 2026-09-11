@@ -1,0 +1,12 @@
+{
+  "scope": "worker-manager-start-timeout",
+  "passed": true,
+  "checks": 3,
+  "command": "node scripts/worker-manager-start-timeout-smoke.mjs",
+  "startupTimeoutMs": 120,
+  "failedRequestReplayed": false,
+  "lateBridgeClosedOnce": true,
+  "slotRetainedUntilMatchingExit": true,
+  "replacementExplicitRequestOnly": true,
+  "productionWindowsWorkerEnabled": false
+}

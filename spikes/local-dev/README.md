@@ -1,6 +1,200 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial -->
 
+## 中央管理开发版（2026-09-11 更新）
+
+Windows 最新测试包统一了配对、授权检查及桌面/Agent WSS 的 Rustls 实现，并提供证书与网络分类错误码，用于排查旧 Windows 配对成功后连接失败。凭据格式不变，保留此前全部修复。16 组原生 TLS、27 项安全库、19 项 Agent 与正式桌面模型/工具验收通过；用户 Windows 8.1 现场尚待复测。安装包见[TLS 统一与旧 Windows 连接验收](../../docs/客户端TLS统一与旧Windows连接验收-2026-09-11.md)。
+
+Windows 客户端最新包已修复执行中及完成后多层滚动和输入框遮挡：执行记录进入对话滚动区，结束后默认折叠。真实模型与 Local Agent 长日志、三种窗口尺寸的运行/完成状态及手动展开共 7 组检查通过。安装包见[执行记录布局修复与验收](../../docs/客户端执行记录布局修复与验收-2026-09-11.md)，包含此前配对、无终端及首次发送修复。
+
+Windows 客户端最新测试包已修复首次发送携带旧 `serviceName` 被网关拒绝的问题，保留一体配对和无终端启动。实际 Tauri 页面 GPT-5.6-Sol/high 新建对话、首条发送与后续回复通过；交付包与复现入口见[首次发送修复与验收](../../docs/客户端首次发送serviceName修复与验收-2026-09-11.md)。
+
+最新客户端已支持“一体配对码”：中央端生成并复制，客户端只需粘贴并点击“配对并连接”，自动处理地址、公共 CA 和设备名，保留当前工作区。中央 Mac 已更新，Windows 和 Apple Silicon 客户端测试安装包已生成，真实 Windows Tauri 配对、设备重连及正式模型链路通过。步骤、安装包和验收边界见[客户端一体配对码实施与验收](../../docs/客户端一体配对码实施与验收-2026-09-11.md)。下文手工导入 CA 仅适用于旧版或高级配置。
+
+Mac Apple Silicon 中央 App 已构建、安装，并经用户批准将正式 `192.0.2.10:4510` 切换到 App 管理的 **WSS＋平台登录**。Windows 原生设备配对、Local Agent 重启重连、真实模型读取/命令、设备撤销及 Mac App 退出重启通过。旧 WS 客户端须重新配置 CA 与配对；旧历史保留原目录/备份，尚未映射新账号。测试 DMG、管理员密码文件位置、Mac 构建入口与回退方法见 [macOS 打包与正式迁移验收](../../docs/中央管理App-macOS打包与正式4510迁移验收-2026-09-11.md)。当前仍为 ad-hoc 签名 Debug 测试包，Mac 逐页视觉验收待本地测试。以下“正式 4510 未切换”记录均为此前批次状态。
+
+独立 Windows 安装验收版已完成初装、同版覆盖、0.1.0 → 0.1.1 升级、运行中安装/卸载阻断、静默降级拒绝及卸载重装数据保留。实际安装版的诊断版本、合成账号恢复、完整网关启动和窗口退出清理通过。打包入口为 `node scripts/package-central-qa.mjs --version 0.1.0` 或 `0.1.1`；只读实装校验为 `node scripts/verify-central-qa-installed.mjs --build <成功构建目录的绝对路径>`。脚本不自动安装或启动，QA 身份及安装目录固定；仍为未签名 Debug 候选。限制与完整证据见[Windows 安装与升级验收](../../docs/中央管理App-Windows安装与升级验收-2026-09-11.md)。
+
+“设置与诊断”已增加当前受管服务故障与恢复建议、已保存并发设置、诊断 JSON 预览与本机导出。报告按采集时点展示，手动刷新；不含目录、连接地址、账号凭据、用户设备标识或完整日志。保存时重新采集并拒绝覆盖已有文件，取消不写入。说明及验收见[设置与诊断交接](../../docs/中央管理App-设置与诊断-2026-09-10.md)。
+
+现有 `apps/central` 已接通 Windows 账号检测/DPAPI 导入、完整候选包核验、首次管理员设置、原生服务启停及用户与设备管理。开发入口 `npm run dev:central-app`；候选资源需要按内置清单准备，Release 仍拒绝未取得正式资格的包。运行方式见[账号与服务启停交接](../../docs/中央管理App-账号与服务启停-2026-09-10.md)，最新管理流程见[用户与设备管理交接](../../docs/中央管理App-用户与设备管理-2026-09-10.md)。
+
+在运行概览启动验证服务后，进入“用户与设备”，使用首次启动时设置的平台管理员登录；新建配对专用用户，再生成限时一次性配对码。设备列表显示已认证 Local Agent 的在线状态和本次网关运行期间最近活动。停用用户或撤销设备前页面会明确目标及影响。管理员令牌只保留在原生内存，配对码只显示在页面内存；停止服务或退出管理员会清除会话。请求超时后须刷新核对，不会自动重发修改。
+
+管理回归：`node scripts/central-people-gateway-smoke.mjs`。完整原生管理链路验证需先 staging 内置候选包，设置 `CENTRAL_SERVICE_QA_RESOURCES` 为本目录的绝对 `target` 路径，再运行 `cargo test -p central-app --offline native_owned_gateway_people_tls_auth_mutations_and_refresh_qa -- --ignored --nocapture`。该测试使用临时合成账号、证书和设备，不调用真实模型。
+
+当前原生管理入口已完成真实模型与同机 Local Agent 验收：2 次模型读取、1 次客户端命令，设备撤销、Agent 退出和临时凭据清理通过；登录后 Tauri 列表、选择、确认框与取消交互也已实测。复现需先构建 `platform-security --example central-live-client` 和 `local-agent`；真实模型测试必须显式 opt-in，并指定一个尚不存在的 run 目录下的 `result.json`。完整命令、权限上下文、失败记录和覆盖边界见[真实链路与登录后界面验收](../../docs/中央管理App-真实链路与登录后界面验收-2026-09-10.md)。本轮没有更新正式中央服务。
+
+下方中央 App 首版段落保留开发历史；完成状态以本节及最新交接为准。
+
+运行概览现已展示受管网关的在线设备、活动任务及用户 Worker 实时统计，每 2 秒刷新。统计过期或读取失败时隐藏数字并提供恢复状态；服务停止且清理确认后显示零。真实模型与同机 Local Agent 已验证空闲、活动、完成和撤销后的指标变化。需使用完整候选 `windows-x64-node24-qa1-74b3e6f43896219f`；旧包不发送统计。检查入口为 `node scripts/central-overview-metrics-smoke.mjs` 与 `node scripts/central-service-host-smoke.mjs --metrics-only`，口径、状态和验收边界见[运行概览指标与验收](../../docs/中央管理App-运行概览指标与验收-2026-09-10.md)。
+
 # 本地纵向技术 Spike
+
+## 中央管理 App 开发交接（2026-09-10）
+
+用户已确认开发独立中央管理 App，Windows 和 macOS 均须能实际作为中央端。
+第一版目标涵盖首次配置、服务启停、用户与设备、模型管理及诊断。现有 `apps/central` 提供独立 Tauri 窗口、运行概览、三步配置、原生预备配置和资源检查。服务启停、账号接入和正式安装包尚未完成。
+最新 Windows 更新：网关已接入显式原生 Worker 候选模式、原生凭据读取及限时停止流程，真实初始化、双用户进程与目录、同用户重启和退出检查通过。独立 Node 网关候选资源可附带 Host/App Server/helper；仍未取得中央 App 启动或正式分发资格。构建、参数和验收边界见 [Windows Worker 与网关候选包](../../docs/中央管理App-Windows-Worker与网关候选包-2026-09-10.md)。
+后续更新：Windows 已接通非秘密预备配置的原生校验、原子保存、版本冲突保护、重启恢复与六项基础运行检查；尚未应用为实际运行服务配置。macOS 原生保存暂不可用。详见 [原生配置与检查验收](../../docs/中央管理App-原生配置与检查验收-2026-09-10.md)。
+开发范围、代码入口、Windows Worker 隔离缺口及分阶段验收见
+[中央管理 App 开发交接与后续计划](../../docs/中央管理App开发交接与后续计划-2026-09-10.md)。
+本批配置、管理身份、启停状态与接口边界见
+[P0 接口与运行设计](../../docs/中央管理App-P0接口与运行设计-2026-09-10.md)。
+
+中央 UI 开发入口（在本目录运行）：
+
+```powershell
+npm run dev:central-app
+# 仅浏览器预览，127.0.0.1:1422
+npm run dev:central-ui
+npm run build --workspace @central-codex-spike/central
+node --no-warnings --experimental-strip-types scripts/central-ui-draft-smoke.ts
+node --no-warnings --experimental-strip-types scripts/central-ui-management-smoke.ts
+cargo test -p central-app --offline
+```
+
+两种开发入口择一运行，避免争用 1422。原有 `dev:central` 仍用于网关与工作客户端联合开发。
+中央 App 仅管理安装它的本机；本版不会连接现有正式中央、启动 Local Agent 或读取模型登录。
+草稿使用独立本地存储键 `yuanzhou.central.setup-draft.v1`，不含凭据，浏览器与桌面分别保存；它不是正式生效配置。
+Windows 桌面 App 在第三步提供“保存本机配置”：原生存储位于应用数据目录 `config/central-config.json`，中央数据默认位于独立 `central-data` 子目录。保存不会创建用户库、读取登录或启动服务。
+第三步现可选择受信清单中的候选运行包、核验实际文件，并通过原生目录选择器导入服务器证书。证书包由 Windows DPAPI 加密保存，普通配置仅保存资源 ID；列表与启动前检查均重新验证证书。候选包缺少完整网关与正式 Windows Worker，文件哈希通过仍不能启动。验收使用独立 QA 应用标识，正常应用没有写入测试配置。
+可选资源打包流程、证书格式及最新验证见 [运行资源与证书接入](../../docs/中央管理App-运行资源与证书接入-2026-09-10.md)。
+实际界面与验证边界见 [中央管理 UI 首版记录](../../docs/中央管理App-UI首版与验收-2026-09-10.md)。
+
+认证工作最新检查点：RC3 双平台真实链路、Windows RC4 重新配对和撤销终态通过；
+Mac RC4 仍待具体源码包上传批准及最终验收，上一轮结束时 4529 已停止，正式 4510 未更新。
+下方早期阶段条目保留为历史说明，具体完成状态以
+[简化设备认证验收记录](../../docs/简化设备认证实施与验收-2026-09-09.md)为准。
+
+## 简化设备认证（RC3/Windows RC4 已验收，未正式发布）
+
+2026-09-09 用户确认改为 HTTPS/WSS + 管理员一次性配对码 + 可撤销设备令牌。
+现有客户端设置页使用配对码和本机名称，不再要求平台账号密码或设备证书续期；
+服务端 CA 与主机名验证保留。Windows 使用当前用户 DPAPI + ACL，macOS 实现使用
+当前用户 `0700/0600` 私有文件（内容未加密），不依赖 Keychain。
+中央管理员负责发码和设备管理，设备令牌本身没有管理员权限。
+
+默认切换经用户明确批准；模块检查、RC3 双平台真实 4529 链路，以及 Windows RC4
+重新配对、撤销终态和实际 Tauri 页面已有验收记录。Mac RC4、新认证安装/升级/回退仍待完成，
+正式 4510 未切换，候选仍为 `deployable=false`。旧 Mac Keychain/mTLS 验收由新方向取代，
+下文旧批次保留历史，不能代替新候选验收。旧设备需重新配对，历史执行绑定不自动迁移；
+Windows 中央 Worker 隔离仍为后续工作。详见
+[简化设备认证实施与验收](../../docs/简化设备认证实施与验收-2026-09-09.md)。
+
+## 设备证书与 mTLS（P5 第四批历史方案，未发布）
+
+以下记录适用于原 mTLS 方案，不是上述已批准的新默认方案。
+
+真实平台认证模式新增必填 `PLATFORM_DEVICE_CA_CONFIG`，指向中央设备 CA 配置。
+管理员在中央机执行 `node scripts/device-ca-init.mjs --directory /绝对路径/新的私有目录`，
+将输出的配置路径交给网关；目录必须不存在，且必须位于 Worker 根目录之外。
+此 CA 专用于设备认证，HTTPS 服务端证书仍使用 `PLATFORM_TLS_CERT` / `PLATFORM_TLS_KEY`。
+默认设备证书有效 7 天，提前 1 天由 Agent 自动续期；CA 自身有效 1 年，需要管理员另行轮换。
+
+客户端配对时本机生成 RSA-2048 TLS 私钥，独立存于系统凭据库；中央只收到公钥。
+Agent 的 WSS 接入同时校验设备签名票据和 mTLS 证书。登录、初次配对和 UI 接口仍可
+在没有设备证书时访问，以便恢复账号和重新配对；它们不能代替 Agent 证书检查。
+续期通过 mTLS 认证并只延长相同设备和平台会话的已连接 Agent 授权，不中断执行中的命令。
+未续期的证书到期或设备被吊销时，现有设备连接关闭并取消客户端命令。
+过期、吊销和缺失证书会在原有设置页显示，重新使用需显式配对。
+
+旧配对身份不会自动获得证书；切换至本版前要准备 CA 并重新配对。旧历史的设备绑定
+不会因重新配对而绕过，跨设备恢复仍遵守原有工作区边界。
+自动恢复旧设备对话被拒绝时，客户端保留正常中央连接，显示明确提示并允许新对话。
+只有明确声明且监听 loopback 的协议 fixture 可省略 CA；真实中央无降级开关。
+本批开发验收入口是 `qa-control.mjs start-mtls`，只使用 4529 和新的第四批 QA 数据目录。
+本批验收记录见[设备证书与 mTLS 生命周期](../../docs/设备证书与mTLS生命周期-2026-09-09.md)。
+
+## 开源 Harness 隔离改造（2026-09-09，未发布）
+
+当前源码中央网关要求固定 Codex `rust-v0.153.4` 的远端工作区补丁，初始化缺少
+`yuan-zhou-remote-workspace/1` 标识时明确拒绝；不回退到中央本机执行。
+准备/构建脚本位于 `harness/`，正式 4510 服务未替换。新 Agent 需要声明
+`remote-workspace/v1` 和 canonical workspaceRoot；Thread 绑定设备安装 key/工作区，
+同名设备或工作区变化不能续接执行。原生图片生成、插件、子代理暂未适配，UI 明示不可用。
+
+客户端支持项目规则、分页搜索/读取、Codex 格式补丁预检与单次审批、实际 Git diff。
+审批后重新核验文件 SHA-256；多文件部分失败、断线及未知结果不得自动重放。
+`npm run harness:check` 验证 UI/协议；`npm run harness:workspace-smoke` 使用独立构建的
+真实 Windows Agent（默认 `target/harness-agent/debug/local-agent.exe`）。这些测试不替代
+中央模型真实闭环。实施、版本、验证缺口与回退见
+[Harness 实施与验收](../../docs/Harness实施与验收-2026-09-09.md)。
+
+P4 补充：Windows Agent 使用进程 Job，强制退出也会清理命令后代；网关状态原子写入，
+坏状态拒绝启动、写入失败停止推理。共享只读登录禁用刷新/撤销请求，过期明确报错并由
+凭据所有者更新。重启保留历史与提交幂等记录，中断任务不会自动重放。
+旧历史/附件、审批冲突、断线和真实重启证据及测试命令见
+[P4 兼容与故障验收](../../docs/Harness-P4兼容与故障验收-2026-09-09.md)。
+
+## 平台登录与设备身份（P5 第一批，未发布）
+
+网关设置 `PLATFORM_AUTH_FILE` 后启用平台账号、设备配对和吊销，并要求
+`PLATFORM_TLS_CERT` / `PLATFORM_TLS_KEY`；该模式仅提供 HTTPS/WSS，拒绝 URL 的
+`userId` 冒用与未验证 Agent，关闭所有测试控制入口。首次管理员用
+`node scripts/platform-auth-bootstrap.mjs` 离线建立：通过 stdin 提交 JSON 的
+`username` / `password`，密码不放在命令参数、环境变量或仓库文件中。
+已有身份库的账号管理使用认证的 `/auth/admin/user/create` 等 API。
+
+桌面设置填写 `wss://中央地址:端口/ws` 后显示平台登录；登录、配对，再保存工作区配置。
+用户/设备 ID 由服务端分配且不可编辑。私有 CA 只配置管理员提供的 PEM 公共证书路径，
+不得关闭证书或主机名校验；公开受信任证书无需额外设置。访问/刷新令牌和设备私钥保存在
+原生系统凭据库；设备签名在 Agent 执行，客户端仍只主动出站连接。
+
+验证：`node scripts/platform-auth-smoke.mjs` 和 `node scripts/platform-auth-live-smoke.mjs`。
+后者需要 Windows 原生 QA 工具和 OpenSSL，在独立临时目录进行 TLS/双 Agent 检查。
+真实中央、原生页面、配置保留及边界见
+[平台登录与设备身份实施](../../docs/平台登录与设备身份实施-2026-09-09.md)。
+本批不代表完整 P5：Worker 操作系统隔离、正式模型凭据策略、mTLS 证书签发与更新、发布安装升级仍需后续验收。
+
+## 按用户 Worker 与持久审计（P5 第二批，未发布）
+
+启用平台认证后，每用户懒启动独立 App Server，使用独立 `CODEX_HOME` 和运行目录。
+默认最多 8 个 Worker、每用户 2 个活动 Turn、全局 8 个活动 Turn；超额明确拒绝。
+一个 Worker 崩溃仅影响其所属用户；重新连接后可恢复原目录中的历史，未完成操作不自动重发。
+故障时在连接设置中断开后重新连接，再恢复对话核对结果。空闲 5 分钟且无任务/RPC 时回收 Worker。
+
+`PLATFORM_WORKER_ROOT` 指定用户运行数据根目录；`PLATFORM_AUDIT_DIR` 指定持久审计目录，
+认证模式下默认启用分段日志。损坏日志拒绝启动，写入失败停止执行；部署须保证单网关写者。
+管理员认证后可读取 `/workers` 与 `/audit`，后者返回最近 1000 项，完整历史留在中央审计目录。
+旧共享 Worker 历史需要显式迁移；发现缺少 `workerLayout=per-user/v1` 的既有 Thread 时拒绝启动，
+不会悄悄切到空用户目录。正式 4510 尚未切换。
+
+验证：构建网关后运行 `npm run workers:smoke`、`node scripts/worker-routing-smoke.mjs`。
+真实中央专项复用 `platform-auth-live-smoke.mjs`，设置 `PLATFORM_QA_CENTRAL=1` 和
+`PLATFORM_WORKER_QA=1`；该开发探针只控制指定 4529 QA 环境。
+配置、14 项真实中央验收与边界详见[按用户 Worker 管理实施与验收](../../docs/按用户Worker管理实施与验收-2026-09-09.md)。
+
+## Worker 权限与模型凭据隔离（P5 第三批，未发布）
+
+> P5 第三批更新：当前认证网关强制使用中央模型凭据代理及 macOS Worker 沙箱，
+> 除身份/TLS 配置外还要求 `PLATFORM_MODEL_BINDINGS`、`PLATFORM_WORKER_BINARY` 与
+> `PLATFORM_WORKER_BINARY_SHA256`。旧共享 auth/config 需显式迁移，不会直接续用。
+> Worker 只接收按用户撤销的代理令牌，真实模型凭据留在中央网关；缺失、停用与过期有明确错误。
+> 中央运维用 `node scripts/model-access-configure.mjs` 经 stdin 配置用户绑定，模型凭据不能放入 Worker 目录。
+> 本机 Node 协议夹具须明确设置 `PLATFORM_WORKER_ISOLATION=protocol-fixture`，只允许回环监听；
+> 该模式不提供真实 Worker 隔离验收。验证命令：`node scripts/model-credential-broker-smoke.mjs`，
+> 中央实际 syscall 验证：`node harness/worker-isolation-smoke.mjs`。
+> 当前进度、配置和验收边界见 [Worker 权限与模型凭据隔离](../../docs/Worker权限与模型凭据隔离-2026-09-09.md)。
+
+## 运行中追加要求（2026-09-07）
+
+中央网关模式下，当前 Turn 运行时可以继续输入文字，按 Enter 或点击“追加要求”；
+独立的“停止当前任务”按钮始终保留。每条追加显示发送中、已接收、失败或待核对。
+前一条接收后即可发送下一条；首版不支持追加图片/文件，模型与推理设置供下一轮使用。
+追加影响后续行为，正在生成的内容或执行中的命令可能先完成；不会撤销已完成的修改。
+
+平台操作 `conversation.turn.steer` 携带 `threadId`、`expectedTurnId`、`clientMessageId` 和文字
+`input`，网关校验所属用户/设备，复用提交记录去重，再调用中央 `turn/steer`。
+仅在上游明确拒绝“无活动 Turn”、历史确认目标轮正常完成、当前无活动轮且未请求停止时，
+自动用同一消息 ID 发起下一轮。超时、断线、Turn 不匹配和已停止均不会自动重发。
+历史按消息标识精确匹配，流式助手消息按 item ID 更新；追加失败不清除原 Turn 的运行状态。
+
+验证命令：`npm run steering:smoke`、`npm run steering:gateway-smoke`。
+真实验收需显式设置 `STEERING_GATEWAY_URL` 后运行 `node scripts/steering-live-smoke.mjs`，
+使用中央 App Server 和 Windows 客户端现有 Local Agent，测试进程结束时关闭测试 Agent。
+详见 [运行中追加实施与验收](../../docs/运行中追加要求实施与验收-2026-09-07.md)。
+2026-09-07 已完成中央机隔离验收和 4510 正式网关部署，正式链路追加、续发及停止验证通过。
+开发桌面使用当前前端；旧安装版需重新构建客户端安装包后分发。
 
 ## 长任务状态与实时命令输出（2026-09-04）
 
@@ -406,3 +600,7 @@ Thread 隔离由网关强制执行，客户端不能通过 payload 自行指定�
 - 不复制 Codexia 或 Soromi 源代码；
 - 不提供登录、数据库、生产认证或完整审计；
 - 当前 `services/test-gateway` 是 Day 3/Day 4 的本地 Spike 和中央机测试网关，仍需补齐固定版本 Codex App Server 管理、平台认证、Worker 隔离、正式 WSS/mTLS、审批/审计和多用户路由。
+
+## 发布候选与迁移准备（2026-09-09）
+
+使用 `npm run package:desktop -- --rc` 构建独立 RC，升级版本加 `--rc-version 0.2.0-rc.2`；产物不是正式切换。Windows 安装/升级/回退、mTLS 续期和重新配对验收已通过；Mac arm64 包构建通过，原生 Keychain 与生命周期验收等待现场检查。迁移工具仅完成离线预检与合成备份恢复，真实共享历史导入尚未实现。详见[本批验收记录](../../docs/发布候选与迁移准备验收-2026-09-09.md)。
