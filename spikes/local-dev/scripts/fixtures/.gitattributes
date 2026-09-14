@@ -1,0 +1,2 @@
+# Preserve the exact bytes covered by the committed public signature on every OS.
+update-payload.txt -text whitespace=cr-at-eol

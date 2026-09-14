@@ -51,7 +51,7 @@ try {
  await new Promise((r,j)=>{agent.once('open',r);agent.once('error',j);});
  const frame=(type,payload,requestId)=>({protocol:'agentrpc',version:1,type,timestamp:new Date().toISOString(),nonce:crypto.randomUUID(),requestId,payload});
  const ready=new Promise(r=>agent.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='agent.hello_ack')r();if(m.type==='agent.request')agent.send(JSON.stringify(frame('agent.response',{ok:true,result:{workspaceRoot:'C:/fixture',rules:[]}},m.requestId)));}));
- agent.send(JSON.stringify(frame('agent.hello',{deviceId:'steering-test-device',agent:{version:'fixture',os:'windows',arch:'x64',deviceKey:'steering-fixture-key',workspaceRoot:'C:/fixture',capabilities:['remote-workspace/v1','workspace/context']}})));await ready;
+ agent.send(JSON.stringify(frame('agent.hello',{deviceId:'steering-test-device',agent:{version:'fixture',os:'windows',arch:'x64',deviceKey:'steering-fixture-key',workspaceRoot:'C:/fixture',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context']}})));await ready;
  const request=await client("steering-owner"); await request("session.initialize");
  const threadId=(await request("conversation.create")).thread.id;
  const turnId=(await request("conversation.turn.create",{threadId,clientMessageId:"message-original",input:[{type:"text",text:"first"}]})).turn.id;

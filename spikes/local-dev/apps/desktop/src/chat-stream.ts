@@ -6,6 +6,8 @@ interface StreamMessage {
   createdAt?: string;
   outputs?: unknown[];
   turnId?: string;
+  kind?: string;
+  itemStatus?: string;
 }
 
 /** Item identity preserves an earlier stream across an interleaved user message. */
@@ -13,10 +15,10 @@ export function appendStreamDelta<T extends StreamMessage>(rows: T[], delta: str
   if (!delta) return rows;
   if (itemId) {
     const id = `assistant-${itemId}`;
-    if (rows.some(row => row.id === id)) return rows.map(row => row.id === id ? {...row,content:row.content + delta,turnId:turnId ?? row.turnId} : row);
+    if (rows.some(row => row.id === id)) return rows.map(row => row.id === id && row.itemStatus !== "completed" ? {...row,content:row.content + delta,turnId:turnId ?? row.turnId} : row);
     return [...rows,{id,role:"assistant",content:delta,createdAt:new Date().toISOString(),turnId}];
   }
   const last = rows[rows.length - 1];
-  if (last?.role === "assistant" && !last.outputs?.length && (!turnId || last.turnId === turnId)) return [...rows.slice(0,-1),{...last,content:last.content + delta}];
+  if (last?.role === "assistant" && !last.kind && last.itemStatus !== "completed" && !last.outputs?.length && (!turnId || last.turnId === turnId)) return [...rows.slice(0,-1),{...last,content:last.content + delta}];
   return [...rows,{id:crypto.randomUUID(),role:"assistant",content:delta,createdAt:new Date().toISOString(),turnId}];
 }

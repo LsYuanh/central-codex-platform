@@ -23,6 +23,13 @@ url = "2.5.8"
 tempfile = "3"
 rfd = "0.15.4"
 uuid = { version = "1", features = ["v4"] }
+tauri-plugin-updater = "2.10.1"
+base64 = "0.22"
+minisign-verify = "0.2.5"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_System_WindowsProgramming"] }
+
+[dev-dependencies]
+tauri = { workspace = true, features = ["test"] }

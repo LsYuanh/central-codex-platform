@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Real Local Agent on this client; loopback AgentRPC transport, no model/central acceptance claim.
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, symlink, chmod } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, symlink, unlink, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, relative } from 'node:path';
+import { deflateSync } from 'node:zlib';
+import { OutputBroker } from '../services/test-gateway/dist/outputs.js';
 import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
@@ -40,7 +42,7 @@ server.on('connection', value => {
     }
   });
 });
-const agent = spawn(process.env.AGENT_SMOKE_BINARY ?? resolve('target/harness-agent/debug/local-agent.exe'), [
+const agent = spawn(process.env.AGENT_SMOKE_BINARY ?? resolve('target/debug/local-agent.exe'), [
   '--workspace-root', directory, '--gateway-url', `ws://127.0.0.1:${server.address().port}/ws/agent?deviceId=${deviceId}`,
   '--attachment-stdio',
 ], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -75,12 +77,48 @@ try {
   assert.equal(search.matches[0].path, 'src/code.txt');
   const wrongDevice = await begin('workspace/context', {}, { binding: { deviceKey: 'wrong' } }).promise;
   assert.equal(wrongDevice.errorCode, 'WORKSPACE_BINDING_MISMATCH');
-  const escaped = await begin('workspace/read_text', { path: '../outside' }).promise;
-  assert.equal(escaped.errorCode, 'WORKSPACE_PATH_DENIED');
   const outside = await mkdtemp(join(tmpdir(), 'codex-harness-outside-'));
-  await writeFile(join(outside, 'outside.txt'), 'DO_NOT_READ');
+  await writeFile(join(outside, 'outside.txt'), 'EXTERNAL_CLIENT_MARKER');
+  await writeFile(join(outside, 'AGENTS.md'), 'EXTERNAL_PROJECT_RULE');
+  assert(hello.capabilities.includes('client-paths/v1'));
+  assert.equal((await call('workspace/read_text', { path: join(outside, 'outside.txt') })).content, 'EXTERNAL_CLIENT_MARKER');
+  assert.equal((await call('workspace/read_text', { path: relative(directory, join(outside, 'outside.txt')) })).content, 'EXTERNAL_CLIENT_MARKER');
+  assert((await call('workspace/context', { path: outside })).rules.some(rule => rule.content === 'EXTERNAL_PROJECT_RULE'));
+  assert((await call('workspace/list', { path: outside })).entries.some(entry => entry.name === 'outside.txt'));
+  assert.equal((await call('read_file', { path: join(outside, 'outside.txt') })).content, 'EXTERNAL_CLIENT_MARKER');
+  assert.equal((await call('workspace/search', { path: outside, mode: 'text', query: 'EXTERNAL_CLIENT_MARKER' })).matches.length, 1);
+  const cwdResult = await call('exec', { program: process.execPath, args: ['-e', 'console.log(require("node:fs").realpathSync(process.cwd()))'], cwd: outside });
+  assert.equal(cwdResult.stdout.trim().toLowerCase(), outside.toLowerCase());
+  execFileSync('git', ['init', '-q', outside], { windowsHide: true });
+  execFileSync('git', ['-C', outside, 'add', '.'], { windowsHide: true });
+  const externalPatch = `*** Begin Patch\n*** Update File: ${join(outside, 'outside.txt').replaceAll('\\', '/')}\n@@\n-EXTERNAL_CLIENT_MARKER\n+EXTERNAL_EDITED_MARKER\n*** End Patch`;
+  const externalPreview = await call('workspace/apply_patch', { patch: externalPatch, dryRun: true });
+  assert.equal((await call('workspace/apply_patch', { ...externalPreview, patch: externalPatch, dryRun: false })).outcome, 'completed');
+  assert.match((await call('workspace/git_diff', { path: outside })).stdout, /EXTERNAL_EDITED_MARKER/);
+  assert.match((await call('workspace/git_status', { path: outside })).stdout, /outside.txt/);
+  const savedText = await call('file/write_text', { name: 'generated.txt', content: 'DEFAULT_OUTPUT_MARKER' });
+  assert.equal(await readFile(join(directory, 'generated.txt'), 'utf8'), 'DEFAULT_OUTPUT_MARKER');
+  assert.equal((await call('file/output_paths')).outputDirectory, hello.workspaceRoot);
+  const outputSummary = {deviceId, deviceKey: hello.deviceKey};
+  const broker = new OutputBroker({ summary: () => outputSummary, deviceKey: () => hello.deviceKey, changed: () => {}, call: async (_, method, params) => begin(method, params).promise });
+  // Use a known valid client-created image; the broker receives inline bytes only.
+  const imageBytes = fixturePng();
+  await broker.image('output-test', 'output-turn', {type:'imageGeneration',id:randomUUID(),status:'completed',result:imageBytes.toString('base64')});
+  const imageOutput = broker.list('output-test')[0];
+  assert.equal(imageOutput.status, 'saved', imageOutput.error);
+  assert.equal(resolve(imageOutput.path), join(directory, imageOutput.name));
+  assert.deepEqual(await readFile(imageOutput.path), imageBytes);
   await symlink(outside, join(directory, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
-  assert.equal((await begin('workspace/read_text', { path: 'escape/outside.txt' }).promise).errorCode, 'WORKSPACE_PATH_DENIED');
+  assert.equal((await call('workspace/read_text', { path: 'escape/outside.txt' })).content.trim(), 'EXTERNAL_EDITED_MARKER');
+  const linkPatch = '*** Begin Patch\n*** Update File: escape/outside.txt\n@@\n-EXTERNAL_EDITED_MARKER\n+LINK_EDITED\n*** End Patch';
+  const linkPreview = await call('workspace/apply_patch', { patch: linkPatch, dryRun: true });
+  const redirected = await mkdtemp(join(tmpdir(), 'codex-harness-link-target-'));
+  await writeFile(join(redirected, 'outside.txt'), await readFile(join(outside, 'outside.txt')));
+  await unlink(join(directory, 'escape')); // Remove only this test's link, never its target.
+  await symlink(redirected, join(directory, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+  const retargeted = await begin('workspace/apply_patch', { ...linkPreview, patch: linkPatch, dryRun: false }).promise;
+  assert.equal(retargeted.errorCode, 'PATCH_APPROVAL_MISMATCH');
+  assert.equal((await readFile(join(redirected, 'outside.txt'), 'utf8')).trim(), 'EXTERNAL_EDITED_MARKER');
   const linkSearch = await call('workspace/search', { query: 'outside' });
   assert.equal(linkSearch.matches.length, 0);
   assert.equal(linkSearch.skippedEntries, 1);
@@ -88,10 +126,10 @@ try {
   const preview = await call('workspace/apply_patch', { patch, dryRun: true });
   assert.equal(await readFile(join(directory, 'src/code.txt'), 'utf8'), 'original\r\nsecond\r\n');
   await writeFile(join(directory, 'src/code.txt'), 'original\r\nchanged-after-preview\r\n');
-  const conflict = await begin('workspace/apply_patch', { patch, patchHash: preview.patchHash, expectedVersions: preview.expectedVersions }).promise;
+  const conflict = await begin('workspace/apply_patch', { patch, patchHash: preview.patchHash, expectedVersions: preview.expectedVersions, expectedPaths: preview.expectedPaths }).promise;
   assert.equal(conflict.errorCode, 'VERSION_CONFLICT');
   const current = await call('workspace/apply_patch', { patch, dryRun: true });
-  const applied = await call('workspace/apply_patch', { patch, patchHash: current.patchHash, expectedVersions: current.expectedVersions });
+  const applied = await call('workspace/apply_patch', { patch, patchHash: current.patchHash, expectedVersions: current.expectedVersions, expectedPaths: current.expectedPaths });
   assert.equal(applied.outcome, 'completed');
   assert.equal(await readFile(join(directory, 'src/code.txt'), 'utf8'), 'modified\r\nchanged-after-preview\r\n');
   const diff = await call('workspace/git_diff');
@@ -104,7 +142,7 @@ try {
   const partialPreview = await call('workspace/apply_patch', { patch: partialPatch, dryRun: true });
   await chmod(join(directory, 'part-two.txt'), 0o444);
   try {
-    const partial = await call('workspace/apply_patch', { patch: partialPatch, patchHash: partialPreview.patchHash, expectedVersions: partialPreview.expectedVersions });
+    const partial = await call('workspace/apply_patch', { patch: partialPatch, patchHash: partialPreview.patchHash, expectedVersions: partialPreview.expectedVersions, expectedPaths: partialPreview.expectedPaths });
     assert.equal(partial.outcome, 'partial');
     assert.match(partial.error, /PERMISSION_DENIED/);
     assert.equal(partial.applied[0].path, 'part-one.txt');
@@ -129,15 +167,22 @@ try {
   const addPatch = '*** Begin Patch\n*** Add File: lost-result.txt\n+written-once\n*** End Patch';
   const addPreview = await call('workspace/apply_patch', { patch: addPatch, dryRun: true });
   ready = new Promise(resolve => { connected = resolve; });
-  await assert.rejects(begin('workspace/apply_patch', { patch: addPatch, patchHash: addPreview.patchHash, expectedVersions: addPreview.expectedVersions }, { drop: true }).promise, /RESULT_UNKNOWN/);
+  await assert.rejects(begin('workspace/apply_patch', { patch: addPatch, patchHash: addPreview.patchHash, expectedVersions: addPreview.expectedVersions, expectedPaths: addPreview.expectedPaths }, { drop: true }).promise, /RESULT_UNKNOWN/);
   await ready;
   assert.equal((await call('workspace/read_text', { path: 'lost-result.txt' })).content, 'written-once\n');
   console.log(JSON.stringify({ ok: true, source: 'real-client-agent-loopback-rpc', fixture: directory,
-    checks: ['context-rules', 'search', 'device-mismatch', 'path-escape', 'symlink-junction-escape', 'preview-no-write', 'approval-version-conflict', 'upstream-patch-crlf', 'actual-git-diff', 'readonly-partial-patch', 'test-exit-output', 'nonzero-structured-exit-output', 'timeout', 'cancel', 'lost-result-reconcile-no-replay'] }));
+    checks: ['context-rules', 'search', 'device-mismatch', 'external-path-access', 'explicit-symlink-junction-access', 'approval-rejects-retargeted-link', 'default-document-and-image-output', 'absolute-command-cwd', 'external-project-git', 'preview-no-write', 'approval-version-conflict', 'upstream-patch-crlf', 'actual-git-diff', 'readonly-partial-patch', 'test-exit-output', 'nonzero-structured-exit-output', 'timeout', 'cancel', 'lost-result-reconcile-no-replay'] }));
 } finally {
   clearTimeout(timer);
   agent.kill();
   for (const client of server.clients) client.terminate();
   await new Promise(resolve => server.close(resolve));
   // Retain the small fixture for evidence; no recursive deletion of a computed path.
+}
+
+function fixturePng(){
+  const header=Buffer.alloc(13);header.writeUInt32BE(32,0);header.writeUInt32BE(32,4);header[8]=8;header[9]=2;
+  const raw=Buffer.alloc(32*(32*3+1));for(let y=0;y<32;y++)for(let x=0;x<32;x++)raw[y*97+1+x*3+1]=255;
+  const chunk=(name,data)=>{const type=Buffer.from(name);const size=Buffer.alloc(4);size.writeUInt32BE(data.length);let crc=0xffffffff;for(const byte of Buffer.concat([type,data])){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}const check=Buffer.alloc(4);check.writeUInt32BE((crc^0xffffffff)>>>0);return Buffer.concat([size,type,data,check]);};
+  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk("IHDR",header),chunk("IDAT",deflateSync(raw)),chunk("IEND",Buffer.alloc(0))]);
 }

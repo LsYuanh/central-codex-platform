@@ -48,6 +48,75 @@
         "PRODUCTION_QUALIFICATION_PENDING",
         "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
       ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-01ff425dbb28a50d",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 175632,
+        "sha256": "01ff425dbb28a50dfcc20ead385926ad2e2dc58a87ba8a04c5e50f18cb6ff720"
+      },
+      "fileCount": 863,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-2f29c3ec8946b174",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 175632,
+        "sha256": "2f29c3ec8946b174b3a735c6d93754abe25835cb753cf77929981c08e8a2758c"
+      },
+      "fileCount": 863,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-6d017449acf1bdfc",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 175801,
+        "sha256": "6d017449acf1bdfc488d39c0e5b26981a336b59733b559b52adec897dee05d96"
+      },
+      "fileCount": 864,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
     }
   ]
 }

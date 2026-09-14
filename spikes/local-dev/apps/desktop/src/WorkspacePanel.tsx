@@ -64,21 +64,21 @@ export function WorkspacePanel({
   return (
     <section className="panel workspace-panel" id="workspace-panel">
       <div className="panel-heading workspace-heading">
-        <div className="workspace-title-wrap"><div className="workspace-icon"><UiIcon name="folder" /></div><div><p className="panel-kicker">{mode === "central-gateway" ? "Central Device Broker / AgentRPC" : "AgentRPC fallback"}</p><h2>工作区</h2><p className="workspace-subtitle">浏览项目文件，查看内容或运行受控命令</p></div></div>
+        <div className="workspace-title-wrap"><div className="workspace-icon"><UiIcon name="folder" /></div><div><p className="panel-kicker">{mode === "central-gateway" ? "Central Device Broker / AgentRPC" : "AgentRPC fallback"}</p><h2>本机文件</h2><p className="workspace-subtitle">输入本机目录，浏览文件或查看 Git 变更</p></div></div>
         {mode === "central-gateway" && <span className={`status-pill pill-${deviceState}`}><span />{deviceState === "online" ? "设备在线" : deviceState === "connecting" ? "连接中" : "设备离线"}</span>}
       </div>
-      {!available && <div className="workspace-offline"><UiIcon name="monitor" /><div><strong>等待设备连接</strong><small>本机设备在线后即可访问本机工作区</small></div></div>}
+      {!available && <div className="workspace-offline"><UiIcon name="monitor" /><div><strong>等待设备连接</strong><small>本机设备在线后即可访问本机文件</small></div></div>}
       <div className="workspace-path-card">
         <span className="path-prefix">/</span>
-        <input aria-label="工作区相对路径" value={path} onChange={(event) => onPathChange(event.target.value)} onKeyDown={handlePathKeyDown} placeholder="输入相对路径，例如 src/components" disabled={!available} />
+        <input aria-label="本机文件路径" value={path} onChange={(event) => onPathChange(event.target.value)} onKeyDown={handlePathKeyDown} placeholder="输入本机目录的绝对路径或相对路径" disabled={!available} />
         <button className="button-secondary" disabled={!available || loading} onClick={onOpen}>{loading ? "读取中…" : "打开"}</button>
       </div>
       <div className="workspace-toolbar">
-        <div className="workspace-nav-actions"><button className="button-quiet" disabled={!available || loading || path === "."} onClick={onParent}>‹ 上级</button><button className="button-quiet" disabled={!available || loading} onClick={onRefresh}>↻ 刷新</button></div>
-        <span className="workspace-location" title={path}>{path === "." ? "项目根目录" : path}</span><span className="workspace-count">{entries.length ? `${entries.length} 项` : ""}</span>
+        <div className="workspace-nav-actions"><button className="button-quiet" disabled={!available || loading} onClick={onParent}>‹ 上级</button><button className="button-quiet" disabled={!available || loading} onClick={onRefresh}>↻ 刷新</button></div>
+        <span className="workspace-location" title={path}>{path === "." ? "默认输出目录" : path}</span><span className="workspace-count">{entries.length ? `${entries.length} 项` : ""}</span>
       </div>
       <div className="workspace-list" aria-live="polite">
-        {loading && <div className="workspace-placeholder"><span className="spinner" /> 正在读取工作区…</div>}
+        {loading && <div className="workspace-placeholder"><span className="spinner" /> 正在读取目录…</div>}
         {!loading && available && entries.length === 0 && <div className="workspace-placeholder"><UiIcon name="folder" /><span>点击“打开”列出目录内容</span></div>}
         {!loading && available && entries.map((entry) => (
           <button key={`${entry.kind}:${entry.name}`} className="workspace-entry" onClick={() => onEntryClick(entry)} disabled={entry.kind === "other"}>

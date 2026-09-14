@@ -1,22 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertPortableWindowsRuntime } from "./windows-runtime-check.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktop = join(root, "apps", "desktop");
 const args = process.argv.slice(2);
-const usage = "Usage: node scripts/package-desktop.mjs [--debug] [--rc [--rc-version 0.2.0-rc.N]] [--plan]";
+const usage = "Usage: node scripts/package-desktop.mjs [--debug] [--rc [--rc-version 0.2.0-rc.N]] [--updater [--release-version X.Y.Z]] [--plan]";
 const flags = new Set();
 let rcVersion;
+let releaseVersion;
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
-  if (flags.has(arg) || !["--debug", "--rc", "--rc-version", "--plan"].includes(arg)) throw new Error(usage);
+  if (flags.has(arg) || !["--debug", "--rc", "--rc-version", "--plan", "--updater", "--release-version"].includes(arg)) throw new Error(usage);
   flags.add(arg);
   if (arg === "--rc-version") rcVersion = args[++i];
+  if (arg === "--release-version") releaseVersion = args[++i];
 }
 const rc = flags.has("--rc");
+const updater = flags.has("--updater");
+if (updater && (rc || flags.has("--debug"))) throw Error("Signed updates require a formal release build");
+if (flags.has("--release-version") && (!updater || !/^\d+\.\d+\.\d+$/.test(releaseVersion ?? ""))) throw Error(usage);
 if (flags.has("--rc-version") && (!rc || !/^0\.2\.0-rc\.[1-9]\d{0,3}$/.test(rcVersion ?? ""))) throw new Error(usage);
 if (!["win32", "darwin"].includes(process.platform)) throw new Error("Package on a native Windows or macOS build host");
 const debug = flags.has("--debug");
@@ -29,6 +35,17 @@ const env = { ...process.env, CARGO_TARGET_DIR: targetDir,
   TAURI_BUNDLER_DMG_IGNORE_CI: process.env.TAURI_BUNDLER_DMG_IGNORE_CI ?? "false",
 };
 let config = "src-tauri/tauri.bundle.conf.json";
+if (updater) {
+  const bundle = JSON.parse(readFileSync(join(desktop, config), "utf8"));
+  config = JSON.stringify({ ...bundle, ...(releaseVersion ? { version: releaseVersion } : {}), bundle: { ...bundle.bundle, createUpdaterArtifacts: true } });
+  delete env.TAURI_CONFIG;
+  if (!flags.has("--plan")) {
+    const localKey = join(root, "secrets", "updater.key");
+    if (!env.TAURI_SIGNING_PRIVATE_KEY && existsSync(localKey)) env.TAURI_SIGNING_PRIVATE_KEY = localKey;
+    if (!env.TAURI_SIGNING_PRIVATE_KEY) throw Error("Set TAURI_SIGNING_PRIVATE_KEY to the release signing key; never distribute it with installers");
+    env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ??= "";
+  }
+}
 if (rc) {
   const base = JSON.parse(readFileSync(join(desktop, "src-tauri/tauri.conf.json"), "utf8"));
   const bundle = JSON.parse(readFileSync(join(desktop, "src-tauri/tauri.bundle.conf.json"), "utf8"));
@@ -62,15 +79,26 @@ const supported = process.platform === "win32" ? ["x86_64-pc-windows-msvc"] : ["
 if (!supported.includes(host)) throw new Error(`Unsupported package target: ${host}`);
 if (flags.has("--plan")) {
   console.log(JSON.stringify({ rc, host, profile: debug ? "debug" : "release", targetDir,
-    config: rc ? JSON.parse(config) : config,
+    config: rc || updater ? JSON.parse(config) : config,
     bundles: process.platform === "win32" ? ["nsis"] : ["app", "dmg"],
   }, null, 2));
   process.exit(0);
 }
+// Tauri sets static CRT flags for its own build; our separate Cargo sidecar build
+// must do the same so fresh Windows machines do not need vc_redist installed.
+const agentEnv = { ...env };
+if (process.platform === "win32") {
+  if (agentEnv.CARGO_ENCODED_RUSTFLAGS !== undefined) {
+    agentEnv.CARGO_ENCODED_RUSTFLAGS += `${agentEnv.CARGO_ENCODED_RUSTFLAGS ? "\x1f" : ""}-C\x1ftarget-feature=+crt-static`;
+  } else {
+    agentEnv.RUSTFLAGS = `${agentEnv.RUSTFLAGS ?? ""} -C target-feature=+crt-static`.trim();
+  }
+}
 // --target prevents a user-level Cargo default target from producing a mismatched sidecar.
-run("cargo", ["build", "-p", "local-agent", "--locked", "--target", host, ...(!debug ? ["--release"] : [])]);
+run("cargo", ["build", "-p", "local-agent", "--locked", "--target", host, ...(!debug ? ["--release"] : [])], { env: agentEnv });
 const extension = process.platform === "win32" ? ".exe" : "";
 const binary = join(targetDir, host, debug ? "debug" : "release", `local-agent${extension}`);
+if (process.platform === "win32") assertPortableWindowsRuntime(binary);
 const sidecar = rc ? join(targetDir, "sidecars", `local-agent-${host}${extension}`)
   : join(desktop, "src-tauri", "binaries", `local-agent-${host}${extension}`);
 mkdirSync(dirname(sidecar), { recursive: true });
@@ -80,6 +108,7 @@ run(process.execPath, [join(root, "node_modules", "@tauri-apps", "cli", "tauri.j
   "--ci", "--config", config, "--target", host,
   "--bundles", process.platform === "win32" ? "nsis" : "app,dmg", ...(debug ? ["--debug"] : []), "--", "--locked"], { cwd: desktop });
 if (process.platform === "win32") {
+  assertPortableWindowsRuntime(join(targetDir, host, debug ? "debug" : "release", "desktop-spike.exe"));
   // Debug installers must be GUI applications too; a console-subsystem binary
   // opens an unwanted terminal when launched from the installed shortcut.
   const appBinary = readFileSync(join(targetDir, host, debug ? "debug" : "release", "desktop-spike.exe"));

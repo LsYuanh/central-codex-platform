@@ -187,6 +187,7 @@ export class WorkerManager {
     if(!this.options.perUser)return;
     for(const w of this.workers.values())if(!w.stopping&&w.bridge?.alive&&!w.calls&&!w.turns.size&&Date.now()-w.touched>=this.options.idleMs){this.options.event("worker.idle_stop",w.userId,"succeeded");this.stop(w,true);}
   }
+  hasActiveThreads(matches:(threadId:string)=>boolean){return [...this.workers.values()].some(w=>[...w.turns.keys()].some(matches));}
   snapshot(){return [...this.workers.values()].map(w=>({userId:w.userId,pid:w.bridge?.pid,ready:!w.stopping&&(w.bridge?.enforcedRuntimeReady??false),alive:w.bridge?.alive??false,starting:!!w.starting,stopping:w.stopping,pendingRequests:w.calls,activeTurns:w.turns.size}));}
   get enforcedRuntimeReady(){const entries=[...this.workers.values()];return entries.length>0&&entries.every(w=>!w.stopping&&w.bridge?.enforcedRuntimeReady);}
   private stop(w:Worker,idle=false){if(w.stopping)return;w.stopping=true;if(w.startTimer)clearTimeout(w.startTimer);w.startTimer=undefined;w.cancelStart?.();w.bridge?.close(idle);}

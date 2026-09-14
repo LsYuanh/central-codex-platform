@@ -131,14 +131,13 @@ export function formatTurnDuration(milliseconds: number): string {
 }
 
 export interface TimedMessage { id: string; role: string; content: string; turnId?: string; timingOnly?: boolean }
-/** One summary before the last assistant response; fallback after a user/empty failed turn. */
+/** Keep one summary before the first assistant reply; before a reply, show it after user input. */
 export function timingAnchors(messages: TimedMessage[], timings: TurnTiming[]): Map<string, TurnTiming> {
   const anchors = new Map<string, TurnTiming>();
   for (const timing of timings) {
-    if (timing.status === "running") continue;
     const rows = messages.filter(row => row.turnId === timing.turnId);
-    const assistant = rows.filter(row => row.role === "assistant" && row.content.trim()).at(-1);
-    const anchor = assistant ?? rows.find(row => row.timingOnly) ?? rows.at(-1);
+    const anchor = rows.find(row => row.role === "assistant" && !row.timingOnly)
+      ?? rows.find(row => row.timingOnly) ?? rows.at(-1);
     if (anchor) anchors.set(anchor.id, timing);
   }
   return anchors;

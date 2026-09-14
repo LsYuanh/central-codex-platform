@@ -13,7 +13,7 @@ const root=await mkdtemp(join(tmpdir(),"harness-gateway-"));
 await mkdir(join(root,"remote-worker"));
 await writeFile(join(root,"state.json"),JSON.stringify({version:1,futureRoot:{preserved:true},users:{owner:[{id:'legacy-metadata-smoke',futureEntry:'kept',summary:{id:'legacy-metadata-smoke',deviceId:'a',deviceKey:'a-key',futureSummary:['kept']}}]}}));
 await writeFile(join(root,"remote-worker","app-server"), `
-const readline=require('node:readline');let next=0,lastTool;
+const readline=require('node:readline');let next=0,lastTool,lastInstructions,lastTools;
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const q=JSON.parse(line);let result={};
  if(q.method==='model/list'&&q.params?.fixtureCrash)process.exit(9);
@@ -21,7 +21,9 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(q.method==='initialize')result={userAgent:process.env.BAD_HARNESS?'stock-codex':'codex yuan-zhou-remote-workspace/1'};
  if(q.method==='thread/start')result={thread:{id:'thread-'+ ++next}};
  if(q.method==='thread/resume')result={thread:{id:q.params.threadId}};
- if(q.method==='thread/read')result={thread:{id:q.params.threadId},lastTool};
+ if(q.method==='thread/start'||q.method==='thread/resume')lastInstructions=q.params.developerInstructions;
+ if(q.method==='thread/start')lastTools=q.params.dynamicTools;
+ if(q.method==='thread/read')result={thread:{id:q.params.threadId},lastTool,lastInstructions,lastTools};
  if(q.method==='turn/start')result={turn:{id:'turn-'+ ++next}};
  process.stdout.write(JSON.stringify({id:q.id,result})+'\\n');
  if(q.method==='turn/start'&&q.params.input?.[0]?.text==='patch')process.stdout.write(JSON.stringify({id:'patch-tool-'+next,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:'device_workspace_apply_patch',arguments:{patch:'*** Begin Patch\\n*** Add File: example.txt\\n+hello\\n*** End Patch'}}})+'\\n');
@@ -30,7 +32,8 @@ const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r
 const gateway=spawn(process.execPath,[resolve('services/test-gateway/dist/index.js')],{env:{...process.env,CODEX_BIN:process.execPath,TEST_GATEWAY_HOST:'127.0.0.1',TEST_GATEWAY_PORT:String(port),TEST_GATEWAY_STATE_FILE:join(root,'state.json')},stdio:['ignore','pipe','pipe'],windowsHide:true});
 let log='';gateway.stderr.on('data',d=>log+=d);gateway.stdout.on('data',d=>log+=d);
 const sockets=[];
-const capabilities=['remote-workspace/v1','workspace/context','workspace/search','workspace/read_text','workspace/git_status','workspace/git_diff','workspace/apply_patch'];
+const legacy=process.env.LEGACY_AGENT==='1';
+const capabilities=[...(legacy?[]:['client-paths/v1']),'remote-workspace/v1','workspace/context','workspace/search','workspace/read_text','workspace/git_status','workspace/git_diff','workspace/apply_patch'];
 function envelope(type,payload,requestId){return {protocol:'agentrpc',version:1,type,timestamp:new Date().toISOString(),nonce:randomUUID(),...(requestId?{requestId}:{}),payload};}
 async function connect(path){const s=new WebSocket(`ws://127.0.0.1:${port}${path}`);sockets.push(s);await new Promise((r,j)=>{s.once('open',r);s.once('error',j);});return s;}
 let onRequest,onApproval;
@@ -56,6 +59,12 @@ try{
  assert.deepEqual(migrated.users.owner[0].summary.futureSummary,['kept']);
  assert.equal(migrated.users.owner[0].summary.remoteWorkspace.policy,'remote-workspace/v1');
  const threadId=(await request('conversation.create')).thread.id;
+ const policy=await request('conversation.read',{threadId});
+ assert.match(policy.lastInstructions,legacy?/Legacy workspace client/:/Client path policy/);
+ assert.match(policy.lastTools.find(t=>t.name==='device_exec').description,legacy?/cwd must be omitted or workspace-relative/:/cwd accepts an absolute client directory/);
+ assert.match(policy.lastTools.find(t=>t.name==='device_workspace_read_text').inputSchema.properties.path.description,legacy?/Workspace-relative/:/Absolute client path/);
+ await request('conversation.resume',{threadId});
+ assert.match((await request('conversation.read',{threadId})).lastInstructions,legacy?/Legacy workspace client/:/Client path policy/);
  await assert.rejects(request('conversation.turn.create',{threadId,input:[],cwd:'/central'}),/REMOTE_POLICY_OVERRIDE/);
  await assert.rejects(request('conversation.resume',{threadId,config:{}}),/REMOTE_POLICY_OVERRIDE/);
  const wrongDevice=await client('owner','b');await assert.rejects(wrongDevice('conversation.resume',{threadId}),/another device/);
@@ -67,21 +76,49 @@ try{
  assert.equal((await request('device.workspace.read_text',{path:'file.txt'})).result.content,'actual-client-a');
  await assert.rejects(request('device.workspace.read_text',{path:'x',__remoteWorkspace:{deviceId:'b'}}),/selected by the central broker/);
  let applied=0;
- onRequest=(s,m)=>{const p=m.payload.params;assert.equal(m.payload.method,'workspace/apply_patch');if(!p.dryRun){applied++;assert.equal(p.patchHash,'preview-hash');assert.equal(p.expectedVersions['example.txt'],'missing');}
-   s.send(JSON.stringify(envelope('agent.response',p.dryRun?{ok:true,result:{patchHash:'preview-hash',expectedVersions:{'example.txt':'missing'}}}:{ok:false,errorCode:'VERSION_CONFLICT',error:'changed after approval'},m.requestId)));
+ onRequest=(s,m)=>{const p=m.payload.params;assert.equal(m.payload.method,'workspace/apply_patch');if(!p.dryRun){applied++;assert.equal('expectedPaths' in p,!legacy);assert.equal(p.patchHash,'preview-hash');assert.equal(p.expectedVersions['example.txt'],'missing');}
+   s.send(JSON.stringify(envelope('agent.response',p.dryRun?{ok:true,result:{patchHash:'preview-hash',expectedVersions:{'example.txt':'missing'},...(legacy?{}:{expectedPaths:{'example.txt':'C:/client-project/example.txt'}})}}:{ok:false,errorCode:'VERSION_CONFLICT',error:'changed after approval'},m.requestId)));
  };
  const approval=(decision)=>new Promise(resolve=>{onApproval=(s,m)=>{assert.equal(m.data.deviceId,'a');assert.equal(m.data.workspaceRoot,'C:/client-project');assert.match(m.data.patch,/Add File/);s.send(JSON.stringify({type:'approval.response',requestId:m.requestId,result:{decision}}));resolve();};});
  const denied=approval('decline');await request('conversation.turn.create',{threadId,input:[{type:'text',text:'patch'}]});await denied;
  await new Promise(r=>setTimeout(r,80));assert.equal(applied,0);assert.equal((await request('conversation.read',{threadId})).lastTool.success,false);
  const approved=approval('accept');await request('conversation.turn.create',{threadId,input:[{type:'text',text:'patch'}]});await approved;
  await new Promise(r=>setTimeout(r,80));assert.equal(applied,1);assert.match(JSON.stringify((await request('conversation.read',{threadId})).lastTool),/VERSION_CONFLICT/);
+
+ // Malformed previews must fail before approval in both versions. New Agents
+ // additionally must never fall back to the old protocol when targets are absent.
+ for(const result of [{expectedVersions:{}}, ...(legacy?[]:[{patchHash:'hash',expectedVersions:{}}])]) {
+   let unexpectedApproval=false;
+   onApproval=()=>{unexpectedApproval=true;};
+   onRequest=(s,m)=>s.send(JSON.stringify(envelope('agent.response',{ok:true,result},m.requestId)));
+   await request('conversation.turn.create',{threadId,input:[{type:'text',text:'patch'}]});
+   await new Promise(r=>setTimeout(r,100));
+   assert.equal(unexpectedApproval,false);assert.equal(applied,1);
+   assert.match(JSON.stringify((await request('conversation.read',{threadId})).lastTool),/PATCH_PREPARE_FAILED/);
+ }
+
+
+ // An approval cannot survive replacement of its Agent session, even if the
+ // installation identity and workspace remain the same.
+ let heldReconnectApproval, writesAfterReconnect=0;
+ onRequest=(s,m)=>{if(!m.payload.params.dryRun)writesAfterReconnect++;
+   s.send(JSON.stringify(envelope('agent.response',{ok:true,result:{patchHash:'hash',expectedVersions:{'example.txt':'missing'},...(legacy?{}:{expectedPaths:{'example.txt':'C:/client-project/example.txt'}})}},m.requestId)));
+ };
+ const previewBeforeReconnect=new Promise(r=>{onApproval=(s,m)=>{heldReconnectApproval={s,m};r();};});
+ await request('conversation.turn.create',{threadId,input:[{type:'text',text:'patch'}]});await previewBeforeReconnect;
+ const oldAgentClosed=new Promise(r=>a.once('close',r));a.close();await oldAgentClosed;await agent('a');
+ heldReconnectApproval.s.send(JSON.stringify({type:'approval.response',requestId:heldReconnectApproval.m.requestId,result:{decision:'accept'}}));
+ await new Promise(r=>setTimeout(r,100));assert.equal(writesAfterReconnect,0);
+ assert.equal((await request('conversation.read',{threadId})).lastTool.success,false);
+
  onRequest=s=>s.close();
  const unknown=await request('device.exec',{program:'test'});assert.equal(unknown.ok,false);assert.equal(unknown.errorCode,'AGENT_DISCONNECTED');assert.equal(unknown.retryable,false);
  await new Promise(r=>setTimeout(r,100));await agent('a','C:/different-project');
- await assert.rejects(request('conversation.resume',{threadId}),/REMOTE_WORKSPACE_CHANGED/);
+ if(legacy)await assert.rejects(request('conversation.resume',{threadId}),/original workspace directory/);
+ else await request('conversation.resume',{threadId});
  const crashThread=(await request('conversation.create')).thread.id;
  let staleApproval;let writesAfterCrash=0;
- onRequest=(s,m)=>{if(!m.payload.params.dryRun)writesAfterCrash++;s.send(JSON.stringify(envelope('agent.response',{ok:true,result:{patchHash:'hash',expectedVersions:{'example.txt':'missing'}}},m.requestId)));};
+ onRequest=(s,m)=>{if(!m.payload.params.dryRun)writesAfterCrash++;s.send(JSON.stringify(envelope('agent.response',{ok:true,result:{patchHash:'hash',expectedVersions:{'example.txt':'missing'},...(legacy?{}:{expectedPaths:{'example.txt':'C:/client-project/example.txt'}})}},m.requestId)));};
  const heldApproval=new Promise(r=>{onApproval=(s,m)=>{staleApproval={s,m};r();};});
  await request('conversation.turn.create',{threadId:crashThread,input:[{type:'text',text:'patch'}]});await heldApproval;
  await assert.rejects(request('model.list',{fixtureCrash:true}),/exited/);
@@ -89,7 +126,7 @@ try{
  await new Promise(r=>setTimeout(r,80));assert.equal(writesAfterCrash,0);
  assert.equal((await (await fetch(`http://127.0.0.1:${port}/healthz`)).json()).enforcedRuntimeReady,false);
  await assert.rejects(request('conversation.turn.create',{threadId:crashThread,input:[]}),/REMOTE_HARNESS_NOT_READY/);
- console.log('HARNESS_GATEWAY_SMOKE_OK: policy overrides, user/device/workspace binding, forged response, patch approval/refusal/version conflict, unknown result, no retry, runtime crash cancels stale approvals');
+ console.log((legacy?'LEGACY_AGENT_COMPAT_OK: ':'CLIENT_PATHS_AGENT_OK: ')+'HARNESS_GATEWAY_SMOKE_OK: policy overrides, user/device/workspace binding, forged response, patch approval/refusal/version conflict, unknown result, no retry, runtime crash cancels stale approvals');
 }catch(error){if(process.env.BAD_HARNESS&&/REMOTE_HARNESS_REQUIRED/.test(String(error)))console.log('HARNESS_STOCK_REJECTED_OK');else {console.error(log);throw error;}}
 finally{for(const s of sockets)s.close();gateway.kill();}
 

@@ -32,6 +32,12 @@ pub(crate) fn config(pem: Option<&[u8]>) -> Result<rustls::ClientConfig, String>
 }
 
 pub(crate) fn http(config: rustls::ClientConfig) -> Result<reqwest::Client, String> {
+    http_builder(config)
+        .build()
+        .map_err(|_| "CENTRAL_TLS_INIT_FAILED".into())
+}
+
+pub(crate) fn http_builder(config: rustls::ClientConfig) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .use_preconfigured_tls(config)
         .no_proxy()
@@ -39,8 +45,6 @@ pub(crate) fn http(config: rustls::ClientConfig) -> Result<reqwest::Client, Stri
         .timeout(std::time::Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
         .https_only(true)
-        .build()
-        .map_err(|_| "CENTRAL_TLS_INIT_FAILED".into())
 }
 
 // Return only fixed codes, never URL, bearer, certificate contents or raw errors.

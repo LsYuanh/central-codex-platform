@@ -120,7 +120,7 @@ powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem"
 - 中央侧只生成和路由请求；
 - Local Agent 负责实际执行；
 - 返回值通过网关回传中央 App Server；
-- 默认工作目录受客户端工作区边界约束；
+- 按用户 2026-09-14 确认的需求，配置目录仅作为默认输出目录，不再作为文件访问边界；文件路径和命令 cwd 可指向本机系统账号有权访问的其他目录；
 - 不能把中央机执行结果伪装成客户端执行结果；
 - 中央 App Server 发出的系统命令/文件审批不得在中央机直接放行执行。
 

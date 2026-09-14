@@ -32,6 +32,7 @@ import { WindowsWorkerBridge } from "./windows-worker-bridge.js";
 import { ModelCredentialBroker } from "./model-credential-broker.js";
 import { readNativeServiceHost } from "./native-service-host.js";
 import { collectServiceMetrics } from "./service-metrics.js";
+import { ClientUpdates } from "./client-updates.js";
 
 const nativeService=await readNativeServiceHost();
 
@@ -166,7 +167,7 @@ const CLIENT_DEVICE_TOOLS = [
   ...WORKSPACE_TOOLS,
   {
     type:"function", name:"device_write_file",
-    description:"Write UTF-8 text to the client and return verified saved-file metadata. path is a client absolute path (or workspace-relative); omit path and set name to save in client Downloads/Codexia. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Never use a central path.",
+    description:"Write UTF-8 text to the client and return verified saved-file metadata. path is a client absolute path (or workspace-relative); omit path and set name to save in the client configured default output directory. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Never use a central path.",
     inputSchema:{type:"object",properties:{path:{type:"string"},name:{type:"string"},content:{type:"string"},overwrite:{type:"boolean"},expectedVersion:{type:"string"}},required:["content"]},
   },
   {
@@ -174,10 +175,10 @@ const CLIENT_DEVICE_TOOLS = [
     inputSchema:{type:"object",properties:{path:{type:"string"}},required:["path"]},
   },
   {
-    type:"function",name:"device_copy_file",description:"Copy an existing client file to a client destination and show the verified output in chat. Omit path and provide name for Downloads/Codexia. Existing destinations require overwrite=true and expectedVersion.",
+    type:"function",name:"device_copy_file",description:"Copy an existing client file to a client destination and show the verified output in chat. Omit path and provide name for the client configured default output directory. Existing destinations require overwrite=true and expectedVersion.",
     inputSchema:{type:"object",properties:{sourcePath:{type:"string"},path:{type:"string"},name:{type:"string"},overwrite:{type:"boolean"},expectedVersion:{type:"string"}},required:["sourcePath"]},
   },
-  {type:"function",name:"device_output_paths",description:"Return the actual client Downloads/Codexia and workspace directories. Do not guess home or Downloads paths.",inputSchema:{type:"object",properties:{}}},
+  {type:"function",name:"device_output_paths",description:"Return the actual client outputDirectory (default save location), workspace (legacy alias) and downloads directories. Use outputDirectory for generated documents/images unless the user specifies a destination.",inputSchema:{type:"object",properties:{}}},
   {type:"function",name:"device_list_outputs",description:"Wait for generated images to finish saving to the client and list verified output paths and any save errors for this thread. Call before claiming a generated image was saved.",inputSchema:{type:"object",properties:{}}},
   {
     type: "function", name: "device_read_text",
@@ -187,19 +188,19 @@ const CLIENT_DEVICE_TOOLS = [
   {
     type: "function",
     name: "device_workspace_list",
-    description: "List entries in the user's approved local workspace.",
-    inputSchema: { type: "object", properties: { path: { type: "string", description: "Relative workspace path; defaults to the workspace root." } } },
+    description: "List any directory accessible to the client OS account. The configured workspace is only the default output directory.",
+    inputSchema: { type: "object", properties: { path: { type: "string", description: "Absolute client directory or relative path; defaults to the configured output directory." } } },
   },
   {
     type: "function",
     name: "device_read_file",
-    description: "Read a UTF-8 text file from the user's approved local workspace.",
+    description: "Read a UTF-8 text file at any client path accessible to the OS account.",
     inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
   },
   {
     type: "function",
     name: "device_exec",
-    description: "Run a noninteractive command on the user's local device with live stdout/stderr. Always provide args (an empty array is valid). Use PowerShell explicitly for shell operations. cwd must be workspace-relative: omit it or use '.' for the bound workspace; absolute cwd and parent traversal are rejected. timeoutMs defaults to 30 minutes and is capped at 2 hours. After creating output files use device_publish_file to verify/show them. The command executes only on the client.",
+    description: "Run a noninteractive command on the user's local device with live stdout/stderr. Always provide args (an empty array is valid). Use PowerShell explicitly for shell operations. cwd accepts an absolute client directory or a relative path. Use the user-specified project directory for project work; omitted cwd uses the default output directory. timeoutMs defaults to 30 minutes and is capped at 2 hours. After creating output files use device_publish_file to verify/show them. The command executes only on the client.",
     inputSchema: {
       type: "object",
       properties: {
@@ -213,18 +214,50 @@ const CLIENT_DEVICE_TOOLS = [
   },
 ] as const;
 
+const CLIENT_PATH_INSTRUCTIONS = "Client path policy also applies to older tool tables: all device file/workspace tools and device_exec cwd accept absolute client paths and relative paths, including parent paths, subject to OS account permissions. The configured workspaceRoot is only the default output directory, not an access boundary. For a user-specified project, pass its absolute client path directly; never ask the user to move it or change the output directory. Read its project context/rules before editing. device_exec always requires an args array. For generated documents/images without an explicit destination, use device_output_paths.outputDirectory; explicit destinations and project edits stay at their requested locations.";
+const LEGACY_WORKSPACE_INSTRUCTIONS = "Legacy workspace client: this connected Agent does not advertise client-paths/v1. This policy overrides path claims in older tool tables and conversation history. For device_workspace_* tools, device_read_file, device_workspace_list, codexia.workspace operations, patch file headers and device_exec cwd, use workspace-relative paths without parent traversal (use . for the root). The configured workspaceRoot remains the project boundary. Do not route outside-workspace project access through commands or alternate tools to bypass a rejected path; explain that upgrading the desktop enables it. Read project context before editing. device_exec always requires an args array. Existing file/attachment/output tools keep their own native capability restrictions. device_output_paths returns workspace, downloads and absolutePaths; outputDirectory may be absent. With name and no path, the old Agent saves outputs in its reported downloads directory; provide an explicit workspace-relative path when the user wants an output inside the workspace. Patches require the client preview patchHash and expectedVersions, then one-time approval and client version revalidation.";
+
 const CLIENT_DEVICE_INSTRUCTIONS = [
   "You are the central reasoning worker for a remote desktop client.",
   "The central machine is never the user's computer.",
   "Never use built-in shell, filesystem, process, git, or other host-system tools for user-device work.",
   "For files, Git, commands, disk, or other system information, use the provided device_* dynamic tools; they execute on the connected user's device through Local Agent.",
-  "Remote workspace policy also applies to older tool tables: device_exec always requires an args array, and cwd must be omitted or workspace-relative (use '.' for the root). Never pass an absolute client workspace as cwd, even if an old tool description permits it. The codexia.workspace broker operations also require workspace-relative paths.",
+  CLIENT_PATH_INSTRUCTIONS,
   "If a required device_* tool is unavailable or rejects an operation, explain that limitation instead of inspecting the central worker.",
   "Native image generation is unavailable in this remote harness. Previously saved imageGeneration outputs remain readable in history. Their native savedPath is CENTRAL ONLY; never pass it to a client tool. Use device_list_outputs to obtain a verified existing client output path and status before claiming a save succeeded.",
   "Use device_write_file for text, device_copy_file to save an existing output to a requested client path, and device_publish_file after creating files with device_exec. Only claim a file exists or was modified after a successful tool result. Prefer a new file when editing images unless the user explicitly requests overwriting.",
   "Compatibility for existing threads without the new tool names: device_exec accepts the reserved broker operation program='codexia.files', args=[operation, JSON.stringify(parameters)]. Supported operations: paths, list_outputs, write_text, publish, copy. This is a broker RPC routed to Local Agent, not a shell executable. Use it when new device tools are absent.",
   "For older threads, program='codexia.workspace', args=[operation, JSON.stringify(parameters)] exposes context, search, read_text, git_status, git_diff and apply_patch through the same enforced client workspace handlers. This reserved name is never executed as a process. Patches require a client preview and single-invocation approval.",
 ].join(" ");
+
+
+function supportsClientPaths(deviceId: string): boolean {
+  return agents.get(deviceId)?.hello?.agent.capabilities.includes("client-paths/v1") === true;
+}
+function clientDeviceInstructions(deviceId: string): string {
+  return supportsClientPaths(deviceId) ? CLIENT_DEVICE_INSTRUCTIONS
+    : CLIENT_DEVICE_INSTRUCTIONS.replace(CLIENT_PATH_INSTRUCTIONS, LEGACY_WORKSPACE_INSTRUCTIONS);
+}
+const LEGACY_TOOL_DESCRIPTIONS: Record<string, string> = {
+  device_workspace_list: "List directories within the connected client's configured workspace. Use workspace-relative paths.",
+  device_read_file: "Read a UTF-8 file inside the client's workspace using a workspace-relative path.",
+  device_workspace_apply_patch: "Apply a Codex patch inside the client's workspace. File headers must be workspace-relative without parent traversal. Gateway obtains a preview patchHash and expectedVersions, requests one-time approval, then the client rechecks versions. Conflicts fail; partial results must be reported.",
+  device_exec: "Run a noninteractive command on the client through Local Agent with live stdout/stderr. Always provide args. cwd must be omitted or workspace-relative without parent traversal; use . for the root. Use PowerShell explicitly for shell operations. timeoutMs defaults to 30 minutes, maximum 2 hours. After creating output files call device_publish_file.",
+  device_write_file: "Write UTF-8 text on the client. Use an explicit workspace-relative path to save inside the workspace. Omit path and set name to save in the old Agent's downloads directory. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Other paths follow Agent capability restrictions.",
+  device_copy_file: "Copy an existing client file and return verified output metadata. A workspace-relative destination path saves inside the workspace; name without path saves in the old Agent's downloads directory. Existing destinations require overwrite=true and expectedVersion. Source and destination follow Agent capability restrictions.",
+  device_output_paths: "Return the client's actual workspace, downloads and absolutePaths capability. This older Agent may not return outputDirectory. name without path saves in downloads; use an explicit workspace-relative path to save in the workspace.",
+};
+function clientDeviceTools(deviceId: string) {
+  if (supportsClientPaths(deviceId)) return CLIENT_DEVICE_TOOLS;
+  return CLIENT_DEVICE_TOOLS.map(tool => ({
+    ...tool,
+    description: LEGACY_TOOL_DESCRIPTIONS[tool.name] ?? tool.description,
+    inputSchema: {...tool.inputSchema, properties: {...tool.inputSchema.properties,
+      ...("path" in tool.inputSchema.properties && tool.name.startsWith("device_workspace_")
+        ? {path:{type:"string",description:"Workspace-relative client path without parent traversal; default ."}} : {}),
+    }},
+  }));
+}
 
 const BLOCKED_CENTRAL_OPERATION_REQUESTS = new Set([
   "item/commandExecution/requestApproval",
@@ -388,6 +421,8 @@ const clients = new Map<string, ConnectedClient>();
 const pendingServerRequests = new Map<string, PendingServerRequest>();
 const pendingAgentRequests = new Map<string, PendingAgentRequest>();
 const activeDeviceTools = new Map<string, ActiveDeviceTool>();
+const clientUpdates = new ClientUpdates(process.env.PLATFORM_CLIENT_RELEASE_DIR);
+const deviceGatewayCalls = new Map<string, number>();
 const turnCancelVersions = new Map<string, number>();
 const stoppedNativeTurns = new Set<string>();
 const pendingSyntheticApprovals = new Map<string, PendingSyntheticApproval>();
@@ -683,16 +718,19 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
         if (!threadId) throw new Error("REMOTE_BINDING_REQUIRED: tool has no owning thread");
         const binding = await ensureRemoteBinding(client, threadId);
         if (agentMethod === "workspace/apply_patch") {
+          const previewAgent = agents.get(client.deviceId);
+          const clientPaths = supportsClientPaths(client.deviceId);
           const prepared = await sendAgentRequest(client.deviceId, agentMethod, {patch:toolArgs.patch,dryRun:true}, {binding});
-          if (!prepared.ok || !isRecord(prepared.result)) throw new Error(`${prepared.errorCode ?? "PATCH_PREPARE_FAILED"}: ${prepared.error ?? "Invalid patch preview"}`);
+          if (!prepared.ok || !isRecord(prepared.result) || typeof prepared.result.patchHash !== "string" || !isRecord(prepared.result.expectedVersions) || (clientPaths && !isRecord(prepared.result.expectedPaths))) throw new Error(`${prepared.errorCode ?? "PATCH_PREPARE_FAILED"}: ${prepared.error ?? "Invalid patch preview: hash, versions and capability-specific target paths are required"}`);
           if (toolArgs.expectedVersions !== undefined) {
             const expected = toolArgs.expectedVersions, actual = prepared.result.expectedVersions;
             if (!isRecord(expected) || !isRecord(actual) || Object.keys(expected).length !== Object.keys(actual).length || Object.keys(actual).some(path => expected[path] !== actual[path])) throw new Error("VERSION_CONFLICT: file versions differ from the requested patch");
           }
-          toolArgs = {patch:toolArgs.patch,patchHash:prepared.result.patchHash,expectedVersions:prepared.result.expectedVersions,dryRun:false};
+          toolArgs = {patch:toolArgs.patch,patchHash:prepared.result.patchHash,expectedVersions:prepared.result.expectedVersions,...(clientPaths ? {expectedPaths:prepared.result.expectedPaths} : {}),dryRun:false};
           assertNotStopped();
           await approveDevicePatch(client, threadId, turnId, binding, toolArgs);
           assertBinding(binding, await ensureRemoteBinding(client, threadId));
+          if (agents.get(client.deviceId) !== previewAgent) throw new Error("REMOTE_WORKSPACE_CHANGED: agent reconnected after patch preview; request a new preview");
         }
         if (threadId && threadSummaryById.get(threadId)?.deviceKey && threadSummaryById.get(threadId)?.deviceKey !== agents.get(client.deviceId)?.hello?.agent.deviceKey) throw new Error("来源设备身份不一致，拒绝读取同名路径");
         if(listOutputs){
@@ -805,6 +843,29 @@ const httpHandler = (request: IncomingMessage, response: ServerResponse) => {
   if(nativeService)response.setHeader('x-central-service-instance',nativeService.serviceInstanceId);
   const url = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`);
   if(auditFailed&&url.pathname!=="/healthz"){writeJson(response,503,{ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
+  if(url.pathname.startsWith("/client-updates/")) {
+    try {
+      if(!auth)throw Error("AUTH_REQUIRED");
+      const principal=auth.bearer(request.headers.authorization);
+      if(!principal.deviceId || principal.authMode!=="device-token-v1")throw Error("AUTH_REQUIRED");
+      const device=principal.deviceId;
+      if(url.pathname==="/client-updates/prepare" && request.method==="POST") {
+        const busy=(deviceGatewayCalls.get(device)??0)>0 || workers.hasActiveThreads(id=>threadSummaryById.get(id)?.deviceId===device) ||
+          [...activeDeviceTools.values()].some(tool=>tool.deviceId===device) || [...pendingAgentRequests.values()].some(p=>p.deviceId===device);
+        const version=String(request.headers["x-update-version"]??"");
+        writeJson(response,200,clientUpdates.prepare(device,randomUUID(),busy,/^\d+\.\d+\.\d+$/.test(version)?version:undefined)); return;
+      }
+      if(url.pathname==="/client-updates/release" && request.method==="POST") {
+        clientUpdates.release(device,String(request.headers["x-update-lease"]??""));
+        writeJson(response,200,{released:true}); return;
+      }
+      if(url.pathname==="/client-updates/resume" && request.method==="POST") {
+        clientUpdates.resume(device,String(request.headers["x-client-version"]??""));
+        writeJson(response,200,{resumed:!clientUpdates.locked(device)});return;
+      }
+      void clientUpdates.serve(request,response,url); return;
+    } catch(error) {writeJson(response,String(error).includes("UPDATE_DEVICE_BUSY")?409:401,{error:String(error).includes("UPDATE_DEVICE_BUSY")?"UPDATE_DEVICE_BUSY":"AUTH_REQUIRED"});return;}
+  }
   if(auth && url.pathname.startsWith("/auth/")){void auth.http(request,response);return;}
   if (url.pathname === "/healthz") {
     writeJson(response, 200, {
@@ -927,6 +988,16 @@ function rehomePendingApprovals(disconnected: ConnectedClient): void {
 }
 
 async function handleGatewayMessage(client: ConnectedClient, message: GatewayMessage | undefined): Promise<void> {
+  if(clientUpdates.locked(client.deviceId)) {
+    if(message)send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:"UPDATE_IN_PROGRESS: 客户端正在升级，请稍后重连"});
+    return;
+  }
+  deviceGatewayCalls.set(client.deviceId,(deviceGatewayCalls.get(client.deviceId)??0)+1);
+  try { await handleGatewayMessageInner(client,message); }
+  finally {const count=(deviceGatewayCalls.get(client.deviceId)??1)-1;if(count)deviceGatewayCalls.set(client.deviceId,count);else deviceGatewayCalls.delete(client.deviceId);}
+}
+
+async function handleGatewayMessageInner(client: ConnectedClient, message: GatewayMessage | undefined): Promise<void> {
   if(auth&&!auth.valid(client.principal!)){client.socket.close(4001,auth.failureReason(client.principal));return;}
   if (!message) return;
   if(auditFailed){send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
@@ -1000,7 +1071,7 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
       const context = await sendAgentRequest(client.deviceId, "workspace/context", {}, {binding});
       if (!context.ok) throw new Error(`${context.errorCode}: ${context.error}`);
       const legacyNames = ["device_workspace_list", "device_read_file", "device_exec"];
-      const result = await bridge.request("thread/start", {developerInstructions:CLIENT_DEVICE_INSTRUCTIONS + `\nClient context: ${JSON.stringify(context.result)}`, dynamicTools:CLIENT_DEVICE_TOOLS.filter(tool=>legacyNames.includes(tool.name))});
+      const result = await bridge.request("thread/start", {developerInstructions:clientDeviceInstructions(client.deviceId) + `\nClient context: ${JSON.stringify(context.result)}`, dynamicTools:clientDeviceTools(client.deviceId).filter(tool=>legacyNames.includes(tool.name))});
       const id = threadIdFromResult(result);
       if (!id) throw new Error("History fixture did not create a native Thread");
       ownedThreadIdsByUser.get(client.userId)!.add(id);
@@ -1066,12 +1137,12 @@ async function handleGatewayMessage(client: ConnectedClient, message: GatewayMes
       ? await sendAgentRequest(client.deviceId, "workspace/context", {}, { binding: await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined) })
       : undefined;
     if (context && !context.ok) throw new Error(`${context.errorCode}: ${context.error}`);
-    const instructions = CLIENT_DEVICE_INSTRUCTIONS + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
+    const instructions = clientDeviceInstructions(client.deviceId) + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
     const appPayload = message.operation === "conversation.create"
       ? {
           ...(message.payload ?? {}),
           developerInstructions: instructions,
-          dynamicTools: CLIENT_DEVICE_TOOLS,
+          dynamicTools: clientDeviceTools(client.deviceId),
         }
       : message.operation === "conversation.resume"
       ? {...(message.payload??{}), developerInstructions:instructions}
@@ -1325,14 +1396,18 @@ async function ensureRemoteBinding(client: ConnectedClient, threadId?: string): 
   const session = agents.get(client.deviceId);
   if (!session?.ready || session.socket.readyState !== WebSocket.OPEN) throw new Error("AGENT_OFFLINE: reconnect the original client device");
   const agent = session.hello?.agent;
-  if (!agent?.capabilities.includes(REMOTE_WORKSPACE_POLICY) || !agent.deviceKey || !agent.workspaceRoot) throw new Error("AGENT_UPGRADE_REQUIRED: remote-workspace/v1 and stable workspace identity are required");
+  if (!agent?.capabilities.includes(REMOTE_WORKSPACE_POLICY) || !agent.deviceKey || !agent.workspaceRoot) throw new Error("AGENT_UPGRADE_REQUIRED: upgrade the desktop Local Agent: remote-workspace/v1 and stable device identity are required");
   const binding: RemoteWorkspaceBinding = {policy:REMOTE_WORKSPACE_POLICY,userId:client.userId,deviceId:client.deviceId,deviceKey:agent.deviceKey,workspaceRoot:agent.workspaceRoot};
   if (threadId) {
     assertOwnedThread(client, {threadId});
     const summary = threadSummaryById.get(threadId)!;
     if (summary.deviceId && summary.deviceId !== binding.deviceId) throw new Error("REMOTE_WORKSPACE_CHANGED: thread belongs to another device");
     if (summary.deviceKey && summary.deviceKey !== binding.deviceKey) throw new Error("REMOTE_WORKSPACE_CHANGED: device installation changed");
-    if (summary.remoteWorkspace) assertBinding(summary.remoteWorkspace as RemoteWorkspaceBinding, binding);
+    if (summary.remoteWorkspace) {
+      const previous = summary.remoteWorkspace as RemoteWorkspaceBinding;
+      assertBinding(previous, binding);
+      if (!supportsClientPaths(client.deviceId) && previous.workspaceRoot !== binding.workspaceRoot) throw new Error("REMOTE_WORKSPACE_CHANGED: legacy client requires the original workspace directory");
+    }
     else {
       // Additive migration: preserve native history and pin the existing source device.
       summary.remoteWorkspace = binding;
@@ -1361,6 +1436,7 @@ function sendAgentRequest(
   params: JsonObject,
   options: AgentRequestOptions = {},
 ): Promise<AgentRpcResponsePayload> {
+  if(clientUpdates.locked(deviceId))return Promise.resolve({ok:false,error:"Client is installing an update",errorCode:"UPDATE_IN_PROGRESS",retryable:true});
   if(auditFailed)return Promise.resolve({ok:false,error:"Audit storage unavailable",errorCode:"AUDIT_STORAGE_UNAVAILABLE",retryable:false});
   const session = agents.get(deviceId);
   const socket = session?.socket;
@@ -1421,7 +1497,7 @@ function approveDevicePatch(client: ConnectedClient, threadId: string, turnId: s
       if (error) reject(new Error(error)); else resolve();
     };
     pendingDeviceApprovals.set(requestId, {clientId:client.id,threadId,turnId,finish});
-    send(client.socket, {type:"approval.request",requestId,kind:"approval",method:"device/fileChange/requestApproval",data:{threadId,turnId,deviceId:binding.deviceId,workspaceRoot:binding.workspaceRoot,patch:params.patch,expectedVersions:params.expectedVersions,scope:"this invocation only; client rechecks versions after approval"},sequence:++sequence});
+    send(client.socket, {type:"approval.request",requestId,kind:"approval",method:"device/fileChange/requestApproval",data:{threadId,turnId,deviceId:binding.deviceId,workspaceRoot:binding.workspaceRoot,patch:params.patch,expectedVersions:params.expectedVersions,expectedPaths:params.expectedPaths,scope:"this invocation only; client rechecks versions after approval"},sequence:++sequence});
   });
 }
 

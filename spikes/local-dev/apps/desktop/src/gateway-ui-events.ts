@@ -3,8 +3,9 @@ import type { AppServerMessage, JsonRpcId } from "./app-server-client";
 import type { OutputArtifact } from "../../../packages/agentrpc-types/src/index";
 import type { TurnTimingStatus } from "./turn-timing";
 import type { MessageAttachment } from "./attachments";
+import type { MessagePresentation } from "./conversation-content";
 
-export interface ChatMessage {
+export interface ChatMessage extends MessagePresentation {
   id: string; role: "user" | "assistant" | "system"; content: string;
   createdAt?: string; turnId?: string; timingOnly?: boolean;
   attachments?: MessageAttachment[]; outputs?: OutputArtifact[];

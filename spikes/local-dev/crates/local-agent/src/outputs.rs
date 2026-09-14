@@ -2,11 +2,13 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+#[cfg(windows)]
+use std::path::Component;
 use std::{
     collections::HashMap,
     fs,
     io::{Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use uuid::Uuid;
@@ -30,14 +32,14 @@ impl Outputs {
     pub fn has_transfers(&self) -> bool {
         !self.writes.is_empty()
     }
-    pub fn new(root: PathBuf, absolute: bool) -> Self {
+    pub fn new(root: PathBuf, _absolute: bool) -> Self {
         let downloads = dirs::download_dir()
             .or_else(|| dirs::home_dir().map(|p| p.join("Downloads")))
             .unwrap_or_else(|| root.clone())
             .join("Codexia");
         Self {
             root,
-            absolute,
+            absolute: true,
             downloads,
             writes: HashMap::new(),
         }
@@ -50,7 +52,7 @@ impl Outputs {
         self.expire();
         match method {
             "file/output_paths" => Ok(
-                json!({"downloads":display_path(&self.downloads),"workspace":display_path(&self.root),"absolutePaths":self.absolute}),
+                json!({"downloads":display_path(&self.downloads),"workspace":display_path(&self.root),"outputDirectory":display_path(&self.root),"absolutePaths":self.absolute}),
             ),
             "file/write_text" => {
                 let content = p["content"].as_str().ok_or("content must be UTF-8 text")?;
@@ -160,13 +162,7 @@ impl Outputs {
         }
     }
     fn existing(&self, raw: &str) -> Result<PathBuf, String> {
-        validate_path(raw)?;
-        let path = Path::new(raw);
-        if path.is_absolute() && self.absolute {
-            path.canonicalize().map_err(|e| e.to_string())
-        } else {
-            super::resolve_existing_path(&self.root, raw)
-        }
+        super::workspace::resolve(&self.root, raw)
     }
     fn destination(&self, p: &Value) -> Result<PathBuf, String> {
         let requested = if let Some(raw) = p["path"].as_str().filter(|v| !v.is_empty()) {
@@ -189,7 +185,7 @@ impl Outputs {
                 return Err("INVALID_OUTPUT_NAME".into());
             }
             validate_path(name)?;
-            self.downloads.join(name)
+            self.root.join(name)
         };
         let parent = requested.parent().ok_or("INVALID_OUTPUT_PATH")?;
         let mut ancestor = parent;
@@ -197,22 +193,17 @@ impl Outputs {
             ancestor = ancestor.parent().ok_or("INVALID_OUTPUT_PARENT")?;
         }
         let canonical = ancestor.canonicalize().map_err(|e| e.to_string())?;
-        // Relative writes retain the workspace boundary, including symlinked parents.
-        if !self.absolute
-            || p["path"]
-                .as_str()
-                .is_some_and(|s| !Path::new(s).is_absolute())
-        {
-            if !canonical.starts_with(&self.root) {
-                return Err("WRITE_ESCAPES_WORKSPACE".into());
-            }
-        }
-        if let Ok(meta) = fs::symlink_metadata(&requested) {
-            if meta.file_type().is_symlink() || !meta.is_file() {
+        if let Ok(meta) = fs::metadata(&requested) {
+            if !meta.is_file() {
                 return Err("OUTPUT_TARGET_NOT_REGULAR_FILE".into());
             }
+            return requested.canonicalize().map_err(|e| e.to_string());
         }
-        Ok(requested)
+        Ok(canonical.join(
+            requested
+                .strip_prefix(ancestor)
+                .map_err(|e| e.to_string())?,
+        ))
     }
     fn save(&self, p: &Value, data: &[u8]) -> Result<Value, String> {
         if data.len() > OUTPUT_LIMIT {
@@ -272,31 +263,43 @@ impl Outputs {
     }
 }
 pub(crate) fn validate_path(raw: &str) -> Result<(), String> {
-    if raw.is_empty()
-        || raw.contains(['\0', '\r', '\n'])
-        || raw.starts_with("\\\\")
-        || raw.starts_with("//")
-    {
+    if raw.is_empty() || raw.contains(['\0', '\r', '\n']) {
         return Err("INVALID_LOCAL_PATH".into());
     }
-    if Path::new(raw)
-        .components()
-        .any(|c| matches!(c, Component::ParentDir))
-    {
-        return Err("PARENT_TRAVERSAL_FORBIDDEN".into());
-    }
     #[cfg(windows)]
-    if raw.chars().enumerate().any(|(i, c)| c == ':' && i != 1)
-        || (raw.as_bytes().get(1) == Some(&b':') && !Path::new(raw).is_absolute())
     {
-        return Err("INVALID_WINDOWS_PATH".into());
+        let path = Path::new(raw);
+        if path.has_root() && !path.is_absolute()
+            || path.components().any(|c| match c {
+                Component::Prefix(prefix) => {
+                    !path.is_absolute()
+                        || !matches!(
+                            prefix.kind(),
+                            std::path::Prefix::Disk(_)
+                                | std::path::Prefix::UNC(_, _)
+                                | std::path::Prefix::VerbatimDisk(_)
+                                | std::path::Prefix::VerbatimUNC(_, _)
+                        )
+                }
+                Component::Normal(part) => {
+                    part.to_string_lossy().contains(':')
+                        || part.to_string_lossy().ends_with(['.', ' '])
+                }
+                _ => false,
+            })
+        {
+            return Err("INVALID_WINDOWS_PATH".into());
+        }
     }
     Ok(())
 }
 pub fn display_path(path: &Path) -> String {
-    path.to_string_lossy()
-        .trim_start_matches("\\\\?\\")
-        .to_string()
+    let value = path.to_string_lossy();
+    if let Some(unc) = value.strip_prefix("\\\\?\\UNC\\") {
+        format!("\\\\{unc}")
+    } else {
+        value.trim_start_matches("\\\\?\\").to_string()
+    }
 }
 fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
@@ -382,10 +385,10 @@ mod tests {
             files
                 .call(
                     "file/write_text",
-                    &json!({"path":"../escape.txt","content":"no"}),
+                    &json!({"path":"../escape.txt","content":"external output"}),
                     false
                 )
-                .is_err()
+                .is_ok()
         );
     }
     #[test]
@@ -405,7 +408,7 @@ mod tests {
             .call("file/write_commit", &json!({"transferId":id}), false)
             .unwrap();
         assert_eq!(result["sha256"], hash(&bytes));
-        assert_eq!(fs::read(files.downloads.join("result.bin")).unwrap(), bytes);
+        assert_eq!(fs::read(files.root.join("result.bin")).unwrap(), bytes);
         assert!(
             files
                 .call("file/reveal", &json!({"path":result["path"]}), false)

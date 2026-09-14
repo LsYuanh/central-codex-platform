@@ -49,6 +49,7 @@ export class NativeServiceHost {
       TEST_GATEWAY_STATE_FILE:join(this.config.dataDirectory,'gateway-state.json'),
       PLATFORM_AUTH_FILE:join(this.config.dataDirectory,'platform-auth.json'),
       PLATFORM_AUDIT_DIR:join(this.config.dataDirectory,'audit'),
+      PLATFORM_CLIENT_RELEASE_DIR:join(this.config.dataDirectory,'client-releases'),
       PLATFORM_WORKER_ROOT:join(this.config.dataDirectory,'workers'),
       PLATFORM_MODEL_BINDINGS:join(this.config.dataDirectory,'model-bindings.memory'),
       PLATFORM_DEVICE_AUTH_MODE:'device-token-v1',PLATFORM_WORKER_ISOLATION:mac?'macos-seatbelt-v1':'windows-appcontainer-v1',

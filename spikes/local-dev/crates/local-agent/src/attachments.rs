@@ -23,7 +23,6 @@ struct Transfer {
 }
 pub struct Attachments {
     root: PathBuf,
-    allow_absolute: bool,
     transfers: HashMap<String, Transfer>,
     temp_root: PathBuf,
     identity: Value,
@@ -35,7 +34,6 @@ impl Attachments {
         Self {
             outputs: super::outputs::Outputs::new(root.clone(), allow_absolute),
             root,
-            allow_absolute,
             transfers: HashMap::new(),
             temp_root: std::env::temp_dir().join("codexia-attachments-v1"),
             identity: json!({}),
@@ -54,15 +52,7 @@ impl Attachments {
     }
     fn resolve(&self, p: &Value) -> Result<PathBuf, String> {
         let raw = super::required_string(p, "path")?;
-        let path = Path::new(raw);
-        if path.is_absolute() && self.allow_absolute {
-            if raw.starts_with("\\\\") || raw.starts_with("//") {
-                return Err("NETWORK_PATH_UNSUPPORTED".into());
-            }
-            path.canonicalize().map_err(|e| e.to_string())
-        } else {
-            super::resolve_existing_path(&self.root, raw)
-        }
+        super::workspace::resolve(&self.root, raw)
     }
     pub fn call(&mut self, method: &str, p: &Value, local: bool) -> Result<Value, String> {
         self.expire();
@@ -406,7 +396,7 @@ mod tests {
         }
     }
     #[test]
-    fn absolute_attachment_and_relative_sandbox() {
+    fn absolute_and_parent_attachment_paths_do_not_depend_on_lan_flag() {
         let f = Fixture::new();
         let p = f.0.join("outside.txt");
         fs::write(&p, "client-only").unwrap();
@@ -421,12 +411,12 @@ mod tests {
         assert!(
             restricted
                 .call("file/stat", &json!({"path":p}), false)
-                .is_err()
+                .is_ok()
         );
         assert!(
             trusted
                 .call("file/stat", &json!({"path":"../outside.txt"}), false)
-                .is_err()
+                .is_ok()
         );
         assert!(
             trusted

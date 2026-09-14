@@ -20,10 +20,10 @@ export interface RemoteWorkspaceBinding {
   workspaceRoot: string;
 }
 
-/** Platform routing identity is never taken from model-supplied tool arguments. */
+/** Bind to the original device; changing its default output directory does not move the Thread. */
 export function assertBinding(binding: RemoteWorkspaceBinding, current: RemoteWorkspaceBinding): void {
-  for (const key of ["policy", "userId", "deviceId", "deviceKey", "workspaceRoot"] as const) {
-    if (binding[key] !== current[key]) throw new Error(`REMOTE_WORKSPACE_CHANGED: ${key}; reconnect the original workspace or create a new conversation`);
+  for (const key of ["policy", "userId", "deviceId", "deviceKey"] as const) {
+    if (binding[key] !== current[key]) throw new Error(`REMOTE_WORKSPACE_CHANGED: ${key}; reconnect the original client device or create a new conversation`);
   }
 }
 
@@ -45,12 +45,12 @@ export function executionStatus(result: AgentRpcResponsePayload): string {
   return "failed";
 }
 
-const path = {type:"string", description:"Path relative to the bound client workspace; absolute paths and parent traversal are rejected."};
+const path = {type:"string", description:"Absolute client path or relative path from the default output directory; access follows OS account permissions."};
 export const WORKSPACE_TOOLS = [
   {type:"function", name:"device_workspace_context", description:"Read actual client OS, shell, workspace and applicable AGENTS project rules. Read context for the target directory before editing.", inputSchema:{type:"object",properties:{path}}},
-  {type:"function", name:"device_workspace_search", description:"Search client workspace filenames or UTF-8 text with bounded pagination. No central filesystem is searched.",inputSchema:{type:"object",properties:{path,mode:{type:"string",enum:["files","text"]},query:{type:"string"},cursor:{type:"string"},limit:{type:"integer",minimum:1,maximum:200}},required:["mode","query"]}},
+  {type:"function", name:"device_workspace_search", description:"Search filenames at the specified client directory or UTF-8 text with bounded pagination. No central filesystem is searched.",inputSchema:{type:"object",properties:{path,mode:{type:"string",enum:["files","text"]},query:{type:"string"},cursor:{type:"string"},limit:{type:"integer",minimum:1,maximum:200}},required:["mode","query"]}},
   {type:"function", name:"device_workspace_read_text", description:"Read client UTF-8 project text with a content SHA256 version and bounded pages. Use that version for safe edits.",inputSchema:{type:"object",properties:{path,offset:{type:"integer",minimum:0},version:{type:"string"}},required:["path"]}},
-  {type:"function", name:"device_workspace_git_status", description:"Get actual client Git status; fails if the workspace is not a repository.",inputSchema:{type:"object",properties:{path}}},
+  {type:"function", name:"device_workspace_git_status", description:"Get actual client Git status; pass the project directory; fails if it is not a repository.",inputSchema:{type:"object",properties:{path}}},
   {type:"function", name:"device_workspace_git_diff", description:"Get actual bounded client Git diff, never an inferred model diff. Includes truncation and exit status.",inputSchema:{type:"object",properties:{path,staged:{type:"boolean"}}}},
-  {type:"function", name:"device_workspace_apply_patch", description:"Apply a Codex patch on the client workspace after one-time user approval. Gateway prepares a client preview and captures SHA256 versions (missing for a new path) before requesting approval. Optional expectedVersions must match the preview. Client rechecks after approval; conflicts fail without applying stale edits. Multi-file failures report partial changes; never assume rollback.",inputSchema:{type:"object",properties:{patch:{type:"string"},expectedVersions:{type:"object",additionalProperties:{type:"string"}}},required:["patch"]}},
+  {type:"function", name:"device_workspace_apply_patch", description:"Apply a Codex patch at the specified client paths after one-time user approval. Use absolute client paths in patch file headers for projects outside the default output directory; relative patch paths start at the output directory. Gateway prepares a client preview and captures canonical paths and SHA256 versions (missing for a new path) before requesting approval. Optional expectedVersions must match the preview. Client rechecks after approval; conflicts fail without applying stale edits. Multi-file failures report partial changes; never assume rollback.",inputSchema:{type:"object",properties:{patch:{type:"string"},expectedVersions:{type:"object",additionalProperties:{type:"string"}}},required:["patch"]}},
 ] as const;

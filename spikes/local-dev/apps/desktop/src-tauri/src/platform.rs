@@ -31,7 +31,7 @@ fn close_event(code: Option<&'static str>) -> Value {
 pub struct PlatformState {
     pub namespace: String,
     pub directory: PathBuf,
-    guard: Mutex<()>,
+    pub(crate) guard: Mutex<()>,
     sockets: Mutex<HashMap<String, NativeSocket>>,
 }
 struct NativeSocket {
@@ -85,12 +85,14 @@ impl PlatformState {
 }
 #[tauri::command]
 pub async fn platform_account(
+    updates: tauri::State<'_, crate::updates::UpdateState>,
     state: tauri::State<'_, PlatformState>,
     runtime: tauri::State<'_, crate::runtime::DesktopRuntime>,
     gateway: String,
     action: String,
     input: Value,
 ) -> Result<Value, String> {
+    updates.ensure_idle()?;
     let _guard = state.guard.lock().await;
     if action == "pair-bundle" {
         let bundle = platform_security::pairing_bundle::Bundle::decode(
@@ -284,10 +286,12 @@ mod tests {
 }
 #[tauri::command]
 pub async fn platform_ws_send(
+    updates: tauri::State<'_, crate::updates::UpdateState>,
     state: tauri::State<'_, PlatformState>,
     connection_id: String,
     data: Option<String>,
 ) -> Result<(), String> {
+    updates.ensure_idle()?;
     if data.as_ref().is_some_and(|s| s.len() > 1024 * 1024) {
         return Err("中央请求过大".into());
     }

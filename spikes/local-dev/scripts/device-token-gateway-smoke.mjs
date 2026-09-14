@@ -38,6 +38,7 @@ function start(extra={}){const child=spawn(process.execPath,[resolve('services/t
 async function stop(run){if(run.child.exitCode===null&&run.child.signalCode===null)run.child.kill();await until(()=>run.child.exitCode!==null||run.child.signalCode!==null,'gateway stopped');}
 function http(route,body,token){return new Promise((resolve,reject)=>{const req=https.request(origin+route,{method:body===undefined?'GET':'POST',ca,agent:false,timeout:5000,headers:{...(body!==undefined?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})}},res=>{let raw='';res.on('data',d=>raw+=d);res.on('end',()=>{try{const value=JSON.parse(raw);value.ok?resolve(value):reject(Error(value.error??'HTTP_FAILED'));}catch(e){reject(e);}});});req.on('error',reject);req.on('timeout',()=>req.destroy(Error('HTTP timeout')));req.end(body===undefined?undefined:JSON.stringify(body));});}
 async function post(route,body={},token){return(await http(route,body,token)).data;}
+async function updateHttp(route,token,lease){return new Promise((resolve,reject)=>{const req=https.request(origin+'/client-updates/'+route,{method:'POST',ca,agent:false,timeout:5000,headers:{...(token?{Authorization:'Bearer '+token}:{}),...(lease?{'x-update-lease':lease}:{})}},res=>{let raw='';res.on('data',d=>raw+=d);res.on('end',()=>{try{resolve({status:res.statusCode,body:JSON.parse(raw)});}catch(e){reject(e);}});});req.on('error',reject);req.on('timeout',()=>req.destroy(Error('TIMEOUT')));req.end();});}
 const pass=name=>{checks.push(name);console.log('PASS '+name);};
 async function connect(url,token,onMessage){
   const ws=new WebSocket(url,{ca,headers:{Authorization:'Bearer '+token},handshakeTimeout:5000});sockets.push(ws);ws.on('error',()=>{});if(onMessage)ws.on('message',raw=>onMessage(JSON.parse(String(raw))));
@@ -57,7 +58,7 @@ async function agent(device,{wrongKey=false}={}){
   const result=message.payload.method==='workspace/context'?{source:'client',workspaceRoot:'C:/synthetic-token-workspace',os:'windows',rules:[]}:{source:'client',content:device.deviceId};
   socket.send(JSON.stringify(envelope('agent.response',{ok:true,result},message.requestId)));
  });
- socket.send(JSON.stringify(envelope('agent.hello',{deviceId:device.deviceId,agent:{version:'token-protocol-fixture',os:'windows',arch:'x64',deviceKey:wrongKey?'0'.repeat(64):device.deviceKey,workspaceRoot:'C:/synthetic-token-workspace',capabilities:['remote-workspace/v1','workspace/context','workspace/read_text','exec']}})));
+ socket.send(JSON.stringify(envelope('agent.hello',{deviceId:device.deviceId,agent:{version:'token-protocol-fixture',os:'windows',arch:'x64',deviceKey:wrongKey?'0'.repeat(64):device.deviceKey,workspaceRoot:'C:/synthetic-token-workspace',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context','workspace/read_text','exec']}})));
  await until(()=>ready||socket.readyState===WebSocket.CLOSED,'Agent hello');return{socket,messages,ready};
 }
 let current,result;
@@ -73,9 +74,17 @@ try{
  const health=await http('/healthz');assert.equal(health.devices,3);assert.equal(health.clients,3);assert.equal(workerPids.size,2);pass('token UI and Agent channels use existing gateway routing and separate per-user Workers');
  assert.equal((await ua.request('device.workspace.read_text',{path:'fixture.txt'})).result.content,a.deviceId);assert.equal((await ub.request('device.workspace.read_text',{path:'fixture.txt'})).result.content,b.deviceId);pass('device read requests route to the exact bearer-bound Agent fixture');
  const threadId=(await ua.request('conversation.create')).thread.id;assert(threadId);await ua.request('conversation.resume',{threadId});await assert.rejects(ua2.request('conversation.resume',{threadId}),/REMOTE_WORKSPACE_CHANGED/);await assert.rejects(ub.request('conversation.read',{threadId}));pass('existing Thread ownership and original-device workspace binding remain enforced');
+ assert.equal((await updateHttp('prepare')).status,401);assert.equal((await updateHttp('prepare',admin.accessToken)).status,401);
+ const lease=await updateHttp('prepare',a.deviceToken);assert.equal(lease.status,200);assert.equal(typeof lease.body.token,'string');
+ await assert.rejects(ua.request('device.workspace.read_text',{path:'fixture.txt'}),/UPDATE_IN_PROGRESS/);
+ assert.equal((await ua2.request('device.workspace.read_text',{path:'fixture.txt'})).result.content,a2.deviceId);
+ await updateHttp('release',a2.deviceToken,lease.body.token);assert.equal((await updateHttp('prepare',a.deviceToken)).status,409);
+ await updateHttp('release',a.deviceToken,lease.body.token);await ua.request('device.workspace.read_text',{path:'fixture.txt'});
+ pass('native update maintenance requires a device bearer, blocks only its requests, and releases only with its own lease');
  await assert.rejects(ua.request('test.approval.inject'));await assert.rejects(connect(gateway+'?deviceId='+b.deviceId,a.deviceToken));await assert.rejects(connect(gateway,admin.accessToken),/AUTH_MODE_UNSUPPORTED/);pass('authentication keeps fixture controls disabled and denies URL/session identity substitution');
  const pending=ua.request('device.exec',{program:'never-executed-protocol-fixture',args:[],cwd:'.',timeoutMs:30000}).then(()=>({unexpected:true}),error=>({error:String(error)}));
  await until(()=>aa.messages.some(m=>m.type==='agent.request'&&m.payload.method==='exec'),'pending device request dispatched');
+ assert.equal((await updateHttp('prepare',a.deviceToken)).status,409);pass('active client execution prevents update installation');
  await post('/auth/device/revoke',{deviceId:a.deviceId},admin.accessToken);await until(()=>ua.socket.readyState===WebSocket.CLOSED&&aa.socket.readyState===WebSocket.CLOSED,'revoked channels close');assert((await pending).error);assert.equal(aa2.socket.readyState,WebSocket.OPEN);assert.equal((await ua2.request('device.workspace.read_text',{path:'fixture.txt'})).result.content,a2.deviceId);await assert.rejects(connect(gateway+'/agent',a.deviceToken),/DEVICE_REVOKED/);pass('revocation closes both channels, fails the outstanding request without replay, and preserves a sibling Agent');
  await post('/auth/admin/user/disable',{userId:users[2].id},admin.accessToken);await until(()=>ub.socket.readyState===WebSocket.CLOSED&&ab.socket.readyState===WebSocket.CLOSED,'disabled user channels close');pass('user disablement removes its active UI and Agent through the real gateway');
  await post('/auth/device/disconnect',{},a2.deviceToken);await until(()=>ua2.socket.readyState===WebSocket.CLOSED&&aa2.socket.readyState===WebSocket.CLOSED,'self-disconnect channels close');await until(async()=>{const h=await http('/healthz');return h.devices===0&&h.clients===0;},'all device channels removed');pass('self disconnect uses the existing gateway lifecycle and leaves no device connection');

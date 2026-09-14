@@ -11,6 +11,7 @@ use std::{
 use tauri::Manager;
 mod platform;
 mod runtime;
+mod updates;
 use runtime::{DesktopConfig, DesktopRuntime};
 use std::{
     env,
@@ -109,16 +110,18 @@ async fn desktop_config(
 
 #[tauri::command]
 async fn apply_desktop_config(
+    updates: tauri::State<'_, updates::UpdateState>,
     state: tauri::State<'_, DesktopRuntime>,
     config: DesktopConfig,
 ) -> Result<runtime::ConfigView, String> {
+    updates.ensure_idle()?;
     state.apply(config).await
 }
 
 #[tauri::command]
 async fn select_workspace_directory() -> Option<String> {
     rfd::AsyncFileDialog::new()
-        .set_title("选择本机工作区")
+        .set_title("选择默认输出目录")
         .pick_folder()
         .await
         .map(|folder| folder.path().to_string_lossy().into_owned())
@@ -253,16 +256,19 @@ fn spawn_local_agent(config: &DesktopConfig) -> Result<Child, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::UpdateState::default())
         .setup(|app| {
             let namespace = app.config().identifier.clone();
             let directory = app.path().app_config_dir()?;
             let _ = platform::LAUNCH_CONTEXT.set((namespace.clone(), directory.clone()));
             app.manage(platform::PlatformState::new(namespace, directory));
+            tauri::async_runtime::block_on(updates::recover_attempt(app.handle()));
             let suggested_workspace = app
                 .path()
                 .document_dir()
                 .or_else(|_| app.path().home_dir().map(|path| path.join("Documents")))?
-                .join("Codexia Workspace");
+                .join("YuanZhou Workspace");
             app.manage(DesktopRuntime::new(
                 app.path().app_config_dir()?.join("desktop-runtime-v1.json"),
                 suggested_workspace,
@@ -278,10 +284,22 @@ fn main() {
             select_workspace_directory,
             platform::platform_account,
             platform::platform_ws_open,
-            platform::platform_ws_send
+            platform::platform_ws_send,
+            updates::desktop_update_check,
+            updates::desktop_update_download,
+            updates::desktop_update_install
         ])
         .on_window_event(move |window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window
+                    .app_handle()
+                    .state::<updates::UpdateState>()
+                    .ensure_idle()
+                    .is_err()
+                {
+                    api.prevent_close();
+                    return;
+                }
                 let _ = window.hide();
                 // macOS normally keeps an app alive after its last window closes.
                 // This single-window client owns its Agent for the entire app lifetime.
@@ -291,6 +309,14 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build desktop Spike")
         .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = &event
+            {
+                if app.state::<updates::UpdateState>().ensure_idle().is_err() {
+                    api.prevent_exit();
+                }
+            }
             if matches!(event, tauri::RunEvent::Exit) {
                 // Includes the application menu / Cmd+Q path, which does not close
                 // each window first. Wait for any configuration change before cleanup.

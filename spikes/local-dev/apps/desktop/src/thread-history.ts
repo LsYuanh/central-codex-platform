@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
+import { messagePhase, processItem, type MessagePresentation } from "./conversation-content.ts";
 export type RestoredChatRole = "user" | "assistant" | "system";
 
-export interface RestoredChatMessage {
+export interface RestoredChatMessage extends MessagePresentation {
   id: string;
   role: RestoredChatRole;
   content: string;
@@ -47,6 +48,9 @@ export function messagesFromThreadRead(result: unknown): RestoredChatMessage[] {
         shownOutputs.add(output.id);
       }
       if(item?.type==="imageGeneration")continue;
+      const process = processItem(item, group.turnId);
+      if (process) { if (process.content) restored.push(process); continue; }
+      if (item?.type === "reasoning") continue;
       const raw = extractItemText(item);
       const role = roleFromItem(item);
       const submission = role === "user" ? submissions.find(s => raw.includes(`[platform-message:${s.clientMessageId}]`))
@@ -55,7 +59,7 @@ export function messagesFromThreadRead(result: unknown): RestoredChatMessage[] {
       if (submission) shownSubmissions.add(submission.clientMessageId);
       const content = submission?.content ?? raw.replace(/\[platform-message:[a-zA-Z0-9-]+\]/g, "").trim();
       if (!content.trim() && !submission?.attachments.length) continue;
-      restored.push({ id: submission?.clientMessageId ?? (typeof item?.id === "string" ? `${role === "assistant" ? "assistant-" : ""}${item.id}` : crypto.randomUUID()), role, content, attachments: submission?.attachments, createdAt: dateFromRecord(item) ?? group.createdAt, turnId:group.turnId ?? (typeof item?.turnId === "string" ? item.turnId : undefined), ...(submission?.kind === "steer" ? {delivery:"sent" as const} : {}) });
+      restored.push({ id: submission?.clientMessageId ?? (typeof item?.id === "string" ? `${role === "assistant" ? "assistant-" : ""}${item.id}` : crypto.randomUUID()), role, content, phase: messagePhase(item?.phase), attachments: submission?.attachments, createdAt: dateFromRecord(item) ?? group.createdAt, turnId:group.turnId ?? (typeof item?.turnId === "string" ? item.turnId : undefined), ...(submission?.kind === "steer" ? {delivery:"sent" as const} : {}) });
     }
     for(const output of outputs.filter(value=>value.turnId===group.turnId&&!shownOutputs.has(value.id))){
       restored.push({id:`output-${output.id}`,role:"assistant",content:"",outputs:[output],createdAt:group.createdAt,turnId:group.turnId});shownOutputs.add(output.id);

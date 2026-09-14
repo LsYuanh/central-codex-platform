@@ -60,6 +60,6 @@ export function deviceAuthorization(account:DeviceAccount){
   const localValid=account.paired&&!account.storageError&&!account.authorizationError&&!unsupported;
   const valid=localValid&&account.remoteAvailable!==false;
   const canPair=!account.storageError&&!unsupported&&(!account.paired||Boolean(account.authorizationError));
-  const notice=localValid?account.remoteAvailable===false?"本机配对已保存，暂时无法确认中央授权。":"本机已授权。确认本机工作区后，点击“保存并应用”开始连接。":hasLocalPairing?"本机授权暂不可用。":"粘贴管理员提供的一体配对码，即可授权并连接本机。";
+  const notice=localValid?account.remoteAvailable===false?"本机配对已保存，暂时无法确认中央授权。":"本机已授权。确认默认输出目录后，点击“保存并应用”开始连接。":hasLocalPairing?"本机授权暂不可用。":"粘贴管理员提供的一体配对码，即可授权并连接本机。";
   return {hasLocalPairing,valid,canPair,notice,problem};
 }

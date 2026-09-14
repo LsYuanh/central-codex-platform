@@ -45,7 +45,7 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
         const value=await call<DeviceAccount>(gateway,action,input);if(requestEpoch!==epoch.current)return;
         setAccount(value);setReady(true);
         if(!value.paired||!value.user?.id||!value.deviceId||value.storageError)throw Error(value.storageError??"PAIRING_RESULT_UNKNOWN");
-        if(action==="pair-bundle"){if(!value.gatewayUrl?.startsWith("wss://"))throw Error("PAIRING_RESULT_UNKNOWN");await onBundlePaired(value.gatewayUrl,value.user.id,value.deviceId);}else{identityRef.current(value.user.id,value.deviceId);setNotice("本机已授权。确认下方本机工作区后，点击“保存并应用”开始连接。");}
+        if(action==="pair-bundle"){if(!value.gatewayUrl?.startsWith("wss://"))throw Error("PAIRING_RESULT_UNKNOWN");await onBundlePaired(value.gatewayUrl,value.user.id,value.deviceId);}else{identityRef.current(value.user.id,value.deviceId);setNotice("本机已授权。确认下方默认输出目录后，点击“保存并应用”开始连接。");}
       }else if(action==="disconnect"){
         const value=await call<Disconnected>(gateway,action,input);if(requestEpoch!==epoch.current)return;
         if(!value.localRemoved)throw Error("DEVICE_TOKEN_STORAGE_UNAVAILABLE");

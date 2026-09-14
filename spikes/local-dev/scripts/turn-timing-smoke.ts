@@ -61,7 +61,22 @@ const rows = messagesFromThreadRead({ thread: { turns: [{ id: "1", status: "comp
   { id: "final", type: "agentMessage", text: "已完成" },
 ] }] } });
 assert(rows.every(row => row.turnId === "1"));
-assert.deepEqual([...timingAnchors(rows, store.forThread("a")).keys()], ["assistant-final"], "only the final reply gets a timing header");
+assert.deepEqual([...timingAnchors(rows, store.forThread("a")).keys()], ["assistant-progress"], "the whole turn's timing belongs above its first assistant reply");
+const live = new TurnTimingStore();
+live.observe("a", { id: "1" }, "start", now);
+const withOutputs = [...rows.slice(0, 2), { id: "file", role: "assistant", content: "", turnId: "1" },
+  { id: "steer", role: "user", content: "再调整一下", turnId: "1" }, rows[2],
+  { id: "marker", role: "system", content: "", turnId: "1", timingOnly: true }];
+assert.deepEqual([...timingAnchors(rows.slice(0, 1), live.forThread("a")).keys()], ["u"], "before the first reply the user row carries the timing below its input");
+assert.deepEqual([...timingAnchors(withOutputs, live.forThread("a")).keys()], ["assistant-progress"], "live timing appears once before the first reply, before outputs and steering");
+live.observe("a", { id: "1", status: "completed" }, "finish", now + 28000);
+assert.deepEqual([...timingAnchors(withOutputs, live.forThread("a")).keys()], ["assistant-progress"], "completion preserves the live timing position");
+assert.equal(live.get("a", "1")?.durationMs, 28000);
+live.observe("a", { id: "2" }, "start", now + 30000);
+const twoTurns = [...withOutputs, { id: "u2", role: "user", content: "第二轮", turnId: "2" }];
+assert.deepEqual([...timingAnchors(twoTurns, live.forThread("a")).keys()], ["assistant-progress", "u2"], "each turn has its own timing header");
+assert.deepEqual([...timingAnchors([withOutputs[0], withOutputs[2], rows[2]], live.forThread("a")).keys()], ["file"], "a file-only first assistant reply also receives the timing header");
+assert.deepEqual([...timingAnchors(withOutputs.slice(1), live.forThread("a")).keys()], ["assistant-progress"], "history without a user item anchors to the first available output");
 assert.deepEqual([...timingAnchors([{ id: "empty", role: "system", content: "", turnId: "1", timingOnly: true }], store.forThread("b")).keys()], ["empty"], "stopped turns with no output still get a summary");
 let stream = appendStreamDelta([], "第一轮", "i1", "1");
 stream = appendStreamDelta(stream, "下一轮", undefined, "2");

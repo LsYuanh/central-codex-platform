@@ -35,11 +35,11 @@ try {
     try{return {ok:true,result:await ipc(method,params)};}catch(e){return {ok:false,error:String(e)};}
   }});
   const image={type:"imageGeneration",id:randomUUID(),status:"completed",failure:null,result:fixturePng().toString("base64")};
-  await broker.image("test", "image-turn", image);savedTests.push(join(paths.downloads,broker.list("test")[0].name));assert.equal(broker.list("test")[0].status,"failed");
+  await broker.image("test", "image-turn", image);savedTests.push(join(paths.outputDirectory,broker.list("test")[0].name));assert.equal(broker.list("test")[0].status,"failed");
   await broker.retry("test",image.id,{thread:{turns:[{id:"image-turn",items:[image]}]}});
   const saved=broker.list("test")[0];assert.equal(saved.status,"saved",saved.error);savedTests.push(saved.path);
   assert.equal(createHash("sha256").update(readFileSync(saved.path)).digest("hex"),saved.sha256);
-  assert.equal(saved.path.startsWith(paths.downloads),true);assert.equal(transitions.at(-1),"saved");
+  assert.equal(saved.path.startsWith(paths.outputDirectory),true);assert.equal(transitions.at(-1),"saved");
   const before=saved.version;await broker.image("test","image-turn",image);assert.equal(saved.version,before);
   const preview=await ipc("attachment/output_preview",{path:saved.path,version:saved.version});assert(preview.url.startsWith("data:image/jpeg;base64,"));
   // Verify absolute command cwd, ordinary writes and actionable failures on the client.

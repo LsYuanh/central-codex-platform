@@ -79,6 +79,17 @@ pub(crate) fn ca_bytes(path: &str) -> Result<Option<Vec<u8>>, String> {
 pub fn http(ca_path: &str) -> Result<reqwest::Client, String> {
     http_identity(ca_path, None)
 }
+
+/// Reuse the paired central CA for native lifecycle clients (including updates).
+pub fn http_builder(ca_path: &str) -> Result<reqwest::ClientBuilder, String> {
+    Ok(transport::http_builder(transport::config(
+        ca_bytes(ca_path)?.as_deref(),
+    )?))
+}
+
+pub fn central_tls_config(ca_path: &str) -> Result<rustls::ClientConfig, String> {
+    transport::config(ca_bytes(ca_path)?.as_deref())
+}
 pub(crate) fn http_identity(
     ca_path: &str,
     identity: Option<rustls::ClientConfig>,

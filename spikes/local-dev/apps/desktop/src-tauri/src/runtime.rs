@@ -195,6 +195,32 @@ fn start(config: &DesktopConfig) -> Result<AgentProcess, String> {
 }
 
 impl DesktopRuntime {
+    pub async fn stop_for_update(&self, expected: &DesktopConfig) -> Result<(), String> {
+        let mut inner = self
+            .0
+            .try_write()
+            .map_err(|_| "本机操作正在进行，请稍后安装")?;
+        if &inner.effective != expected {
+            return Err("配置已变更，请重新检查更新".into());
+        }
+        if let Some(process) = inner.process.as_ref() {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                process.ipc.request("runtime/prepare_restart", json!({})),
+            )
+            .await
+            .map_err(|_| "Local Agent 状态核对超时")??;
+        }
+        inner.process.take();
+        Ok(())
+    }
+
+    pub async fn restore_after_update(&self) -> Result<(), String> {
+        let mut inner = self.0.write().await;
+        inner.process = Some(start(&inner.effective)?);
+        Ok(())
+    }
+
     pub fn new(path: PathBuf, suggested_workspace: PathBuf) -> Self {
         let key = local_device_key().unwrap_or_else(|_| uuid::Uuid::new_v4().to_string());
         let short_key = key.split('-').next().unwrap_or("device");
@@ -288,12 +314,12 @@ impl DesktopRuntime {
             .map_err(|_| "本机操作尚未结束，请稍后应用配置")?;
         let candidate = normalize_config(candidate)?;
         if candidate.workspace_root.is_empty() {
-            return Err("请选择本机工作区目录".into());
+            return Err("请选择默认输出目录".into());
         }
         let workspace = PathBuf::from(&candidate.workspace_root);
         if !workspace.exists() && workspace == inner.suggested_workspace {
             fs::create_dir_all(&workspace)
-                .map_err(|error| format!("无法创建默认工作区：{error}"))?;
+                .map_err(|error| format!("无法创建默认输出目录：{error}"))?;
         }
         let applied = effective(&candidate)?;
         // Validate before stopping a healthy process. Directory inspection is local desktop setup only.
@@ -606,7 +632,7 @@ mod tests {
         let root_b = temp.path().join("workspace-b");
         fs::create_dir_all(&root_a).unwrap();
         fs::create_dir_all(&root_b).unwrap();
-        let suggested_root = temp.path().join("Documents").join("Codexia Workspace");
+        let suggested_root = temp.path().join("Documents").join("YuanZhou Workspace");
         let suggested_path = temp.path().join("suggested-runtime.json");
         let suggested_runtime = DesktopRuntime::with_options(
             suggested_path.clone(),
@@ -761,6 +787,11 @@ mod tests {
         assert!(view.running);
         assert!(view.has_saved);
         assert_eq!(view.saved, config_b);
+        reopened.stop_for_update(&view.effective).await.unwrap();
+        assert!(!reopened.view().await.running);
+        reopened.restore_after_update().await.unwrap();
+        assert!(reopened.view().await.running);
+        assert_eq!(reopened.view().await.saved, config_b);
         {
             let inner = reopened.0.read().await;
             inner

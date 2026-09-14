@@ -5,7 +5,7 @@ use std::{
     env,
     error::Error,
     fs,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -224,7 +224,8 @@ fn parse_args() -> AgentResult<Config> {
     Ok(Config {
         workspace_root,
         gateway_url,
-        allow_absolute: allow_insecure_lan,
+        // File access follows the client's OS account, independently of transport security.
+        allow_absolute: true,
         attachment_stdio,
         device_id,
         device_key,
@@ -266,7 +267,7 @@ async fn run_connection(
                 "os": env::consts::OS,
                 "arch": env::consts::ARCH,
                 "workspaceRoot": outputs::display_path(&config.workspace_root),
-                "capabilities": ["remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
+                "capabilities": ["client-paths/v1", "remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
                 "absolutePaths": config.allow_absolute
             }
         }),
@@ -650,7 +651,7 @@ fn list_workspace(workspace_root: &Path, params: &Value) -> Result<Value, String
         .collect::<Result<Vec<_>, String>>()?;
     entries.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
 
-    Ok(json!({ "path": requested_path, "entries": entries }))
+    Ok(json!({ "path": outputs::display_path(&target), "entries": entries }))
 }
 
 fn read_file(workspace_root: &Path, params: &Value) -> Result<Value, String> {
@@ -670,7 +671,7 @@ fn read_file(workspace_root: &Path, params: &Value) -> Result<Value, String> {
 
 async fn execute_command(
     workspace_root: &Path,
-    allow_absolute: bool,
+    _allow_absolute: bool,
     params: &Value,
     cancel: watch::Receiver<bool>,
     sink: process::EventSink,
@@ -695,24 +696,15 @@ async fn execute_command(
         .and_then(Value::as_u64)
         .unwrap_or(DEFAULT_COMMAND_TIMEOUT_MS)
         .clamp(1_000, MAX_COMMAND_TIMEOUT_MS);
-    let cwd = if params.get("__remoteWorkspace").is_some() {
-        workspace::resolve(workspace_root, requested_cwd)?
-    } else if allow_absolute && Path::new(requested_cwd).is_absolute() {
-        outputs::validate_path(requested_cwd)?;
-        Path::new(requested_cwd)
-            .canonicalize()
-            .map_err(|e| e.to_string())?
-    } else {
-        resolve_existing_path(workspace_root, requested_cwd)?
-    };
+    let cwd = workspace::resolve(workspace_root, requested_cwd)?;
     if !cwd.is_dir() {
         return Err("cwd must be a directory".into());
     }
 
     // The command runs on the client, never on the central worker. PowerShell
     // is supported explicitly (`powershell -NoProfile -Command ...`) while
-    // relative cwd stays in the workspace; trusted LAN mode also allows a
-    // client absolute cwd, subject to this OS user's permissions.
+    // cwd may name any directory accessible to this OS user. Omitted cwd uses
+    // the configured output directory; it is not a filesystem sandbox.
     let mut command = Command::new(program);
     command.args(&args).current_dir(cwd);
     process::run_command_detailed(
@@ -727,23 +719,7 @@ async fn execute_command(
 }
 
 fn resolve_existing_path(workspace_root: &Path, requested_path: &str) -> Result<PathBuf, String> {
-    let relative = Path::new(requested_path);
-    if relative.is_absolute()
-        || relative
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
-    {
-        return Err("absolute paths and parent traversal are forbidden".into());
-    }
-
-    let resolved = workspace_root
-        .join(relative)
-        .canonicalize()
-        .map_err(|error| error.to_string())?;
-    if !resolved.starts_with(workspace_root) {
-        return Err("resolved path escapes the workspace root".into());
-    }
-    Ok(resolved)
+    workspace::resolve(workspace_root, requested_path)
 }
 
 fn required_string<'a>(params: &'a Value, key: &str) -> Result<&'a str, String> {
@@ -759,10 +735,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rejects_parent_traversal() {
-        let root = env::current_dir().expect("current directory");
-        let error = resolve_existing_path(&root, "../outside").expect_err("traversal must fail");
-        assert!(error.contains("forbidden"));
+    fn resolves_files_outside_default_output_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let output = temp.path().join("outputs");
+        fs::create_dir(&output).unwrap();
+        fs::write(temp.path().join("outside.txt"), "client file").unwrap();
+        assert_eq!(
+            resolve_existing_path(&output, "../outside.txt").unwrap(),
+            temp.path().join("outside.txt").canonicalize().unwrap()
+        );
+        assert_eq!(
+            read_file(&output, &json!({"path":temp.path().join("outside.txt")})).unwrap()["content"],
+            "client file"
+        );
     }
 
     #[test]

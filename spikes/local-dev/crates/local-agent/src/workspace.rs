@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-//! Client-only, bounded workspace operations. These never inherit LAN absolute-path access.
+//! Client-only file operations. The configured root is a default output directory, not a sandbox.
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::{Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -41,48 +41,12 @@ fn link(metadata: &fs::Metadata) -> bool {
 }
 
 pub fn resolve(root: &Path, raw: &str) -> Result<PathBuf, String> {
-    let relative = Path::new(raw);
-    if raw.contains(':')
-        || raw.contains('\\') && !cfg!(windows)
-        || relative.is_absolute()
-        || relative.components().any(|c| {
-            matches!(
-                c,
-                Component::ParentDir | Component::Prefix(_) | Component::RootDir
-            )
-        })
-    {
-        return Err(
-            "WORKSPACE_PATH_DENIED: a workspace-relative path without traversal is required".into(),
-        );
-    }
-    let mut target = root.to_path_buf();
-    for component in relative.components() {
-        if let Component::Normal(part) = component {
-            #[cfg(windows)]
-            if part.to_string_lossy().ends_with(['.', ' ']) {
-                return Err("WORKSPACE_PATH_DENIED: ambiguous Windows path component".into());
-            }
-            target.push(part);
-            if link(&fs::symlink_metadata(&target).map_err(io_error)?) {
-                return Err(
-                    "WORKSPACE_PATH_DENIED: symlink/reparse paths are not supported".into(),
-                );
-            }
-        }
-    }
-    let canonical = target.canonicalize().map_err(io_error)?;
-    if !canonical.starts_with(root) {
-        return Err("WORKSPACE_PATH_DENIED: resolved path leaves the workspace".into());
-    }
-    Ok(canonical)
+    super::outputs::validate_path(raw)?;
+    root.join(raw).canonicalize().map_err(io_error)
 }
 
 fn relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
+    crate::outputs::display_path(path.strip_prefix(root).unwrap_or(path)).replace('\\', "/")
 }
 
 fn snapshot(root: &Path, raw: &str, limit: usize) -> Result<(Vec<u8>, String), String> {
@@ -150,7 +114,14 @@ pub fn call(
 fn destination(root: &Path, raw: &str) -> Result<PathBuf, String> {
     let requested = Path::new(raw);
     let parent = requested.parent().ok_or("INVALID_PATH")?;
-    let parent = resolve(root, parent.to_str().ok_or("INVALID_PATH")?)?;
+    let parent = resolve(
+        root,
+        if parent.as_os_str().is_empty() {
+            "."
+        } else {
+            parent.to_str().ok_or("INVALID_PATH")?
+        },
+    )?;
     let filename = requested
         .file_name()
         .and_then(|name| name.to_str())
@@ -218,6 +189,11 @@ fn apply_patch(
         for (path, version) in expected {
             if version.as_str() != Some(version_at(root, path)?.as_str()) {
                 return Err("VERSION_CONFLICT: files changed since preview/approval".into());
+            }
+            if p["expectedPaths"][path].as_str()
+                != Some(crate::outputs::display_path(&destination(root, path)?).as_str())
+            {
+                return Err("PATCH_APPROVAL_MISMATCH: target path changed since preview".into());
             }
         }
     }
@@ -304,10 +280,10 @@ fn apply_patch(
     }
     // Reject path aliases (case variants on Windows, ./ aliases on all platforms).
     let mut unique = std::collections::HashSet::new();
+    let mut resolved_paths = serde_json::Map::new();
     for change in &changes {
-        let path = destination(root, &change.path)?
-            .to_string_lossy()
-            .to_string();
+        let path = crate::outputs::display_path(&destination(root, &change.path)?);
+        resolved_paths.insert(change.path.clone(), json!(path));
         let key = if cfg!(windows) {
             path.to_lowercase()
         } else {
@@ -320,7 +296,7 @@ fn apply_patch(
     let summary: Vec<_> = changes.iter().map(|c| json!({"path":c.path,"operation":if c.content.is_none() { "delete" } else if versions[&c.path] == "missing" { "add" } else { "update" }})).collect();
     if p["dryRun"].as_bool().unwrap_or(false) {
         return Ok(
-            json!({"source":"client","dryRun":true,"patchHash":patch_hash,"expectedVersions":versions,"changes":summary,"upstream":"3d2ee51ca2d5db578f328aa75e20aa22c0197c9a"}),
+            json!({"source":"client","dryRun":true,"patchHash":patch_hash,"expectedVersions":versions,"expectedPaths":resolved_paths,"changes":summary,"upstream":"3d2ee51ca2d5db578f328aa75e20aa22c0197c9a"}),
         );
     }
     let expected = p["expectedVersions"]
@@ -328,6 +304,9 @@ fn apply_patch(
         .ok_or("VERSION_REQUIRED: preview expectedVersions is required")?;
     if expected != &versions {
         return Err("VERSION_CONFLICT: files changed since preview/approval".into());
+    }
+    if p["expectedPaths"].as_object() != Some(&resolved_paths) {
+        return Err("PATCH_APPROVAL_MISMATCH: preview target paths are required".into());
     }
     let mut applied = Vec::new();
     for change in changes {
@@ -339,6 +318,11 @@ fn apply_patch(
         let outcome = (|| {
             checkpoint(cancel, started)?;
             let target = destination(root, &change.path)?;
+            if p["expectedPaths"][&change.path].as_str()
+                != Some(crate::outputs::display_path(&target).as_str())
+            {
+                return Err("PATCH_APPROVAL_MISMATCH: target path changed".into());
+            }
             if version_at(root, &change.path)? != versions[&change.path].as_str().unwrap() {
                 return Err("VERSION_CONFLICT".into());
             }
@@ -421,10 +405,7 @@ fn context(
     } else {
         target.parent().ok_or("INVALID_PATH")?
     };
-    let mut ancestors: Vec<_> = directory
-        .ancestors()
-        .take_while(|path| path.starts_with(root))
-        .collect();
+    let mut ancestors: Vec<_> = directory.ancestors().collect();
     ancestors.reverse();
     let mut rules = Vec::new();
     let mut total = 0;
@@ -452,10 +433,10 @@ fn context(
         }
     }
     Ok(
-        json!({"source":"client","workspaceRoot":crate::outputs::display_path(root),"path":raw,
+        json!({"source":"client","workspaceRoot":crate::outputs::display_path(root),"outputDirectory":crate::outputs::display_path(root),"path":crate::outputs::display_path(&target),
         "os":std::env::consts::OS,"arch":std::env::consts::ARCH,
         "shell":if cfg!(windows) { "powershell" } else { "sh" },
-        "rules":rules,"ruleScope":"workspace-root-to-target","globalRulesIncluded":false}),
+        "rules":rules,"ruleScope":"filesystem-root-to-target","globalRulesIncluded":false}),
     )
 }
 
@@ -645,46 +626,8 @@ pub async fn git(
     }
     let repository = cwd
         .ancestors()
-        .take_while(|path| path.starts_with(root))
         .find(|path| path.join(".git").exists())
         .ok_or("NOT_A_WORKSPACE_REPOSITORY")?;
-    let git_dir = resolve(root, &relative(root, &repository.join(".git")))?;
-    if !git_dir.is_dir() {
-        return Err("GIT_LAYOUT_UNSUPPORTED: external gitdir/worktree links are disabled".into());
-    }
-    // Git reads its own metadata internally, so reject unsupported indirect metadata
-    // before starting it. A bounded audit is explicit about repositories it cannot prove.
-    let mut pending = vec![git_dir.clone()];
-    let mut metadata_entries = 0;
-    while let Some(directory) = pending.pop() {
-        if *cancel.borrow() {
-            return Err("WORKSPACE_CANCELLED".into());
-        }
-        for entry in fs::read_dir(directory).map_err(io_error)? {
-            metadata_entries += 1;
-            if metadata_entries > SCAN_ENTRIES {
-                return Err("GIT_LAYOUT_UNSUPPORTED: metadata exceeds bounded path audit; use a smaller repository".into());
-            }
-            let entry = entry.map_err(io_error)?;
-            let path = resolve(root, &relative(root, &entry.path()))?;
-            if fs::metadata(&path).map_err(io_error)?.is_dir() {
-                pending.push(path);
-            }
-        }
-    }
-    // External config includes, worktree relocation and shared object stores need an audited adapter.
-    let config_path = relative(root, &git_dir.join("config"));
-    let config = text(snapshot(root, &config_path, PAGE_BYTES)?.0)?.to_ascii_lowercase();
-    let compact_config: String = config.chars().filter(|c| !c.is_whitespace()).collect();
-    if compact_config.contains("[include")
-        || config
-            .lines()
-            .any(|line| line.trim_start().starts_with("worktree"))
-        || git_dir.join("commondir").exists()
-        || git_dir.join("objects/info/alternates").exists()
-    {
-        return Err("GIT_LAYOUT_UNSUPPORTED: external repository references are disabled".into());
-    }
     let mut args = vec![
         "--no-optional-locks",
         "-c",
@@ -804,7 +747,7 @@ mod tests {
             .contains("VERSION_CONFLICT")
         );
         assert!(resolve(&root, "../outside").is_err());
-        assert!(resolve(&root, root.to_str().unwrap()).is_err());
+        assert_eq!(resolve(&root, root.to_str().unwrap()).unwrap(), root);
         #[cfg(windows)]
         assert!(destination(&root, "new-file. ").is_err());
     }
@@ -868,7 +811,7 @@ mod tests {
             .unwrap_err()
             .contains("PATCH_APPROVAL_MISMATCH")
         );
-        let params = json!({"patch":patch,"patchHash":preview["patchHash"],"expectedVersions":preview["expectedVersions"]});
+        let params = json!({"patch":patch,"patchHash":preview["patchHash"],"expectedVersions":preview["expectedVersions"],"expectedPaths":preview["expectedPaths"]});
         fs::write(root.join("a.txt"), "other\r\n").unwrap();
         assert!(
             call(&root, "workspace/apply_patch", &params, &cancel)
@@ -904,16 +847,15 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn rejects_symlink_escape_and_skips_search_links() {
+    fn resolves_explicit_symlink_and_skips_recursive_search_links() {
         let temp = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         let root = temp.path().canonicalize().unwrap();
         fs::write(outside.path().join("secret"), "secret").unwrap();
         std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
-        assert!(
-            resolve(&root, "escape/secret")
-                .unwrap_err()
-                .contains("WORKSPACE_PATH_DENIED")
+        assert_eq!(
+            resolve(&root, "escape/secret").unwrap(),
+            outside.path().join("secret").canonicalize().unwrap()
         );
         let (_, cancel) = watch::channel(false);
         let result = call(&root, "workspace/search", &json!({}), &cancel).unwrap();
