@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type ThemeMode = "dark" | "light" | "system";
 export const settingsStorageKey = "codexia.desktop.settings.v1";
+let nativeThemeSync = Promise.resolve();
 
 export function resolveTheme(theme: ThemeMode, darkSystem: boolean): "dark" | "light" {
   return theme === "system" ? (darkSystem ? "dark" : "light") : theme;
@@ -13,10 +14,14 @@ export function applyTheme(theme: ThemeMode) {
   const resolved = resolveTheme(theme, window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
-  // CSS cannot style the native title bar. Clear the native override for
-  // system mode so Windows can keep following its own appearance changes.
+  // Keep native controls in the selected theme, then pin the caption background
+  // to the sidebar token so Windows activation changes cannot replace its color.
   if (isTauri()) {
-    void getCurrentWindow().setTheme(theme === "system" ? null : theme).catch(error => {
+    const color = getComputedStyle(document.documentElement).getPropertyValue("--shell").trim();
+    nativeThemeSync = nativeThemeSync.then(async () => {
+      await getCurrentWindow().setTheme(theme === "system" ? null : theme);
+      await invoke("set_window_caption_color", { color });
+    }).catch(error => {
       console.warn("无法同步窗口标题栏主题", error);
     });
   }

@@ -12,6 +12,7 @@ use tauri::Manager;
 mod platform;
 mod runtime;
 mod updates;
+mod window_frame;
 use runtime::{DesktopConfig, DesktopRuntime};
 use std::{
     env,
@@ -276,6 +277,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            window_frame::set_window_caption_color,
             attachment_request,
             select_attachment_paths,
             attachment_device_id,

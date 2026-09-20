@@ -29,7 +29,7 @@ minisign-verify = "0.2.5"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_System_WindowsProgramming"] }
+windows-sys = { version = "0.61.2", features = ["Win32_System_WindowsProgramming", "Win32_Graphics_Dwm"] }
 
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }
