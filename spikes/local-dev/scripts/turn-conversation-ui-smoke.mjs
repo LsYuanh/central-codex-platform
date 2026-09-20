@@ -104,6 +104,17 @@ try {
   await page.keyboard.press('ArrowRight');
   assert(await page.getByRole('radio', { name: '跟随系统' }).isChecked());
   const more = page.getByRole('button', { name: '更多操作：测试对话' });
+  const threadRow = page.getByTestId('thread-row');
+  await threadRow.hover();
+  const rowBounds = await threadRow.boundingBox();
+  const actionBounds = await more.boundingBox();
+  assert(actionBounds.x >= rowBounds.x && actionBounds.x + actionBounds.width <= rowBounds.x + rowBounds.width, 'hover actions must stay inside the conversation row');
+  assert.equal(await page.locator('.conversation-actions').evaluate(el => getComputedStyle(el).opacity), '1', 'hover reveals actions');
+  assert(await more.locator('svg').evaluate(el => el.getBBox().height >= 3), 'more icon must have visible filled geometry at small sizes');
+  await more.click();
+  assert(await page.getByRole('menuitem', { name: '重命名' }).isVisible());
+  assert(await page.getByRole('menuitem', { name: '归档对话' }).isVisible());
+  await page.keyboard.press('Escape');
   await more.focus();
   await page.keyboard.press('ArrowDown');
   const rename = page.getByRole('menuitem', { name: '重命名' });

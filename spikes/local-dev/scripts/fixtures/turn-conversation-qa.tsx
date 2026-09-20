@@ -35,7 +35,14 @@ function Fixture() {
   ];
   const execution = { requestId: "e", tool:"device_exec", phase:"executing", status: status === "running" ? "running" : status === "failed" ? "failed" : "succeeded" } as const;
   return <>
-    <nav aria-label="外观与菜单测试"><ThemePicker value={theme} onChange={setTheme} /><ThreadActions title="测试对话" disabled={false} rename={() => setAction("rename")} archive={() => setAction("archive")} /><output data-testid="menu-action">{action}</output></nav>
+    <nav aria-label="外观与菜单测试"><ThemePicker value={theme} onChange={setTheme} />
+      <div className="conversation-list" style={{ width: 248 }}>
+        <div className="conversation-item" data-testid="thread-row">
+          <button className="conversation-select"><span className="conversation-copy"><strong>测试对话：这是一个需要截断的很长的对话标题</strong></span></button>
+          <div className="conversation-actions"><ThreadActions title="测试对话" disabled={false} rename={() => setAction("rename")} archive={() => setAction("archive")} /></div>
+        </div>
+      </div>
+      <output data-testid="menu-action">{action}</output></nav>
     <nav aria-label="测试控制"><button onClick={() => setStatus("completed")}>完成测试</button><button onClick={() => setTick(tick + 1000)}>更新时钟</button>
       <button onClick={() => { setId("t2"); setStatus("running"); setStepCount(0); }}>下一轮测试</button><button onClick={() => setStatus("unknown")}>断线测试</button><button onClick={() => setStatus("failed")}>失败测试</button>
       <button onClick={() => { setStepCount(stepCount + 1); setStepComplete(false); }}>追加步骤</button><button onClick={() => setStepComplete(true)}>步骤完成</button></nav>

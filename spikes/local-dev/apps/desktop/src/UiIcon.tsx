@@ -19,10 +19,11 @@ const paths = {
   check: "m5 12 4 4L19 6",
   chevronDown: "m6 9 6 6 6-6",
   arrowDown: "M12 4v16m-7-7 7 7 7-7",
-  more: "M5 12h.01M12 12h.01M19 12h.01",
   archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
 } as const;
 
-export function UiIcon({ name }: { name: keyof typeof paths }) {
-  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} /></svg>;
+export function UiIcon({ name }: { name: keyof typeof paths | "more" }) {
+  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{name === "more"
+    ? [5, 12, 19].map(cx => <circle key={cx} cx={cx} cy="12" r="1.5" fill="currentColor" stroke="none" />)
+    : <path d={paths[name]} />}</svg>;
 }
