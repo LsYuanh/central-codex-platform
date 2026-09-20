@@ -1025,7 +1025,7 @@ export default function App() {
       setThreadId(nextThreadId);
       threadIdRef.current = nextThreadId;
       setAppState("online");
-      setMessages(nextThreadId ? [{ id: crypto.randomUUID(), role: "system", content: `已连接并恢复 Thread ${nextThreadId}` }, ...restoredMessages] : []);
+      setMessages(nextThreadId ? restoredMessages : []);
       setThreads(summaries);
       return true;
     } catch (error) {
@@ -1478,6 +1478,7 @@ export default function App() {
         <button className="sidebar-close text-icon-button" aria-label="关闭导航" onClick={closeSidebar}><UiIcon name="close" /></button>
         {activePage === "conversation" ? (
           <>
+            <div className="sidebar-brand">远舟</div>
             <nav className="conversation-nav" aria-label="对话导航">
               <button className="sidebar-primary-action" onClick={() => { startConversationFromSidebar(); setSidebarOpen(false); }} disabled={sending || Boolean(threadBusy) || appState === "connecting"}>
                 <UiIcon name="edit" /><strong>新对话</strong>
@@ -1538,6 +1539,7 @@ export default function App() {
           <div className="conversation-page">
             <header className="conversation-header">
               <div className="conversation-title">
+                <UiIcon name="folder" />
                 <div><strong>{threadId ? threadDisplayTitle(threads.find((thread) => thread.id === threadId)) : "新对话"}</strong></div>
               </div>
             </header>

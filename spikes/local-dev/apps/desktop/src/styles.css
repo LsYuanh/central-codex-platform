@@ -3,16 +3,21 @@
 /* YuanZhou V0.3: shared geometry, semantic colors, no per-component theme overrides. */
 
 :root {
-  --shell: #f5f5f5;
+  --shell: #edf3f8;
   --canvas: #fff;
   --surface: #f3f3f3;
-  --user-bubble-bg: #f3f3f3;
+  --user-bubble-bg: #fcecf4;
+  --user-bubble-ink: #684354;
+  --send-accent: #c44482;
+  --send-accent-hover: #aa326d;
+  --on-send-accent: #fff;
+  --composer-shadow: 0 2px 8px rgba(30,40,55,.025), 0 12px 40px rgba(30,40,55,.045);
   --group: #fff;
   --surface-raised: #fff;
   --surface-inset: #f3f3f3;
   --hover: #ececec;
-  --rail-hover: #ececec;
-  --selected: #e7e7e7;
+  --rail-hover: #e6edf3;
+  --selected: #e1e8ee;
   --line: #e5e5e5;
   --line-strong: #858585;
   --ink: #242424;
@@ -35,15 +40,15 @@
   --popover-shadow: 0 12px 36px rgba(20,30,45,.12);
   --overlay: rgba(18,23,30,.48);
   --text-ui: 14px;
-  --text-body: 15px;
+  --text-body: 14px;
   --text-caption: 12px;
   --text-code: 13px;
   --text-heading: 15px;
   --text-display: 28px;
-  --line-body: 26px;
+  --line-body: 24px;
   --border: var(--line);
   --text-muted: var(--ink-muted);
-  font-family: "Segoe UI","Microsoft YaHei UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+  font-family: "Noto Sans SC","Microsoft YaHei UI","Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;
   color: var(--ink);
   background: var(--shell);
   font-synthesis: none;
@@ -51,16 +56,21 @@
 }
 
 :root[data-theme="dark"] {
-  --shell: #181818;
+  --shell: #20262e;
   --canvas: #1e1e1e;
   --surface: #292929;
-  --user-bubble-bg: #292929;
+  --user-bubble-bg: #3d2935;
+  --user-bubble-ink: #efcada;
+  --send-accent: #e58ab5;
+  --send-accent-hover: #eda4c6;
+  --on-send-accent: #261b21;
+  --composer-shadow: 0 4px 24px rgba(0,0,0,.16);
   --group: #232323;
   --surface-raised: #2a2a2a;
   --surface-inset: #292929;
   --hover: #303030;
-  --rail-hover: #303030;
-  --selected: #303030;
+  --rail-hover: #2b333d;
+  --selected: #323c47;
   --line: #383838;
   --line-strong: #858585;
   --ink: #ececec;
@@ -250,7 +260,7 @@ a {
 
 .desktop-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0,1fr);
+  grid-template-columns: clamp(248px,26vw,304px) minmax(0,1fr);
   width: 100%;
   height: 100dvh;
   overflow: hidden;
@@ -265,8 +275,10 @@ a {
   flex-direction: column;
   padding: 16px 12px 12px;
   background: var(--shell);
-  border-right: 1px solid var(--line);
+  border-right: 0;
 }
+
+.sidebar-brand { padding: 2px 4px 18px; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--ink); }
 
 .conversation-nav {
   display: grid;
@@ -546,7 +558,10 @@ a {
   position: relative;
   min-width: 0;
   min-height: 0;
-  border-radius: 0;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 14px 0 0 0;
   overflow: hidden;
   background: var(--canvas);
 }
@@ -570,21 +585,28 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 56px;
-  padding: 8px 28px;
+  min-height: 48px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--line);
 }
 
 .conversation-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
+
+.conversation-title > div { min-width: 0; }
+.conversation-title > .ui-icon { color: var(--ink-muted); }
 
 .conversation-title strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .conversation-header-actions {
@@ -608,7 +630,7 @@ a {
   gap: 12px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 24px max(32px,calc((100% - 760px)/2));
+  padding: 28px max(40px,calc((100% - 736px)/2));
   scroll-padding-bottom: 20px;
 }
 
@@ -713,14 +735,15 @@ a {
 .chat-bubble {
   max-width: 100%;
   color: var(--ink);
-  font-size: 15px;
-  line-height: 26px;
+  font-size: var(--text-body);
+  line-height: var(--line-body);
 }
 
 .bubble-user {
   padding: 10px 16px;
   border-radius: 16px;
   background: var(--user-bubble-bg);
+  color: var(--user-bubble-ink);
 }
 
 .bubble-assistant {
@@ -826,9 +849,9 @@ a {
   flex-direction: column;
   min-height: 0;
   max-height: 50%;
-  width: 100%;
-  max-width: 824px;
-  padding: 8px 32px 20px;
+  width: calc(100% - 80px);
+  max-width: 736px;
+  padding: 12px 0 14px;
   margin: 0 auto;
 }
 
@@ -838,9 +861,9 @@ a {
   min-height: 0;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 22px;
   background: var(--surface-raised);
-  box-shadow: var(--shadow);
+  box-shadow: var(--composer-shadow);
 }
 
 .composer-body {
@@ -850,13 +873,13 @@ a {
 
 .composer-input-wrap textarea {
   display: block;
-  min-height: 48px;
+  min-height: 56px;
   max-height: 180px;
   padding: 0;
   border: 0;
   resize: none;
   background: transparent;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 25px;
 }
 
@@ -887,9 +910,11 @@ a {
   flex: none;
   padding: 0;
   border-radius: 50%;
-  background: var(--primary);
-  color: var(--on-primary);
+  background: var(--send-accent);
+  color: var(--on-send-accent);
 }
+
+.send-button:not(.send-button-stop):hover:not(:disabled) { background: var(--send-accent-hover); }
 
 .send-button .ui-icon {
   width: 18px;
@@ -2082,7 +2107,9 @@ a {
 }
 
 .turn-process-header {
-  padding: 0;
+  margin-top: 12px;
+  padding: 0 0 4px;
+  border-bottom: 1px solid var(--line);
 }
 
 .turn-process-toggle {
@@ -2541,12 +2568,6 @@ a {
 
 /* Compact screens keep navigation in a dismissible, keyboard-contained drawer. */
 
-@media (min-width:960px) and (max-width:1199px) {
-  .desktop-shell {
-    grid-template-columns: 232px minmax(0,1fr);
-  }
-}
-
 @media (max-width:1199px) {
   .settings-content {
     padding: 0 24px 32px;
@@ -2626,10 +2647,11 @@ a {
     padding-top: 56px;
   }
   .message-list {
-    padding: 20px max(20px,calc((100% - 760px)/2));
+    padding: 20px max(20px,calc((100% - 736px)/2));
   }
   .composer {
-    padding: 8px 20px 16px;
+    width: calc(100% - 40px);
+    padding: 8px 0 16px;
   }
   .conversation-error-region {
     padding: 8px 20px;
@@ -2641,7 +2663,8 @@ a {
     padding: 20px 16px;
   }
   .composer {
-    padding: 8px 12px 12px;
+    width: calc(100% - 32px);
+    padding: 8px 0 12px;
   }
   .conversation-empty-state h1 {
     font-size: 24px;
