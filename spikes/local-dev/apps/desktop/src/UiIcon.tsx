@@ -18,6 +18,7 @@ const paths = {
   moon: "M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z",
   check: "m5 12 4 4L19 6",
   chevronDown: "m6 9 6 6 6-6",
+  arrowDown: "M12 4v16m-7-7 7 7 7-7",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
 } as const;

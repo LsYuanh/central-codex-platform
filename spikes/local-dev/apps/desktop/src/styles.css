@@ -570,7 +570,7 @@ a {
   display: none;
 }
 
-/* Only message history scrolls; the composer reserves its own space below it. */
+/* Messages scroll behind the opaque composer; only the end gets a measured inset. */
 
 .conversation-page {
   display: flex;
@@ -615,12 +615,44 @@ a {
 }
 
 .conversation-surface {
+  --composer-height: 136px;
+  --approval-height: 0px;
   position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
   flex-direction: column;
 }
+
+.conversation-surface > .message-list {
+  padding-bottom: calc(var(--composer-height) + 12px);
+  scroll-padding-bottom: calc(var(--composer-height) + 12px);
+}
+
+.jump-to-latest {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: calc(var(--composer-height) + var(--approval-height) + 12px);
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+}
+
+.jump-to-latest:hover:not(:disabled) { background: var(--hover); }
+.jump-to-latest .ui-icon { width: 18px; height: 18px; }
+
+/* Approval stays in normal flow so every decision remains visible and reachable. */
+.conversation-surface.has-approval > .message-list { padding-bottom: 12px; scroll-padding-bottom: 12px; }
+.conversation-surface.has-approval > .composer { position: relative; left: auto; bottom: auto; transform: none; }
 
 .message-list {
   display: flex;
@@ -807,6 +839,12 @@ a {
 }
 
 .composer {
+  --composer-bottom-gap: 14px;
+  position: absolute;
+  z-index: 3;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -814,7 +852,8 @@ a {
   max-height: 50%;
   width: calc(100% - 80px);
   max-width: 736px;
-  padding: 12px 0 14px;
+  padding: 0 0 var(--composer-bottom-gap);
+  background: linear-gradient(to top, var(--canvas) var(--composer-bottom-gap), transparent var(--composer-bottom-gap));
   margin: 0 auto;
 }
 
@@ -2614,7 +2653,7 @@ a {
   }
   .composer {
     width: calc(100% - 40px);
-    padding: 8px 0 16px;
+    --composer-bottom-gap: 16px;
   }
   .conversation-error-region {
     padding: 8px 20px;
@@ -2627,7 +2666,7 @@ a {
   }
   .composer {
     width: calc(100% - 32px);
-    padding: 8px 0 12px;
+    --composer-bottom-gap: 12px;
   }
   .conversation-empty-state h1 {
     font-size: 24px;
@@ -2731,6 +2770,7 @@ a {
   .conversation-select { padding-right: 48px; }
   .conversation-actions button { width: 44px; height: 44px; }
   .theme-picker span { min-height: 44px; }
+  .jump-to-latest { width: 44px; height: 44px; }
   .text-icon-button,.send-button,.attachment-add-button {
     width: 44px;
     height: 44px;

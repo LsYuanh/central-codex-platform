@@ -4,7 +4,7 @@ import { joinClientPath, parentClientPath } from "./client-paths";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { RuntimeSettings, type ConfigView, type DesktopConfig } from "./runtime-settings";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppServerClient, type AppServerMessage, threadIdFromResult } from "./app-server-client";
 import { reduceExecutions, type GatewayUiEvent, type ExecutionActivity, type ExecutionLogChunk, type ExecutionStatus, type ConnectionState, type DeviceState, type ChatMessage, type ThreadSummary, type ApprovalRequest, type PlatformCapabilities, type CentralEngineState } from "./gateway-ui-events";
 import { CodexiaGatewayAdapter } from "./codexia-gateway-adapter";
@@ -193,10 +193,12 @@ export default function App() {
   const threadMessageCacheRef = useRef(new Map<string, ChatMessage[]>());
   const threadDraftsRef = useRef(new Map<string, ThreadDraft>());
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const conversationSurfaceRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const followMessagesRef = useRef(true);
   const scrollThreadRef = useRef<string | undefined>(undefined);
+  const [showLatest, setShowLatest] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -1090,14 +1092,38 @@ export default function App() {
 
   useEffect(() => disconnectAppServer, [disconnectAppServer]);
 
+  useLayoutEffect(() => {
+    const surface = conversationSurfaceRef.current;
+    const composerElement = composerRef.current;
+    const messagesElement = messageListRef.current;
+    if (!surface || !composerElement || !messagesElement) return;
+    const approvalElement = surface.querySelector<HTMLElement>(".approval-card");
+    let frame = 0;
+    const measure = () => {
+      surface.style.setProperty("--composer-height", `${composerElement.getBoundingClientRect().height}px`);
+      surface.style.setProperty("--approval-height", `${approvalElement ? approvalElement.getBoundingClientRect().height + 16 : 0}px`);
+      window.cancelAnimationFrame(frame);
+      if (followMessagesRef.current) frame = window.requestAnimationFrame(() => {
+        messagesElement.scrollTo({ top: messagesElement.scrollHeight, behavior: "auto" });
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(composerElement);
+    observer.observe(surface);
+    if (approvalElement) observer.observe(approvalElement);
+    measure();
+    return () => { observer.disconnect(); window.cancelAnimationFrame(frame); };
+  }, [activePage, Boolean(approval)]);
+
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
     if (scrollThreadRef.current !== threadId) {
       scrollThreadRef.current = threadId;
       followMessagesRef.current = true;
+      setShowLatest(false);
     }
-    if (!followMessagesRef.current) return;
+    if (!followMessagesRef.current) { setShowLatest(true); return; }
     const frame = window.requestAnimationFrame(() => {
       element.scrollTo({ top: element.scrollHeight, behavior: "auto" });
     });
@@ -1552,8 +1578,8 @@ export default function App() {
               </div>
             )}
 
-            <section className="conversation-surface">
-              <div ref={messageListRef} className="message-list" onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }} role="log" aria-live="polite" aria-label="对话消息">
+            <section ref={conversationSurfaceRef} className={`conversation-surface${approval ? " has-approval" : ""}`}>
+              <div ref={messageListRef} className="message-list" tabIndex={-1} onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; setShowLatest(!followMessagesRef.current); }} role="log" aria-live="polite" aria-label="对话消息">
                 {messages.length === 0 ? (
                   <div className="conversation-empty-state">
                     <h1>{runtimeConfig?.needsSetup ? "先连接这台电脑" : appState === "online" ? "今天想完成什么？" : "连接后开始工作"}</h1>
@@ -1577,6 +1603,14 @@ export default function App() {
                   if(asRecord(result?.output))setMessages(current=>current.map(item=>item.id===`output-${output.id}`?{...item,outputs:[result!.output as OutputArtifact]}:item));
                 }}/>} />)}
               </div>
+
+              {showLatest && messages.length > 0 && <button className="jump-to-latest" type="button" aria-label="回到最新" title="回到最新" onClick={() => {
+                followMessagesRef.current = true;
+                setShowLatest(false);
+                const element = messageListRef.current;
+                element?.scrollTo({ top: element.scrollHeight, behavior: "auto" });
+                element?.focus({ preventScroll: true });
+              }}><UiIcon name="arrowDown" /></button>}
 
               {approval && (
                 <div className="approval-card" role="alert" aria-live="assertive">
