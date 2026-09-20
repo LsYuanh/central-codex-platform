@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { useCallback, useEffect, useRef, useState } from "react";
 import { localAttachment } from "./attachments";
+import { UiIcon } from "./UiIcon";
 import type { OutputArtifact } from "../../../packages/agentrpc-types/src/index";
 export type { OutputArtifact };
 
@@ -60,8 +61,8 @@ export function OutputCard({ output, retry }: { output:OutputArtifact; retry:(ou
   return <>
     <section className={`output-card output-${output.status} output-kind-${output.kind}`} aria-label={`输出文件 ${output.name}`}>
       {preview&&<button className="output-image-button" type="button" onClick={()=>void view()} disabled={busy} aria-label={`查看图片 ${output.name}`}><img src={preview} alt={output.name}/></button>}
-      <div className="output-file-heading"><strong>{output.name}</strong><span>{output.status==="saved"?"已保存到本机":output.status==="saving"?"正在保存到本机…":"保存失败"}</span></div>
-      {output.path&&<p className="output-path" title={output.path}>{output.path}</p>}
+      <div className="output-file-heading"><span className="output-file-icon"><UiIcon name="file" /></span><div className="output-file-copy"><strong title={output.name}>{output.name}</strong><span role="status">{output.status==="saved"?"已保存到本机":output.status==="saving"?"正在保存到本机…":"保存失败"}</span></div></div>
+      {output.path&&<details className="output-location"><summary>文件位置</summary><p className="output-path">{output.path}</p></details>}
       {(output.error||error)&&<p role="alert" className="attachment-error-text">{error||output.error}</p>}
       <div className="output-actions">
         {output.status==="saved"&&<>{output.kind==="image"&&<button type="button" onClick={()=>void view()} disabled={busy}>查看大图</button>}<button type="button" onClick={()=>void reveal()} disabled={busy}>打开所在目录</button>{error&&<button type="button" onClick={()=>void reload()} disabled={busy}>重新读取</button>}</>}

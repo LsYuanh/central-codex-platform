@@ -64,8 +64,8 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
   const state=deviceAuthorization(account);const locked=disabled||working||reading;
   return <div className="settings-card form-settings-card platform-account-card">
     <p className="runtime-config-notice" role="status">{!ready?reading?"正在读取本机配对状态…":"本机配对状态尚未确认。":state.notice}</p>
-    {account.user&&<div className="settings-field"><span><strong>关联用户</strong></span><span>{account.user.username||account.user.id}</span></div>}
-    {account.deviceId&&<div className="settings-field"><span><strong>本机设备</strong></span><code>{account.deviceId}</code></div>}
+    {account.user&&<div className="settings-value-row"><span><strong>关联用户</strong></span><code>{account.user.username||account.user.id}</code></div>}
+    {account.deviceId&&<details className="connection-details"><summary>设备详情</summary><div className="settings-value-row"><span><strong>设备标识</strong><small>用于区分本机安装身份</small></span><code>{account.deviceId}</code></div></details>}
     {ready&&state.problem&&<p className="settings-error" role="alert">{state.problem}</p>}
     {(!ready||state.canPair)&&<>
       <label className="settings-field"><span><strong>一体配对码</strong><small>粘贴中央管理员提供的完整配对码，自动配置地址和证书。</small></span><input aria-label="一体配对码" type="password" autoComplete="off" spellCheck={false} value={code} disabled={locked} onChange={e=>setCode(e.target.value)} maxLength={98304}/></label>

@@ -19,7 +19,7 @@ export interface ConfigView {
 export function RuntimeSettings({ view, draft, setDraft, applying, busy, error, notice, apply, reload, onAuthBoundary }: {
   view?: ConfigView; draft: DesktopConfig; setDraft: (value: DesktopConfig) => void;
   applying: boolean; busy: boolean; error: string; notice: string;
-  apply: (config?: DesktopConfig) => Promise<void>; reload: () => void;
+  apply: (config?: DesktopConfig) => Promise<boolean>; reload: () => void;
   onAuthBoundary: () => void;
 }) {
   const [selecting, setSelecting] = useState(false);

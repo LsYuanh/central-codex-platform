@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { TurnConversation } from "../../apps/desktop/src/TurnConversation";
 import { MarkdownMessage } from "../../apps/desktop/src/MarkdownMessage";
+import { ThemePicker } from "../../apps/desktop/src/ThemePicker";
+import { ThreadActions } from "../../apps/desktop/src/ThreadActions";
+import type { ThemeMode } from "../../apps/desktop/src/theme";
 import type { ChatMessage } from "../../apps/desktop/src/gateway-ui-events";
 import type { TurnTimingStatus } from "../../apps/desktop/src/turn-timing";
 import "../../apps/desktop/src/styles.css";
 
 function Fixture() {
+  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [action, setAction] = useState("");
+  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [status, setStatus] = useState<TurnTimingStatus>("running");
   const [tick, setTick] = useState(38000);
   const [id, setId] = useState("t1");
@@ -29,6 +35,7 @@ function Fixture() {
   ];
   const execution = { requestId: "e", tool:"device_exec", phase:"executing", status: status === "running" ? "running" : status === "failed" ? "failed" : "succeeded" } as const;
   return <>
+    <nav aria-label="外观与菜单测试"><ThemePicker value={theme} onChange={setTheme} /><ThreadActions title="测试对话" disabled={false} rename={() => setAction("rename")} archive={() => setAction("archive")} /><output data-testid="menu-action">{action}</output></nav>
     <nav aria-label="测试控制"><button onClick={() => setStatus("completed")}>完成测试</button><button onClick={() => setTick(tick + 1000)}>更新时钟</button>
       <button onClick={() => { setId("t2"); setStatus("running"); setStepCount(0); }}>下一轮测试</button><button onClick={() => setStatus("unknown")}>断线测试</button><button onClick={() => setStatus("failed")}>失败测试</button>
       <button onClick={() => { setStepCount(stepCount + 1); setStepComplete(false); }}>追加步骤</button><button onClick={() => setStepComplete(true)}>步骤完成</button></nav>

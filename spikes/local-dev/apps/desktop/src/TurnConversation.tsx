@@ -48,9 +48,9 @@ export function TurnConversation({ group, timing, running, now, executions, rend
     ? executions.find(e => e.requestId === row.executionId)?.status === "succeeded"
     : row.kind === "tool" && row.itemStatus === "completed").length;
   const active = executions.find(row => row.status === "running");
-  const activity = active?.phase === "dispatched" ? "等待本机执行" : active?.tool === "device_exec" ? "正在执行命令"
+  const activity = active?.phase === "dispatched" ? "等待本机执行" : active?.tool === "device_exec" ? "正在本机执行命令"
     : active?.tool.includes("search") ? "正在搜索代码" : active?.tool.includes("read") ? "正在读取文件" : "正在处理";
-  const status = mode === "failed" ? "任务失败 · " : mode === "interrupted" ? "已停止 · " : "";
+  const status = mode === "failed" ? "任务失败 · " : mode === "interrupted" ? "已停止 · " : timing?.status === "completed" ? "已完成 · " : "";
   const label = running ? [activity, completedCount ? `已完成 ${completedCount} 项操作` : undefined,
       timing?.startedAt !== undefined ? formatTurnDuration(Math.max(0, now - timing.startedAt)) : undefined].filter(Boolean).join(" · ")
     : mode === "unknown" ? "连接中断，结果待核对"
@@ -84,7 +84,7 @@ export function TurnConversation({ group, timing, running, now, executions, rend
       <button type="button" className="turn-process-toggle" aria-label={`${open ? "收起" : "展开"}处理过程`} aria-expanded={open} aria-controls={contentId}
         disabled={!hasProcess} onClick={() => { setChoice({ mode, open: !open }); setRevealExecutions(false); }}>
         {running && <span className="spinner" aria-hidden="true" />}
-        <span>{label}</span>{hasProcess && <span className={`turn-process-chevron${open ? " is-open" : ""}`} aria-hidden="true">›</span>}
+        {hasProcess && <span className={`turn-process-chevron${open ? " is-open" : ""}`} aria-hidden="true">›</span>}<span>{label}</span>
       </button>
       {uncertainChanges && <button type="button" className="turn-process-warning" onClick={() => { setChoice({mode, open:true}); setRevealExecutions(true); }}>文件修改结果需要核对，查看详情</button>}
     </div>}

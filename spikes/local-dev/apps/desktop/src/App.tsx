@@ -19,6 +19,7 @@ import { withThreadRunning, withThreadTurn } from "./thread-session-state";
 import { appendStreamDelta } from "./chat-stream";
 import { UiIcon } from "./UiIcon";
 import { ThemePicker } from "./ThemePicker";
+import { ThreadActions } from "./ThreadActions";
 import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
 import { TurnConversation } from "./TurnConversation";
@@ -122,6 +123,13 @@ export default function App() {
   const [deviceId, setDeviceId] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("browser preview");
   const [activePage, setActivePage] = useState<AppPage>("conversation");
+  const [pendingNavigation, setPendingNavigation] = useState<{ page: AppPage; section: SettingsSection }>();
+  const unsavedDialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = unsavedDialogRef.current;
+    if (pendingNavigation && dialog && !dialog.open) dialog.showModal();
+    return () => { if (dialog?.open) dialog.close(); };
+  }, [pendingNavigation]);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("connection");
   const [mode, setMode] = useState<TestMode>(import.meta.env.PROD ? "central-gateway" : persisted.mode ?? "central-gateway");
   const runtimeModeRef = useRef(mode);
@@ -1040,7 +1048,7 @@ export default function App() {
   const clientUpdate = useClientUpdates(`${runtimeConfig?.effective.gatewayUrl}:${runtimeConfig?.effective.deviceId}`, updateEnabled);
   const updateBusy = configBusy || runningThreadIds.size > 0 || Boolean(composer.trim()) || attachments.drafts.length > 0 || [...threadDraftsRef.current.values()].some(d => d.text.trim() || d.attachments.length);
   const applyRuntimeConfig = async (selectedConfig?: DesktopConfig) => {
-    if (configApplyingRef.current || configLoadingRef.current || configBusy || !runtimeConfig) return;
+    if (configApplyingRef.current || configLoadingRef.current || configBusy || !runtimeConfig) return false;
     configApplyingRef.current = true; setConfigApplying(true); setConfigError(""); setConfigNotice("");
     const previousUrl = runtimeConfig.uiGatewayUrl;
     const previousThread = threadIdRef.current;
@@ -1061,6 +1069,7 @@ export default function App() {
       setConfigNotice("配置已保存，Local Agent 已启动，正在连接中央网关…");
       const connected = await connectAppServer(view.uiGatewayUrl, previousUrl === view.uiGatewayUrl ? previousThread : undefined);
       setConfigNotice(connected ? "配置已保存并应用。中央网关已连接；设备在线状态见上方。" : "配置已保存，Local Agent 已启动；中央连接失败，请重试连接或修改地址后重新应用。");
+      return Boolean(connected);
     } catch (error) {
       setConfigError(String(error));
       try {
@@ -1069,6 +1078,7 @@ export default function App() {
         if (!current.needsSetup && current.running && !appClientRef.current) await connectAppServer(previousUrl, previousThread);
       }
       catch { /* Preserve the explicit apply error; the reload button remains available. */ }
+      return false;
     } finally { configApplyingRef.current = false; setConfigApplying(false); }
   };
 
@@ -1432,11 +1442,17 @@ export default function App() {
     id: `execution-${execution.requestId}`, role: "assistant" as const, content: "", kind: "execution" as const, executionId: execution.requestId, turnId: execution.turnId,
   }))]);
 
-  const openSettings = (section: SettingsSection = "connection") => {
-    setSettingsSection(section);
-    setActivePage("settings");
+  const configDirty = runtimeConfig && (Object.keys(configDraft) as (keyof DesktopConfig)[]).some(key => configDraft[key] !== runtimeConfig.saved[key]);
+  const finishNavigation = (page: AppPage, section: SettingsSection) => {
+    setSettingsSection(section); setActivePage(page); setPendingNavigation(undefined);
     setSidebarOpen(false);
   };
+  const navigatePage = (page: AppPage, section: SettingsSection = "connection") => {
+    if (activePage === "settings" && settingsSection === "connection" && configDirty && (page !== "settings" || section !== "connection")) {
+      setPendingNavigation({ page, section });
+    } else finishNavigation(page, section);
+  };
+  const openSettings = (section: SettingsSection = "connection") => navigatePage("settings", section);
 
   const closeSidebar = () => setSidebarOpen(false);
 
@@ -1471,7 +1487,7 @@ export default function App() {
 
             <section className="conversation-list-section">
               <div className="conversation-list-heading">
-                <div><span>对话</span>{runningThreadIds.size > 0 && <small>{runningThreadIds.size} 个进行中</small>}</div>
+                <div><span>最近对话</span>{runningThreadIds.size > 0 && <small>{runningThreadIds.size} 个进行中</small>}</div>
                 <button className="text-icon-button" title="刷新" aria-label="刷新对话" disabled={appState !== "online" || threadsLoading} onClick={() => void refreshThreads()}>{threadsLoading ? <span className="icon-loading">…</span> : <RefreshIcon />}</button>
               </div>
               <div className="conversation-list">
@@ -1486,7 +1502,7 @@ export default function App() {
                     <button className="conversation-select" aria-current={thread.id === threadId ? "page" : undefined} onClick={() => { void resumeThread(thread.id); setSidebarOpen(false); }} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
                       <span className="conversation-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong></span>
                     </button>
-                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : <><button title="编辑标题" aria-label="编辑标题" disabled={Boolean(threadBusy)} onClick={() => void renameThread(thread)}><EditIcon /></button><button title="归档" aria-label="归档" disabled={Boolean(threadBusy)} onClick={() => void archiveThread(thread)}><ArchiveIcon /></button></>}</div>
+                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : <ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} />}</div>
                   </div>;
                 })}
               </div>
@@ -1502,7 +1518,7 @@ export default function App() {
           </>
         ) : (
           <>
-            <button className="back-to-app" onClick={() => { setActivePage("conversation"); setSidebarOpen(false); }}><UiIcon name="arrow" /> 返回应用</button>
+            <button className="back-to-app" onClick={() => navigatePage("conversation")}><UiIcon name="arrow" /> 返回应用</button>
             <div className="settings-nav-title">设置</div>
             <nav className="settings-nav" aria-label="设置分类">
               <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="settings" /><strong>常规与连接</strong></button>
@@ -1511,7 +1527,7 @@ export default function App() {
               <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => openSettings("diagnostics")}><UiIcon name="activity" /><strong>诊断</strong></button>
               <button className={settingsSection === "updates" ? "active" : ""} onClick={() => openSettings("updates")}><UiIcon name="settings" /><strong>版本更新{clientUpdate.release.version ? " · 有更新" : ""}</strong></button>
             </nav>
-            <div className="settings-sidebar-note"><span className={`connection-dot dot-${primaryConnectionState}`} /><span>{connectionTitle}<small>{connectionStateLabel}</small></span></div>
+            <div className="settings-connection-summary"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "offline" ? "离线" : "状态待核对"}</span></div>
           </>
         )}
       </aside>
@@ -1523,9 +1539,6 @@ export default function App() {
             <header className="conversation-header">
               <div className="conversation-title">
                 <div><strong>{threadId ? threadDisplayTitle(threads.find((thread) => thread.id === threadId)) : "新对话"}</strong></div>
-              </div>
-              <div className="conversation-header-actions">
-                <span className={`header-status status-${primaryConnectionState}`}><i />{connectionStateLabel}</span>
               </div>
             </header>
 
@@ -1543,14 +1556,12 @@ export default function App() {
               <div ref={messageListRef} className="message-list" onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; setShowLatest(!followMessagesRef.current); }} role="log" aria-live="polite" aria-label="对话消息">
                 {messages.length === 0 ? (
                   <div className="conversation-empty-state">
-                    <div className="empty-orbit"><UiIcon name="terminal" /></div>
-                    <h1>{runtimeConfig?.needsSetup ? "先选择默认输出目录" : appState === "online" ? "今天想完成什么？" : "连接后开始工作"}</h1>
-                    {appState !== "online" && <p>在设置中连接中央网关，即可开始对话。</p>}
+                    <h1>{runtimeConfig?.needsSetup ? "先连接这台电脑" : appState === "online" ? "今天想完成什么？" : "连接后开始工作"}</h1>
+                    <p>{appState === "online" ? "从一个想法开始，让远舟帮你把工作往前推进。" : "在设置中完成配对与连接，即可开始对话。"}</p>
                     {canStartConversation && !threadId && <div className="conversation-starters">{([
-                      ["search", "探索并理解代码", "请先梳理项目结构，解释主要模块及其关系。"],
-                      ["build", "构建新功能", "我想添加一个新功能，请先和我明确需求。"],
-                      ["review", "审查代码改动", "请审查当前代码改动，指出有依据的问题。"],
-                      ["bug", "修复问题与失败", "请帮我定位问题，先检查错误信息和相关代码。"],
+                      ["search", "了解一个项目", "请先梳理项目结构，解释主要模块及其关系。"],
+                      ["folder", "整理本机文件", "帮我制定本机文件整理方案，先列出建议。"],
+                      ["file", "起草一份文档", "帮我起草一份文档，先和我确认内容。"],
                     ] as const).map(([icon, label, prompt]) => <button key={icon} type="button" onClick={() => { setComposer(current => current ? `${current}\n${prompt}` : prompt); composerInputRef.current?.focus(); }}><UiIcon name={icon} /><span>{label}</span></button>)}</div>}
                     {!canStartConversation && <button className="empty-action" onClick={() => openSettings("connection")}>打开连接设置</button>}
                   </div>
@@ -1620,22 +1631,21 @@ export default function App() {
           </div>
         ) : (
           <div className="settings-page">
-            <header className="settings-header"><div><p>远舟</p><h1>{settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1></div></header>
+            <header className="settings-header"><div><h1>{settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>
             <div className="settings-scroll">
               {settingsSection === "connection" && (
                 <div className="settings-content">
                   <section className="settings-section">
-                    <div className="settings-section-heading"><h2>运行状态</h2><p>中央推理与客户端执行是两条独立连接。</p></div>
-                    <div className="status-card-grid">
-                      <div className="status-card"><span className={`status-orb orb-${primaryConnectionState}`} /><div><strong>{connectionTitle}</strong><small>{connectionStateLabel}</small></div><StatusPill value={primaryConnectionState} /></div>
-                      <div className="status-card"><span className={`status-orb orb-${deviceState}`} /><div><strong>Local Agent</strong><small>本机文件与命令执行</small></div><StatusPill value={deviceState} /></div>
+                    <div className="settings-section-heading"><h2>外观</h2></div>
+                    <div className="settings-card form-settings-card theme-settings-card">
+                      <div className="settings-field"><span><strong>主题</strong><small>立即应用，并在下次启动时恢复</small></span><ThemePicker value={theme} onChange={setTheme} /></div>
                     </div>
                   </section>
-
                   <section className="settings-section">
-                    <div className="settings-section-heading"><h2>外观</h2><p>主题会立即应用，并在下次启动时恢复。</p></div>
-                    <div className="settings-card form-settings-card theme-settings-card">
-                      <div className="settings-field"><span><strong>主题</strong><small>选择客户端的显示外观</small></span><ThemePicker value={theme} onChange={setTheme} /></div>
+                    <div className="settings-section-heading"><h2>连接状态</h2></div>
+                    <div className="status-card-grid">
+                      <div className="status-card"><div><strong>{connectionTitle}</strong><small>对话与任务处理</small></div><StatusPill value={primaryConnectionState} /></div>
+                      <div className="status-card"><div><strong>本机设备</strong><small>本机文件与命令执行</small></div><StatusPill value={deviceState} /></div>
                     </div>
                   </section>
 
@@ -1650,15 +1660,15 @@ export default function App() {
 
                   {mode !== "fake-central" ? (
                     <section className="settings-section">
-                      <div className="settings-section-heading"><h2>连接配置</h2><p>这些地址属于当前可信局域网 Spike，不应暴露到互联网。</p></div>
+                      <div className="settings-section-heading"><h2>连接配置</h2><p>管理设备配对和默认文件保存位置。</p></div>
                       {desktopRuntime && mode === "central-gateway" && <RuntimeSettings view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setEvents([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} />}
-                      <div className="settings-card form-settings-card">
+                      <details className="connection-details"><summary>高级连接选项</summary><div className="settings-card form-settings-card">
                         {!(desktopRuntime && mode === "central-gateway") && <>
-                        <label className="settings-field"><span><strong>WebSocket 地址</strong><small>{mode === "central-gateway" ? "桌面客户端连接中央网关，不直连 App Server" : "开发代理监听地址"}</small></span><input value={appUrl} onChange={(event) => setAppUrl(event.target.value)} placeholder={mode === "central-gateway" ? "ws://192.0.2.10:4510/ws" : "ws://127.0.0.1:4501"} /></label>
+                        <label className="settings-field"><span><strong>WebSocket 地址</strong><small>{mode === "central-gateway" ? "桌面客户端连接中央网关，不直连 App Server" : "开发代理监听地址"}</small></span><input value={appUrl} onChange={(event) => setAppUrl(event.target.value)} placeholder={mode === "central-gateway" ? "wss://192.0.2.10:4510/ws" : "ws://127.0.0.1:4501"} /></label>
                         {mode === "local-app-server" && <label className="settings-field"><span><strong>默认工作目录</strong><small>开发模式创建新 Thread 时使用，可留空</small></span><input value={appCwd} onChange={(event) => setAppCwd(event.target.value)} placeholder="C:\\work\\project" /></label>}
                         </>}
                         <label className="settings-field"><span><strong>默认模型</strong><small>由中央 App Server 解析，可留空</small></span><input value={appModel} onChange={(event) => setAppModel(event.target.value)} placeholder="使用服务端默认模型" /></label>
-                      </div>
+                      </div></details>
                       {appError && <p className="settings-error">{appError}</p>}
                       <div className="settings-actions">{appState === "online" ? <button className="button-secondary" disabled={configApplying || configBusy} onClick={disconnectAppServer}>断开连接</button> : <button disabled={configApplying || (desktopRuntime && mode === "central-gateway" && !configReady) || appState === "connecting" || appState === "reconnecting"} onClick={() => void connectAppServer()}>{appState === "connecting" ? "正在连接…" : appState === "reconnecting" ? "正在重连…" : appState === "error" ? "重试连接" : "连接"}</button>}</div>
                     </section>
@@ -1728,6 +1738,23 @@ export default function App() {
           <span><strong>{notice.message}</strong><small>{threadDisplayTitle(threads.find((thread) => thread.id === notice.threadId))}</small></span><span>查看</span>
         </button>)}
       </div>}
+      {pendingNavigation && <dialog ref={unsavedDialogRef} className="unsaved-dialog" aria-labelledby="unsaved-title" onCancel={event => { event.preventDefault(); if (!configApplying) setPendingNavigation(undefined); }}>
+        <h2 id="unsaved-title">连接配置尚未保存</h2>
+        <p>保存并应用后生效。你也可以放弃修改，或返回继续编辑。</p>
+        {(configError || configNotice) && <p role="status">{configError || configNotice}</p>}
+        <div className="button-row">
+          <button type="button" disabled={configApplying || configBusy || configLoading} onClick={async () => {
+            const target = pendingNavigation;
+            if (await applyRuntimeConfig()) finishNavigation(target.page, target.section);
+          }}>{configApplying ? "正在保存…" : "保存并应用"}</button>
+          <button type="button" className="button-secondary" disabled={configApplying} onClick={() => {
+            if (runtimeConfig) setConfigDraft(runtimeConfig.saved);
+            finishNavigation(pendingNavigation.page, pendingNavigation.section);
+          }}>放弃修改</button>
+          <button type="button" className="button-quiet" disabled={configApplying} autoFocus onClick={() => setPendingNavigation(undefined)}>继续编辑</button>
+        </div>
+        {configBusy && <p>任务尚未结束，暂时不能应用配置。</p>}
+      </dialog>}
       {renameTarget && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeRenameDialog(); }}>
           <form className="rename-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title" onSubmit={(event) => { event.preventDefault(); void confirmRenameThread(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeRenameDialog(); } }} onMouseDown={(event) => event.stopPropagation()}>
@@ -1744,14 +1771,6 @@ export default function App() {
 
 function RefreshIcon() {
   return <svg className="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 5.8A5.2 5.2 0 1 0 13 9.4" /><path d="M13.2 2.8v3h-3" /></svg>;
-}
-
-function EditIcon() {
-  return <svg className="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m10.9 2.3 2.8 2.8-7.8 7.8-3.2.5.5-3.2 7.7-7.9Z" /><path d="m9.2 4 2.8 2.8" /></svg>;
-}
-
-function ArchiveIcon() {
-  return <svg className="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.4 4.1h11.2l-.7 9H3.1l-.7-9Z" /><path d="M2 2.4h12v1.7H2zM6 7.1h4" /></svg>;
 }
 
 function SendIcon() {
