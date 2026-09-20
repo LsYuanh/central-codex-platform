@@ -197,7 +197,6 @@ export default function App() {
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const followMessagesRef = useRef(true);
   const scrollThreadRef = useRef<string | undefined>(undefined);
-  const [showLatest, setShowLatest] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -1097,9 +1096,8 @@ export default function App() {
     if (scrollThreadRef.current !== threadId) {
       scrollThreadRef.current = threadId;
       followMessagesRef.current = true;
-      setShowLatest(false);
     }
-    if (!followMessagesRef.current) { setShowLatest(true); return; }
+    if (!followMessagesRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       element.scrollTo({ top: element.scrollHeight, behavior: "auto" });
     });
@@ -1555,7 +1553,7 @@ export default function App() {
             )}
 
             <section className="conversation-surface">
-              <div ref={messageListRef} className="message-list" onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; setShowLatest(!followMessagesRef.current); }} role="log" aria-live="polite" aria-label="对话消息">
+              <div ref={messageListRef} className="message-list" onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }} role="log" aria-live="polite" aria-label="对话消息">
                 {messages.length === 0 ? (
                   <div className="conversation-empty-state">
                     <h1>{runtimeConfig?.needsSetup ? "先连接这台电脑" : appState === "online" ? "今天想完成什么？" : "连接后开始工作"}</h1>
@@ -1579,8 +1577,6 @@ export default function App() {
                   if(asRecord(result?.output))setMessages(current=>current.map(item=>item.id===`output-${output.id}`?{...item,outputs:[result!.output as OutputArtifact]}:item));
                 }}/>} />)}
               </div>
-
-              {showLatest && messages.length > 0 && <button className="jump-to-latest" type="button" onClick={() => { followMessagesRef.current = true; setShowLatest(false); const el = messageListRef.current; el?.scrollTo({ top: el.scrollHeight, behavior: "auto" }); }}>回到最新 ↓</button>}
 
               {approval && (
                 <div className="approval-card" role="alert" aria-live="assertive">
@@ -1861,8 +1857,6 @@ function formatDuration(milliseconds: number): string {
 }
 
 function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutput:(output:OutputArtifact)=>Promise<void> }) {
-  const isLong = message.content.length > 5_000 || message.content.split("\n").length > 80;
-  const [expanded, setExpanded] = useState(false);
   const displayTime = formatMessageTime(message.createdAt);
   if (message.timingOnly) return null;
   if (message.kind === "tool") return <div className="process-tool-summary">
@@ -1875,14 +1869,9 @@ function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutpu
       <article className={`chat-bubble bubble-${message.role}`}>
         {message.attachments?.length ? <MessageAttachments attachments={message.attachments}/> : null}
         {message.outputs?.map(output=><OutputCard key={output.id} output={output} retry={retryOutput}/>)}
-        <div className={`bubble-content ${isLong && !expanded ? "bubble-content-collapsed" : ""}`}>
+        <div className="bubble-content">
           <MarkdownMessage content={message.content} />
         </div>
-        {isLong && (
-          <button className="bubble-expand" onClick={() => setExpanded((value) => !value)}>
-            {expanded ? "收起长内容" : "展开完整内容"}
-          </button>
-        )}
       </article>
       {displayTime && <time className="bubble-meta" dateTime={message.createdAt}>{displayTime}</time>}
       {message.delivery && <span className="bubble-meta" role="status">{({sending:"正在发送追加要求…",sent:"追加要求已接收",failed:"追加未发送，可在输入框重试",unknown:"追加结果待核对"})[message.delivery]}</span>}

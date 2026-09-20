@@ -770,47 +770,15 @@ a {
   overflow-wrap: anywhere;
 }
 
-.bubble-content-collapsed {
-  position: relative;
-  max-height: 330px;
-  overflow: hidden;
-}
-
-.bubble-content-collapsed:after {
-  position: absolute;
-  inset: auto 0 0;
-  height: 60px;
-  content: "";
-  background: linear-gradient(transparent,var(--canvas));
-  pointer-events: none;
-}
-
-.bubble-user .bubble-content-collapsed:after {
-  background: linear-gradient(transparent,var(--user-bubble-bg));
-}
-
-.bubble-expand,.output-expand {
+.output-expand {
   margin-top: 10px;
   font-size: 12px;
   color: var(--ink-muted);
   background: var(--surface);
 }
 
-.bubble-expand:hover:not(:disabled),.output-expand:hover:not(:disabled) {
+.output-expand:hover:not(:disabled) {
   background: var(--hover);
-}
-
-.jump-to-latest {
-  align-self: center;
-  flex: none;
-  margin: 0 0 8px;
-  padding: 6px 12px;
-  border-color: var(--line);
-  border-radius: 20px;
-  color: var(--ink);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow);
-  font-size: 12px;
 }
 
 .turn-timing-summary {
@@ -836,11 +804,6 @@ a {
 
 .chat-message-row-user.chat-message-row-has-timing .bubble-user {
   max-width: 85%;
-}
-
-.jump-to-latest:hover:not(:disabled) {
-  color: var(--ink);
-  background: var(--hover);
 }
 
 .composer {
