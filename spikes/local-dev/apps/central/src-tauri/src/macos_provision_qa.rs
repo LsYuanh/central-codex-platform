@@ -40,8 +40,29 @@ fn switch_formal_macos_runtime() {
         std::path::Path::new(&saved.data_directory),
     )
     .unwrap();
-    let _package = crate::runtime_package::prepare_service(&resources, &package)
+    let verified = crate::runtime_package::prepare_service(&resources, &package)
         .expect("verified pinned service package");
+    let shared = if std::env::var("CENTRAL_MACOS_LINK_EXISTING_LOGIN").as_deref() == Ok("1") {
+        let previous_id = std::env::var("CENTRAL_MACOS_PREVIOUS_ACCOUNT_ID").unwrap();
+        let previous_account = model_accounts::load_internal(&root, &previous_id).unwrap();
+        let linked = model_accounts::shared::link_existing(&root).unwrap();
+        let current = model_accounts::load_internal(&root, &linked.account_id).unwrap();
+        assert!(
+            previous_account.account_id() == current.account_id(),
+            "source account changed"
+        );
+        model_accounts::shared::renew(
+            &root,
+            &linked.account_id,
+            &verified,
+            &std::sync::atomic::AtomicBool::new(false),
+            true,
+        )
+        .unwrap();
+        Some(linked)
+    } else {
+        None
+    };
     saved.runtime_package_id = package;
     config::save(
         &root,
@@ -51,6 +72,24 @@ fn switch_formal_macos_runtime() {
     )
     .unwrap();
     let result = config::read(&root).unwrap().config.unwrap();
+    if let Some(account) = shared {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let destination = PathBuf::from(std::env::var_os("CENTRAL_MACOS_RELEASE_REPORT").unwrap());
+        assert!(destination.is_absolute());
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(destination)
+            .unwrap();
+        let report = serde_json::json!({"accountId": account.account_id,
+            "credentialSource": account.credential_source, "revision": result.revision,
+            "packageId": result.runtime_package_id});
+        file.write_all(serde_json::to_vec_pretty(&report).unwrap().as_slice())
+            .unwrap();
+        file.sync_all().unwrap();
+    }
     println!(
         "FORMAL_RUNTIME_SWITCH_OK revision={} package={}",
         result.revision, result.runtime_package_id
