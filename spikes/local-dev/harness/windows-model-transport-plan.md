@@ -2,6 +2,8 @@
 
 # Windows 模型管道 transport 候选集成
 
+> Historical transport design and threat-model reference; implementation and probe evidence are in [windows-model-pipe.md](windows-model-pipe.md) and verification/*.json. Current acceptance limits are in the [validation guide](../../../docs/验证与已知限制.md).
+
 状态：`windows_model_transport.rs` 已通过独立 Windows model overlay 接入固定源码；生成器可重复生成，源码准备通过真实 archive 34 项回归和 rustfmt 检查。此记录未运行 Cargo、TLS 握手或模型请求。下面列出的行为必须由实际隔离验收证明，不能作为已接通的结论。
 
 固定源：Codex `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`，reqwest `0.12.28`。`generate-windows-model-patch.mjs` 从校验归档提取原文件，生成 `windows-model.patch` 和 `windows-model-files.json`；`prepare-patch.mjs` 仅在 Windows 验证 base/home 后调用 `prepare-windows-model.mjs`。原 base/home 补丁和清单保持原值。源码准备记录：`../target/prepare-patch-6ba2tI/result.json`。新增五个文件的完整 LF SHA、模板内容与 reverse check 均强制验证；p0w 源码已应用并验证 25 + 2 + 5 个文件。非 Windows 未运行；代码分支检查确认不会应用此 overlay。

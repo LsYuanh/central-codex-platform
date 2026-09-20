@@ -1,5 +1,7 @@
 # Harness Local Agent implementation and verification — 2026-09-09
 
+> Historical implementation reference. For client-paths/v1 Agents, workspaceRoot is a default output directory, not an access boundary. Current path/patch negotiation is specified in [AgentRPC](../spikes/local-dev/AGENTRPC.md) and the [client manual](客户端维护手册.md).
+
 Implementation is integrated into the existing `spikes/local-dev/crates/local-agent`.
 The synchronized current product baseline remains intact, including attachment/output
 permissions and Tauri-managed lifecycle. New changes are `workspace.rs`, the main

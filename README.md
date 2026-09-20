@@ -1,55 +1,38 @@
-# Central Codex Platform
+# 远舟 · Central Codex Platform
 
-中央化 Codex 多用户远程工作平台。
+中央化 Codex 多用户远程工作平台。Codex/App Server 在中央机推理，文件、Git、PowerShell 和其他系统操作由目标客户端 Local Agent 执行。客户端主动出站连接中央，不依赖本地 Codex，也不开放入站 SSH。
 
-## 核心目标
+## 当前维护基线
 
-- Codex 和 OpenAI 凭据只部署在中央 macOS；
-- Windows/macOS 客户端不安装 Codex，不直接访问 OpenAI；
-- 每位平台用户独立管理自己的账号、对话、设备和工作区；
-- Codex 在中央机推理，文件、Git 和命令在指定客户端的 Local Agent 中执行；
-- 客户端只建立主动出站连接，默认不开放 SSH 或其他入站端口。
+截至 2026-09-20 的仓库及部署记录：工作客户端 0.2.2，中央管理 App 0.1.1；中央 Mac 已使用 WSS、一次性配对码、设备令牌、按用户 Worker 和共享模型登录续期。Windows 中央实现及独立安装 QA 已具备，完整发布资格和跨平台验收仍有缺口，见[验证与已知限制](docs/验证与已知限制.md)。
 
-## 当前阶段
+正式局域网入口为 `wss://192.0.2.10:4510/ws`，禁止暴露到互联网。部署版本、备份及回退见[发布手册](docs/发布与回退手册.md)；文档中的在线数量是历史观测，不代表实时状态。
 
-项目已进入阶段 2 第一轮：在保留本机纵向 Spike 的前提下，建立最小 AgentRPC V1 合同、Fake App Server Worker/Remote Workspace Bridge、中央 Device Broker 和可重复的本机/真实中央机协议 smoke。真实中央机测试网关现支持可信局域网临时直连；正式认证、WSS/mTLS 和多用户 Worker 仍在开发中。
+## 开发入口
 
-桌面端当前已提供 Codexia Workspace 正式版工作台 UI，覆盖 Thread 管理、实时对话、Markdown、工作区文件浏览、文件读取、受控版本命令和活动日志；权限与认证仍按局域网 Spike 边界运行。
+实现集中在 [spikes/local-dev](spikes/local-dev/README.md)，继续在现有工程开发。
 
-Spike 客户端 UI 另提供 `Local Codex App Server` 开发模式：用户自行启动本机
-`codex app-server --listen ws://127.0.0.1:4500`，再由本地开发代理转发到 UI，即可做真实握手、Thread、流式事件和审批测试；该模式不会改变生产中央化边界。
-
-在 Spike 给出 Go/No-Go 之前，不初始化正式 Rust/Node 产品工程，不引入生产依赖。
-
-## 目录
-
-```text
-apps/                         桌面应用与后续管理界面
-services/                     中央控制面、Worker、Broker 和 Bridge
-crates/                       Local Agent、AgentRPC、IPC、策略和审计
-packages/                     App Server Schema、API Client 和 UI 组件
-database/                     数据库迁移与种子数据
-infra/                        中央 macOS、签名和监控
-tests/                        协议、E2E、安全和跨平台测试
-docs/                         架构、路线、ADR、威胁模型和 Runbook
+```powershell
+cd spikes/local-dev
+npm ci
+npm run dev:desktop
 ```
 
-## 许可证
+`dev:desktop` 自动构建和管理 Local Agent，首次启动按客户端设置完成配对与默认目录配置。中央管理开发入口为 `npm run dev:central-app`。环境要求和检查命令见[开发说明](spikes/local-dev/README.md)。
 
-项目方拥有完整版权的代码计划采用：
+| 目录 | 内容 |
+| --- | --- |
+| `spikes/local-dev/apps/desktop` | Tauri + React 工作客户端 |
+| `spikes/local-dev/apps/central` | 中央管理 App |
+| `spikes/local-dev/services/test-gateway` | 中央网关、Worker 管理和设备路由 |
+| `spikes/local-dev/crates` | Local Agent、原生安全和运行支撑 |
+| `spikes/local-dev/packages` | AgentRPC 类型等共享模块 |
+| `spikes/local-dev/harness` | 固定上游、补丁、隔离和验收摘要 |
+| `docs` | 维护手册与设计参考 |
+| `database` | 早期数据库 PoC；不是正式中央数据迁移入口 |
 
-```text
-AGPL-3.0-only OR Commercial License
-```
+## 文档与许可
 
-详细边界见 `LICENSING.md`。商业许可文本、CLA 和商标规则在对外发布或接受外部贡献前必须经过知识产权律师审阅。
+从[文档导航](docs/README.md)查阅维护手册，开发代理先读 [AGENTS.md](AGENTS.md)。日常改动按风险验证并本地提交；打包和发布仅在当次明确要求时进行。
 
-第三方代码继续适用其原始许可证，不因进入本仓库而自动变成本项目双许可代码。
-
-## 文档
-
-- `docs/中央化Codex多用户远程工作平台-需求与架构设计-V0.2.md`
-- `docs/中央化Codex平台-总体开发路线-V1.0.md`
-- `docs/中央化Codex平台-技术选型与开发环境-V1.0.md`
-- `docs/B.3-A0-推荐改造方案启动决策清单.md`
-- `docs/B.3-B6-阶段验收与Go-No-Go-2026-09-01.md`
+自有代码的双许可计划及边界见 [LICENSING.md](LICENSING.md)，第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。

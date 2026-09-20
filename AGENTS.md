@@ -4,7 +4,7 @@
 
 ## 项目目标
 
-本项目是中央化 Codex 多用户远程工作平台。当前优先完成可信局域网内的核心功能和客户端正式 UI，权限、认证、WSS/mTLS 和生产级多用户隔离后续再完善。
+本项目是中央化 Codex 多用户远程工作平台。截至 2026-09-20，可信局域网部署已使用 WSS、配对码、设备令牌和按用户 Worker；继续完善客户端、中央管理和生产级隔离。当前状态与验收缺口见 `docs/README.md`，不要把早期 mTLS 方案当作当前默认认证。
 
 必须保持以下核心架构：
 
@@ -22,8 +22,8 @@
 
 按顺序阅读与任务相关的文档：
 
-1. `docs/客户端UI与Local-Agent开发交接文档-2026-09-02.md`
-2. `docs/中央化Codex多用户远程工作平台-需求与架构设计-V0.2.md`
+1. `docs/README.md`，再按任务读取对应维护手册
+2. `docs/中央化Codex多用户远程工作平台-需求与架构设计-V0.2.md`（历史需求基线，以维护手册说明的后续变更为准）
 3. `spikes/local-dev/README.md`
 4. `spikes/local-dev/AGENTRPC.md`
 
@@ -33,7 +33,7 @@
 
 ```text
 Tauri + React 客户端
-        │ ws://<central>:4510/ws
+        │ wss://<central>:4510/ws
         ▼
 Central Test Gateway
         │ stdio
@@ -41,7 +41,7 @@ Central Test Gateway
 Codex App Server（中央机）
 
 Local Agent（客户端）
-        │ ws://<central>:4510/ws/agent
+        │ wss://<central>:4510/ws/agent
         ▲
 Device Broker / dynamic tools
         │
@@ -50,21 +50,21 @@ Device Broker / dynamic tools
 
 当前真实中央机局域网地址：
 
-- UI 网关：`ws://192.0.2.10:4510/ws`
-- Agent 网关：`ws://192.0.2.10:4510/ws/agent?deviceId=desktop-device`
-- 健康检查：`http://192.0.2.10:4510/healthz`
+- UI 网关：`wss://192.0.2.10:4510/ws`
+- Agent 网关：`wss://192.0.2.10:4510/ws/agent`，使用已配对设备凭据，不用 URL 查询参数传身份或秘密
+- 健康检查：`https://192.0.2.10:4510/healthz`，使用既有公共 CA 验证
 
-这些地址是当前可信局域网 Spike 配置，不代表生产配置。不得将 4510 端口暴露到互联网。
+这些地址是当前可信局域网部署配置，不代表已取得完整生产发布资格。不得将 4510 端口暴露到互联网，也不得跳过 TLS 验证。
 
 ## Local Agent 生命周期
 
 桌面客户端必须管理 Local Agent 生命周期：
 
-- 桌面程序启动时自动启动 Local Agent；
+- 桌面程序配置就绪后自动启动 Local Agent（首次配置未保存时不启动）；
 - 桌面窗口关闭时自动停止 Local Agent；
 - `dev:desktop` 在启动 Tauri 前先构建 `local-agent`；
 - 默认从桌面可执行文件同目录寻找 `local-agent.exe`；
-- 正式打包阶段再迁移为 Tauri sidecar 或安装包资源。
+- 安装包已通过 Tauri `externalBin` 内置 Local Agent，继续使用现有生命周期管理。
 
 相关实现：
 
@@ -88,7 +88,7 @@ Device Broker / dynamic tools
 3. 消息发送、流式输出、完成、失败和中断；
 4. 客户端工作区目录、文件读取和命令执行结果；
 5. loading、空状态、错误状态、toast 和响应式布局；
-6. 设置持久化、正式认证和权限 UI。
+6. 维护已有设置持久化、设备配对、版本更新及权限 UI。
 
 UI 必须明确区分：
 
@@ -149,7 +149,7 @@ npm run build --workspace @central-codex-spike/desktop
 
 ```powershell
 npm run build --workspace @central-codex-spike/test-gateway
-Invoke-RestMethod http://192.0.2.10:4510/healthz
+curl.exe --fail --cacert 'C:\path\to\existing-public-ca.pem' https://192.0.2.10:4510/healthz
 ```
 
 不要在已有 Tauri/Cargo 进程占用 `target` 构建锁时反复并行启动构建；先确认运行进程和端口占用。

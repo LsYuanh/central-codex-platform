@@ -1,5 +1,7 @@
 # Central QA authentication lifecycle
 
+> This describes the historical read-only QA authentication mode. Current managed central authentication and shared-login renewal are documented in the [model authentication manual](../../../docs/模型认证维护手册.md).
+
 This is the 2026-09-09 fixed-source follow-up, not production credential management.
 The 4510 service and its auth file are outside the QA mutation boundary.
 

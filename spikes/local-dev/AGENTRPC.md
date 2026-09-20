@@ -1,13 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial -->
 
+# Local AgentRPC
+
+Current maintenance baseline: 2026-09-20. WSS plus `device-token-v1` is the deployed default. Sections explicitly marked historical describe legacy compatibility and protocol fixtures, not the current product startup path. See the [maintenance index](../../docs/README.md) for deployment and acceptance limits.
+
 ## Client file access (`client-paths/v1`, 2026-09-14)
 
 For Agents advertising `client-paths/v1`, this section supersedes the workspace-root access restrictions and Downloads/Codexia default-output rules below. Local Agent resolves ordinary absolute and relative client paths (including parents and explicit links) with OS account permissions, independent of LAN/TLS transport. `workspaceRoot` is retained as the default output directory and relative-path base, not a sandbox. `file/output_paths.outputDirectory` names the default destination for name-only document/image/copy output. Central system execution stays disabled.
 
-Thread identity binds user/device/deviceKey, not the default output directory; each in-flight RPC still checks its captured configuration. Patch previews add `expectedPaths`, mapping patch paths to canonical client destinations. The gateway shows and forwards these alongside `expectedVersions`; apply rejects missing or changed destinations, including retargeted links. The gateway negotiates this behavior per connected device. Older Agents with `remote-workspace/v1` and stable device identity can still create/resume conversations and use their original workspace-relative tools and cwd. They retain the original workspace binding and native output defaults. Legacy patch previews use patchHash and expectedVersions without expectedPaths; the gateway only allows this fallback when client-paths/v1 is absent. New Agents must still provide canonical target paths. Agent reconnection during approval invalidates the preview. Older tool tables on resumed Threads receive capability-specific developer instructions. Missing authentication or remote-workspace identity capabilities remain unsupported. See [implementation and validation](../../docs/客户端自由文件访问与默认输出目录-2026-09-14.md).
+Thread identity binds user/device/deviceKey, not the default output directory; each in-flight RPC still checks its captured configuration. Patch previews add `expectedPaths`, mapping patch paths to canonical client destinations. The gateway shows and forwards these alongside `expectedVersions`; apply rejects missing or changed destinations, including retargeted links. The gateway negotiates this behavior per connected device. Older Agents with `remote-workspace/v1` and stable device identity can still create/resume conversations and use their original workspace-relative tools and cwd. They retain the original workspace binding and native output defaults. Legacy patch previews use patchHash and expectedVersions without expectedPaths; the gateway only allows this fallback when client-paths/v1 is absent. New Agents must still provide canonical target paths. Agent reconnection during approval invalidates the preview. Older tool tables on resumed Threads receive capability-specific developer instructions. Missing authentication or remote-workspace identity capabilities remain unsupported. See [implementation and validation](../../docs/客户端维护手册.md).
 
-
-# Local AgentRPC / Fake App Server round 1
 
 ## One-code bootstrap (2026-09-11)
 
@@ -25,20 +27,13 @@ this trust automatically. The `/auth/device/pair` server protocol is unchanged.
 Formal Mac 4510 has now migrated to WSS; Windows native one-code UI, persisted
 Agent reconnect and real remote model/tool execution passed. Mac client packaging
 passed, but Mac visual acceptance remains pending. Earlier migration statements
-below are historical. See [current acceptance](../../docs/客户端一体配对码实施与验收-2026-09-11.md).
+below are historical. See [current acceptance](../../docs/客户端维护手册.md).
 
-## Device-token authentication (2026-09-10 status correction; unreleased)
+## Device-token authentication
 
-The user selected HTTPS/WSS plus administrator-issued single-use pairing codes and
-revocable device tokens. Switching the entry-point defaults was initially rejected by
-automatic approval review; the user has now explicitly approved that change. UI checks and 21 real HTTPS/WSS
-module protocol checks have passed. Windows native compilation, 19 Agent unit tests,
-two token storage tests and nine native HTTPS/WSS module checks also passed. Later RC3
-acceptance covered real 4529 model/Agent create and resume on Windows and macOS.
-Windows RC4 covered re-pairing, revocation cancellation and terminal Tauri UI behavior.
-Mac RC4 and the new authentication candidate's installer upgrade/rollback remain pending;
-production 4510 has not migrated and the candidate is still `deployable=false`.
-These are historical acceptance records, not tests rerun by this documentation correction.
+HTTPS/WSS, administrator-issued single-use pairing codes and revocable device tokens
+are the current default. Formal Mac 4510 migrated on 2026-09-11; validation scope and
+remaining platform/installer limits are maintained in the [validation guide](../../docs/验证与已知限制.md).
 
 The implemented module contract is `device-token-v1`: administrator-session
 `POST /auth/admin/pair-code {userId}` returns a code valid for five minutes;
@@ -53,8 +48,9 @@ Native storage uses current-user DPAPI plus protected ACLs on Windows, and owned
 0700 directories / 0600 files on macOS. macOS contents are not encrypted. The renderer
 receives public state only. This replaces the pending legacy Mac Keychain acceptance;
 old records below are historical. Re-pairing does not transfer existing Thread bindings.
-Windows central Worker isolation remains future work, independent of device auth.
-See [implementation and remaining acceptance](../../docs/简化设备认证实施与验收-2026-09-09.md).
+Worker process isolation is independent of device authentication; current platform
+qualification limits are recorded separately in the validation guide.
+See [implementation and remaining acceptance](../../docs/中央管理维护手册.md).
 
 ## Device certificates (P5 fourth batch historical mode, 2026-09-09)
 
@@ -94,7 +90,7 @@ Binding disable/rebind aborts that user's model stream and Worker; reconnect aft
 creates a fresh capability and can restore its history without replaying the previous Turn.
 Unknown central approval request types are rejected; the existing user-input RPC remains allowed.
 Device execution still uses the existing outbound AgentRPC route. SSH is only a developer QA tool.
-See [configuration and acceptance](../../docs/Worker权限与模型凭据隔离-2026-09-09.md).
+See [configuration and acceptance](../../docs/中央管理维护手册.md).
 
 ## Authenticated TLS connections (P5 first batch, 2026-09-09)
 
@@ -110,7 +106,7 @@ per-message and dispatch checks refuse stale identities, and Agent disconnection
 commands. UI and Agent use TLS server certificate/hostname validation. This is device signature
 authentication over TLS, not a completed client X.509/mTLS enrollment implementation.
 Legacy ws connections are available only on gateways without platform authentication enabled.
-See [implementation and acceptance](../../docs/平台登录与设备身份实施-2026-09-09.md).
+See [implementation and acceptance](../../docs/中央管理维护手册.md).
 
 ## Enforced remote workspace extension (2026-09-09)
 
@@ -141,7 +137,7 @@ legacy tool tables. Runtime loss cancels pending device execution and reports un
 Gateway state uses an atomic durable replacement; corrupt state fails before inference starts,
 and persistence failure stops inference. Reconnection retains submission IDs; a recorded `sent`
 status means accepted, not successfully executed, and must not cause replay after restart.
-See [P4 acceptance](../../docs/Harness-P4兼容与故障验收-2026-09-09.md).
+See [P4 acceptance](../../docs/验证与已知限制.md).
 
 ## Mid-turn user input (2026-09-07)
 
@@ -412,7 +408,7 @@ connection.
 
 ## Client application updates (2026-09-14)
 
-Client updates use authenticated native HTTPS routes under `/client-updates/`, not AgentRPC model tools. Before installation, the gateway checks active work and fences new requests for that device with a 60-second maintenance lease. The desktop stops and joins its Local Agent through the existing `runtime/prepare_restart` local IPC before invoking the installer. Only the installed expected version can resume the lease without its in-memory UUID; lease expiry recovers interrupted installs. Other devices remain available. See [implementation and acceptance](../../docs/客户端版本升级实施与验收-2026-09-14.md) for routes and deployment requirements.
+Client updates use authenticated native HTTPS routes under `/client-updates/`, not AgentRPC model tools. Before installation, the gateway checks active work and fences new requests for that device with a 60-second maintenance lease. The desktop stops and joins its Local Agent through the existing `runtime/prepare_restart` local IPC before invoking the installer. Only the installed expected version can resume the lease without its in-memory UUID; lease expiry recovers interrupted installs. Other devices remain available. See [implementation and acceptance](../../docs/发布与回退手册.md) for routes and deployment requirements.
 
 ## Test-gateway isolation probe
 

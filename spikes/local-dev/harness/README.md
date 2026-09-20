@@ -1,5 +1,7 @@
 # Central Codex harness fork
 
+> Maintenance note (2026-09-20): build and probe details below include historical P0/QA stages. Windows central integration now exists; current deployment and unresolved qualification limits are in the [central manual](../../../docs/中央管理维护手册.md) and [validation guide](../../../docs/验证与已知限制.md).
+
 This is a fixed-source dependency and an auditable patch for the existing gateway,
 not another product entry point. The qualified runtime below is the **central Mac**.
 Windows central qualification started in P0 on 2026-09-10; it is not enabled in the gateway.
@@ -71,7 +73,7 @@ synthetic model and synthetic dynamic tool. It checks streamed output hashes,
 interruption/recovery, certificate rejection and Job/profile cleanup; it never
 replaces the formal service or enables the production Windows Worker. See
 `verification/windows-model-runtime-2026-09-10.json` and
-`../../../docs/Windows模型管道接入与验收-2026-09-10.md` for the current result and limits.
+`../../../docs/验证与已知限制.md` for the current result and limits.
 
 Source preparation now isolates Git from the enclosing project and verifies actual
 patch application: `git apply` can otherwise skip all hunks inside a parent repository
@@ -181,7 +183,7 @@ echo endpoint for each case; a timeout is recorded as inconclusive. The 2026-09-
 controlled-LAN run had host echo success and AppContainer `WSAEACCES (10013)` with
 `NETISO_ERROR_TYPE_INTERNET_CLIENT`, while IPv4/IPv6 loopback remained timeout-only.
 It does not test DNS/UDP or change firewall and loopback exemptions.
-See `../../../docs/Windows真实模型与Local-Agent联调-2026-09-10.md` for results and limitations.
+See `../../../docs/验证与已知限制.md` for results and limitations.
 
 - The whole worker uses one immutable remote mode. UI/config cannot turn it off.
 - No native executor is created, regardless of environments.toml, exec-server URL or noise settings.

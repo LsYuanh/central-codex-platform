@@ -2,6 +2,8 @@
 
 # Day 5 验收矩阵
 
+> Historical Day 5 protocol probe matrix. Current WSS/device-token deployment and live acceptance entry points are in the [validation guide](../../../docs/验证与已知限制.md).
+
 `npm run day5:acceptance` 对中央测试网关执行一组可重复的黑盒探针。默认地址是
 `ws://127.0.0.1:4510/ws`，也可以用 `DAY5_GATEWAY_URL` 指定 SSH 隧道或中央测试环境。
 
