@@ -13,6 +13,7 @@ export interface ChatMessage extends MessagePresentation {
 }
 export interface ThreadSummary {
   id: string; name?: string; preview?: string; cwd?: string;
+  clientProject?: import("./projects").ClientProject;
   updatedAt?: string; archived?: boolean; active?: boolean;
 }
 export interface ApprovalRequest {
@@ -20,6 +21,7 @@ export interface ApprovalRequest {
   kind: "approval" | "user-input" | "tool-call" | "other"; threadId?: string;
 }
 export interface PlatformCapabilities {
+  projects?: boolean;
   remoteWorkspace?: boolean; imageGeneration?: boolean; plugins?: boolean; subagents?: boolean;
 }
 
@@ -88,7 +90,7 @@ export function normalizeGatewayUiEvent(message: AppServerMessage, now = Date.no
   if (message.method === "gateway/runtimeUnavailable") return event({kind:"runtime-unavailable", error:`中央 Agent 引擎不可用：${(string(p.error) ?? "App Server 已停止").slice(0, 2000)}。${p.recoverable === true ? "请稍后重新连接并恢复对话；系统不会自动重发当前任务，执行结果需核对。" : "请联系管理员重启网关后重新连接；当前任务结果需核对。"}`});
   if (message.method === "gateway/capabilities") {
     const capabilities: PlatformCapabilities = {};
-    for (const key of ["remoteWorkspace", "imageGeneration", "plugins", "subagents"] as const) {
+    for (const key of ["projects", "remoteWorkspace", "imageGeneration", "plugins", "subagents"] as const) {
       if (typeof p[key] === "boolean") capabilities[key] = p[key];
     }
     return event({kind:"capabilities", capabilities});

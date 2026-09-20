@@ -294,6 +294,9 @@ function operationForMethod(method: string): string | undefined {
   return {
     initialize: "session.initialize",
     "model/list": "model.list",
+    "project/list": "project.list",
+    "project/save": "project.save",
+    "project/remove": "project.remove",
     "thread/start": "conversation.create",
     "thread/resume": "conversation.resume",
     "thread/read": "conversation.read",

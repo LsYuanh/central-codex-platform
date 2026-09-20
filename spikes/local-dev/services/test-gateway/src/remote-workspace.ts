@@ -18,17 +18,19 @@ export interface RemoteWorkspaceBinding {
   deviceId: string;
   deviceKey: string;
   workspaceRoot: string;
+  projectRoot?: string;
 }
 
 /** Bind to the original device; changing its default output directory does not move the Thread. */
 export function assertBinding(binding: RemoteWorkspaceBinding, current: RemoteWorkspaceBinding): void {
-  for (const key of ["policy", "userId", "deviceId", "deviceKey"] as const) {
+  for (const key of ["policy", "userId", "deviceId", "deviceKey", "projectRoot"] as const) {
     if (binding[key] !== current[key]) throw new Error(`REMOTE_WORKSPACE_CHANGED: ${key}; reconnect the original client device or create a new conversation`);
   }
 }
 
 /** Do not permit a UI payload to replace the worker's execution policy/configuration. */
 export function validateRemotePayload(payload: Record<string, unknown>): void {
+  if ("clientProject" in payload) throw new Error("REMOTE_POLICY_OVERRIDE: clientProject is managed by the gateway");
   for (const key of ["cwd", "sandbox", "sandboxPolicy", "approvalPolicy", "config", "baseInstructions", "developerInstructions", "dynamicTools", "mcpServers", "remoteWorkspace", "environment", "permissions", "serviceName"]) {
     if (key in payload) throw new Error(`REMOTE_POLICY_OVERRIDE: ${key} is managed by the gateway`);
   }

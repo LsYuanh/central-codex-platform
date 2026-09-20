@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
+import { ProjectSidebar } from "./ProjectSidebar";
+import { useProjects, readProject, type ClientProject } from "./projects";
 import { joinClientPath, parentClientPath } from "./client-paths";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -175,6 +177,13 @@ export default function App() {
   const [threadId, setThreadId] = useState<string | undefined>();
   const threadIdRef = useRef<string | undefined>(undefined);
   threadIdRef.current = threadId;
+  const [draftProject, setDraftProject] = useState<ClientProject>();
+  const draftProjectRef = useRef<ClientProject | undefined>(undefined);
+  draftProjectRef.current = draftProject;
+  const projectScope = JSON.stringify([mode, appUrl, runtimeConfig?.effective.userId, deviceId]);
+  const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
+  useEffect(() => { setDraftProject(undefined); draftProjectRef.current = undefined; }, [projectScope]);
+  const newDraftKey = () => `__new__:${draftProjectRef.current?.id ?? ""}`;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<ThreadSummary[]>([]);
   const [threadQuery, setThreadQuery] = useState("");
@@ -269,11 +278,11 @@ export default function App() {
   }, []);
 
   const persistCurrentDraft = useCallback(() => {
-    threadDraftsRef.current.set(threadIdRef.current ?? "__new__", { text: composer, attachments: attachments.drafts });
+    threadDraftsRef.current.set(threadIdRef.current ?? newDraftKey(), { text: composer, attachments: attachments.drafts });
   }, [attachments.drafts, composer]);
 
   const restoreThreadDraft = useCallback((id?: string) => {
-    const draft = threadDraftsRef.current.get(id ?? "__new__");
+    const draft = threadDraftsRef.current.get(id ?? newDraftKey());
     setComposer(draft?.text ?? "");
     attachments.setDrafts(draft?.attachments ?? []);
   }, [attachments]);
@@ -292,8 +301,8 @@ export default function App() {
   useEffect(() => { runningThreadIdsRef.current = runningThreadIds; }, [runningThreadIds]);
 
   useEffect(() => {
-    threadDraftsRef.current.set(threadId ?? "__new__", { text: composer, attachments: attachments.drafts });
-  }, [attachments.drafts, composer, threadId]);
+    threadDraftsRef.current.set(threadId ?? newDraftKey(), { text: composer, attachments: attachments.drafts });
+  }, [attachments.drafts, composer, threadId, draftProject]);
 
   useEffect(() => {
     if (!approval) return;
@@ -1187,7 +1196,10 @@ export default function App() {
       const identity = refs.length ? await localAttachment<{deviceKey:string}>("attachment/identity") : undefined;
       if (cancelSendRef.current) throw new Error("已取消附件准备，草稿已保留");
       if (!targetThreadId) {
+        const project = draftProject ? projectService.projects.find(p => p.id === draftProject.id) : undefined;
+        if (draftProject && (!project || !platformCapabilities.projects)) throw new Error("项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留");
         const response = await codexia.threadStart({
+          ...(project ? {projectId:project.id,projectRevision:project.revision} : {}),
           ...(appModel.trim() ? { model: appModel.trim() } : {}),
           ...(appServiceTier.trim() ? { serviceTier: appServiceTier.trim() } : {}),
           ...(mode !== "central-gateway" && appCwd.trim() ? { cwd: appCwd.trim() } : {}),
@@ -1195,7 +1207,7 @@ export default function App() {
         targetThreadId = threadIdFromResult(response.result);
         if (!targetThreadId) throw new Error("thread/start 返回中没有 thread.id");
         setThreadId(targetThreadId); threadIdRef.current = targetThreadId;
-        setThreads(current => [{id:targetThreadId!,preview:text || refs[0]?.name,updatedAt:new Date().toISOString()},...current.filter(t=>t.id!==targetThreadId)]);
+        setThreads(current => [{id:targetThreadId!,preview:text || refs[0]?.name,updatedAt:new Date().toISOString(),clientProject:readProject(asRecord(asRecord(response.result)?.thread)?.clientProject)},...current.filter(t=>t.id!==targetThreadId)]);
         updateThreadRunning(targetThreadId, true);
       }
       if (cancelSendRef.current) throw new Error("已取消附件准备，草稿已保留");
@@ -1221,7 +1233,7 @@ export default function App() {
       const submission = asRecord(result?.submission);
       if (submission?.attachments) setMessages(current=>current.map(item=>item.id===clientMessageId?{...item,attachments:submission.attachments}:item));
       threadDraftsRef.current.set(targetThreadId, { text: "", attachments: [] });
-      if (creatingThread) threadDraftsRef.current.delete("__new__");
+      if (creatingThread) threadDraftsRef.current.delete(newDraftKey());
       setComposer(""); attachments.setDrafts([]);
       if (typeof turn?.id === "string") updateThreadTurnId(targetThreadId, turn.id);
     } catch (error) {
@@ -1244,7 +1256,7 @@ export default function App() {
       sendGuard.current=false;pendingMessageRef.current=undefined;setSending(false);setSendStage("");
       if (creatingThread) setThreadBusy(undefined);
     }
-  }, [appCwd,appEffort,appModel,appServiceTier,appState,engineState,composer,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
+  }, [draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composer,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
 
   const reconcileSubmission = async () => {
     if (!uncertainSubmission || !codexiaRef.current) return;
@@ -1266,12 +1278,13 @@ export default function App() {
     } catch(e) {setAppError(String(e));} finally {setSending(false);}
   };
 
-  const startNewConversation = useCallback(() => {
+  const startNewConversation = useCallback((project?: ClientProject) => {
     if (appState !== "online" || threadBusy || sendGuard.current) return;
     persistCurrentDraft();
     setAppError("");
     setThreadId(undefined);
     threadIdRef.current = undefined;
+    setDraftProject(project); draftProjectRef.current = project;
     restoreThreadDraft(undefined);
     setMessages([]);
     setEvents([]);
@@ -1420,12 +1433,27 @@ export default function App() {
     if (thread.archived) return false;
     const query = threadQuery.trim().toLowerCase();
     if (!query) return true;
-    return `${thread.name ?? ""} ${thread.preview ?? ""} ${thread.id} ${thread.cwd ?? ""}`.toLowerCase().includes(query);
+    const project = projectService.projects.find(p => p.id === thread.clientProject?.id);
+    return `${thread.name ?? ""} ${thread.preview ?? ""} ${thread.id} ${thread.cwd ?? ""} ${project?.name ?? ""} ${project?.folders.join(" ") ?? ""}`.toLowerCase().includes(query);
   }).sort((left, right) => {
     const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
     const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
     return rightTime - leftTime;
   });
+  const recentThreads = visibleThreads.filter(t => !projectService.projects.some(p => p.id === t.clientProject?.id));
+  const currentProject = threadId ? threads.find(t => t.id === threadId)?.clientProject : projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject;
+  const renderThread = (thread: ThreadSummary) => {
+                  const busy = threadBusy?.startsWith(`${thread.id}:`);
+                  const running = runningThreadIds.has(thread.id);
+                  const needsApproval = approvals.some((item) => item.threadId === thread.id);
+                  const needsReconcile = uncertainSubmissions.has(thread.id);
+                  return <div key={thread.id} className={`conversation-item ${thread.id === threadId ? "active" : ""} ${thread.archived ? "archived" : ""} ${running ? "running" : ""}`}>
+                    <button className="conversation-select" aria-current={thread.id === threadId ? "page" : undefined} onClick={() => { void resumeThread(thread.id); setSidebarOpen(false); }} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
+                      <span className="conversation-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong></span>
+                    </button>
+                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : <ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} />}</div>
+                  </div>;
+  };
   const visibleEvents = events.filter((event) => {
     if (eventFilter === "all") return true;
     const normalized = event.toLowerCase();
@@ -1510,28 +1538,24 @@ export default function App() {
               <div className="sidebar-search-wrap"><UiIcon name="search" /><input aria-label="搜索对话" value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder="搜索对话" />{threadQuery && <button type="button" className="text-icon-button" aria-label="清除搜索" onClick={() => setThreadQuery("")}><UiIcon name="close" /></button>}</div>
             </nav>
 
+            <div className="sidebar-lists">
+            {mode === "central-gateway" && <ProjectSidebar key={projectScope} scope={projectScope} projects={projectService.projects} threads={visibleThreads} query={threadQuery} activeProjectId={currentProject?.id}
+              disabled={sending || Boolean(threadBusy)} loading={projectService.loading} error={projectService.error}
+              unavailable={appState !== "online" ? "连接后管理本机项目" : !platformCapabilities.projects ? "中央服务需更新后启用项目" : ""}
+              refresh={projectService.refresh} save={projectService.save} remove={projectService.remove}
+              newThread={p => {startNewConversation(p);setSidebarOpen(false);}} renderThread={renderThread} />}
             <section className="conversation-list-section">
               <div className="conversation-list-heading">
-                <div><span>最近对话</span>{runningThreadIds.size > 0 && <small>{runningThreadIds.size} 个进行中</small>}</div>
+                <div><span>最近</span>{runningThreadIds.size > 0 && <small>{runningThreadIds.size} 个进行中</small>}</div>
                 <button className="text-icon-button" title="刷新" aria-label="刷新对话" disabled={appState !== "online" || threadsLoading} onClick={() => void refreshThreads()}>{threadsLoading ? <span className="icon-loading">…</span> : <RefreshIcon />}</button>
               </div>
               <div className="conversation-list">
-                {visibleThreads.length === 0 ? (
+                {recentThreads.length === 0 ? (
                   <div className="sidebar-empty">{threadQuery ? "没有匹配的对话" : appState === "online" ? "还没有对话" : "连接后显示对话"}</div>
-                ) : visibleThreads.slice(0, 40).map((thread) => {
-                  const busy = threadBusy?.startsWith(`${thread.id}:`);
-                  const running = runningThreadIds.has(thread.id);
-                  const needsApproval = approvals.some((item) => item.threadId === thread.id);
-                  const needsReconcile = uncertainSubmissions.has(thread.id);
-                  return <div key={thread.id} className={`conversation-item ${thread.id === threadId ? "active" : ""} ${thread.archived ? "archived" : ""} ${running ? "running" : ""}`}>
-                    <button className="conversation-select" aria-current={thread.id === threadId ? "page" : undefined} onClick={() => { void resumeThread(thread.id); setSidebarOpen(false); }} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
-                      <span className="conversation-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong></span>
-                    </button>
-                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : <ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} />}</div>
-                  </div>;
-                })}
+                ) : recentThreads.slice(0, 40).map(renderThread)}
               </div>
             </section>
+            </div>
 
             <div className="sidebar-footer">
               <div className="connection-summary" role="status" aria-label="连接状态">
@@ -1566,6 +1590,7 @@ export default function App() {
                 <UiIcon name="folder" />
                 <div><strong>{threadId ? threadDisplayTitle(threads.find((thread) => thread.id === threadId)) : "新对话"}</strong></div>
               </div>
+              {currentProject && <details className="conversation-project-context"><summary>{projectService.projects.find(p => p.id === currentProject.id)?.name ?? currentProject.name}</summary><div>{currentProject.folders.map((path,i) => <p key={path}><span>{i === 0 ? "工作目录" : "关联目录"}</span><code>{path}</code></p>)}</div></details>}
             </header>
 
             {appError && (
@@ -1715,7 +1740,7 @@ export default function App() {
                   <div className="settings-section-heading page-intro"><h2>客户端工作区</h2><p>文件读取和命令执行始终由当前设备的 Local Agent 完成。</p></div>
                   {desktopRuntime && mode === "central-gateway" && <div className="settings-card runtime-workspace-summary"><span>默认输出目录：<code>{runtimeConfig?.effective.workspaceRoot || "尚未读取配置"}</code></span><button className="button-secondary" onClick={() => openSettings("connection")}>修改输出目录</button></div>}
                   {platformCapabilities.remoteWorkspace === true && <p className="attachment-notice">当前运行时使用客户端工作区。{platformCapabilities.imageGeneration === false ? "新图片生成暂不可用；已有图片输出仍可查看和保存。" : ""}{platformCapabilities.plugins === false ? "插件暂不可用。" : ""}{platformCapabilities.subagents === false ? "子任务暂不可用。" : ""}</p>}
-                  <WorkspacePanel diffScope={`${appUrl}:${deviceId}:${runtimeConfig?.effective.workspaceRoot ?? ""}:${workspacePath}`} loadDiff={mode === "central-gateway" && platformCapabilities.remoteWorkspace === true ? staged => { const adapter = codexiaRef.current; if (!adapter) return Promise.reject(new Error("中央网关尚未连接")); return adapter.workspaceDiff(workspacePath, staged); } : undefined} mode={mode} deviceState={deviceState} path={workspacePath} entries={workspaceEntries} loading={workspaceLoading} output={gatewayOutput} resultStatus={workspaceResultStatus} content={workspaceContent} contentPath={workspaceContentPath} command={workspaceCommand} available={workspaceAvailable} onPathChange={setWorkspacePath} onOpen={() => navigateWorkspace(workspacePath)} onParent={() => navigateWorkspace(parentWorkspacePath)} onRefresh={() => navigateWorkspace(workspacePath)} onEntryClick={readWorkspaceEntry} onCommandChange={setWorkspaceCommand} onRunCommand={() => void sendWorkspaceRequest("exec", { program: workspaceCommand, args: ["--version"], cwd: "." })} onCloseContent={() => { setWorkspaceContent(""); setWorkspaceContentPath(""); }} />
+                  <WorkspacePanel diffScope={`${appUrl}:${deviceId}:${runtimeConfig?.effective.workspaceRoot ?? ""}:${workspacePath}`} loadDiff={mode === "central-gateway" && platformCapabilities.remoteWorkspace === true ? staged => { const adapter = codexiaRef.current; if (!adapter) return Promise.reject(new Error("中央网关尚未连接")); return adapter.workspaceDiff(workspacePath, staged); } : undefined} mode={mode} deviceState={deviceState} path={workspacePath} entries={workspaceEntries} loading={workspaceLoading} output={gatewayOutput} resultStatus={workspaceResultStatus} content={workspaceContent} contentPath={workspaceContentPath} command={workspaceCommand} available={workspaceAvailable} onPathChange={setWorkspacePath} onOpen={() => navigateWorkspace(workspacePath)} onParent={() => navigateWorkspace(parentWorkspacePath)} onRefresh={() => navigateWorkspace(workspacePath)} onEntryClick={readWorkspaceEntry} onCommandChange={setWorkspaceCommand} onRunCommand={() => void sendWorkspaceRequest("exec", { program: workspaceCommand, args: ["--version"], cwd: workspacePath })} onCloseContent={() => { setWorkspaceContent(""); setWorkspaceContentPath(""); }} />
                 </div>
               )}
 
@@ -1957,6 +1982,7 @@ function threadSummariesFromResult(result: unknown): ThreadSummary[] {
       id: value.id,
       name: typeof value.name === "string" ? value.name : undefined,
       preview: typeof value.preview === "string" && value.preview.trim() ? normalizeThreadPreview(value.preview) : undefined,
+      clientProject: readProject(value.clientProject),
       cwd: typeof value.cwd === "string" ? value.cwd : undefined,
       updatedAt: threadDateFromValue(value.updatedAt ?? value.recencyAt),
       archived: value.archived === true || value.isArchived === true || typeof value.archivedAt === "string",

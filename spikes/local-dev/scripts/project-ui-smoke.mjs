@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import assert from 'node:assert/strict';
+import {mkdir} from 'node:fs/promises';
+import {join,resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+
+export async function runProjectUi({port,paths}) {
+  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(resolve(process.env.PLAYWRIGHT_MODULE)).href : 'playwright');
+  const output=resolve('target/project-ui-qa');await mkdir(output,{recursive:true});
+  const browser=await chromium.launch({headless:true,channel:'msedge'});
+  let page;
+  try {
+    const context=await browser.newContext({viewport:{width:1170,height:810}});
+    await context.addInitScript(url=>localStorage.setItem('codexia.desktop.settings.v1',JSON.stringify({mode:'central-gateway',appUrl:url,theme:'light'})),`ws://127.0.0.1:${port}/ws?userId=project-owner&deviceId=project-device`);
+    page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(process.env.PROJECT_UI_URL??'http://127.0.0.1:1420');
+    await page.getByRole('button',{name:'添加项目',exact:true}).waitFor();
+    await page.getByRole('button',{name:'添加项目',exact:true}).click();
+    await page.getByRole('textbox',{name:'项目名称',exact:true}).fill('界面测试');
+    await page.getByRole('textbox',{name:'本机目录路径'}).fill(paths.b);
+    await page.getByRole('button',{name:'添加',exact:true}).click();
+    await page.getByRole('textbox',{name:'本机目录路径'}).fill(paths.extra);
+    await page.getByRole('button',{name:'添加',exact:true}).click();
+    await page.getByRole('button',{name:'设为主目录'}).click();
+    assert.equal(await page.locator('.project-folder-copy').first().innerText().then(t=>t.includes('notes')),true);
+    await page.getByRole('button',{name:'创建',exact:true}).click();
+    await page.locator('.project-dialog').waitFor({state:'detached'});
+    await page.locator('.conversation-project-context').getByText('界面测试',{exact:true}).waitFor();
+    const composer=page.locator('.composer textarea');
+    // Independent unsent project drafts must survive switching projects and recent.
+    await composer.fill('项目一草稿');
+    await page.getByRole('button',{name:'在项目 B中新建对话'}).focus();
+    await page.getByRole('button',{name:'在项目 B中新建对话'}).click();
+    assert.equal(await composer.inputValue(),'');await composer.fill('项目二草稿');
+    await page.getByRole('button',{name:'在界面测试中新建对话'}).focus();
+    await page.getByRole('button',{name:'在界面测试中新建对话'}).click();
+    assert.equal(await composer.inputValue(),'项目一草稿');
+    const project=page.locator('.project-group').filter({has:page.getByRole('button',{name:'界面测试',exact:true})});
+    const toggle=project.getByRole('button',{name:'界面测试',exact:true});
+    assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+    const openPath=await toggle.locator('path').getAttribute('d');
+    await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.notEqual(await toggle.locator('path').getAttribute('d'),openPath);
+    await toggle.click();
+    // UI must send the project selection through the real platform adapter.
+    await composer.fill('在当前项目创建对话');
+    await page.getByRole('button',{name:'发送',exact:true}).click();
+    await project.locator('.conversation-select').waitFor();
+    await page.locator('.conversation-project-context summary').click();
+    assert.match(await page.locator('.conversation-project-context').innerText(),/notes/);
+    await page.locator('.conversation-project-context summary').click();
+    await page.getByRole('button',{name:'项目详情：界面测试'}).focus();
+    await page.getByRole('button',{name:'项目详情：界面测试'}).click();
+    await page.getByRole('dialog',{name:'界面测试项目详情'}).waitFor();
+    await page.screenshot({path:join(output,'hover-light.png')});
+    await page.getByRole('button',{name:'置顶项目',exact:true}).click();
+    await page.keyboard.press('Escape');assert.equal(await page.getByRole('button',{name:'项目详情：界面测试'}).evaluate(el=>document.activeElement===el),true);
+    await page.getByRole('button',{name:'项目详情：界面测试'}).focus();
+    await page.getByRole('button',{name:'项目详情：界面测试'}).click();
+    await page.getByRole('button',{name:'编辑项目',exact:true}).click();
+    await page.getByRole('textbox',{name:'项目名称',exact:true}).fill('界面测试重命名');
+    await page.screenshot({path:join(output,'edit-light.png')});
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.locator('.project-dialog').waitFor({state:'detached'});
+    await page.getByRole('button',{name:'界面测试重命名',exact:true}).waitFor();
+    await page.reload();
+    await page.getByRole('button',{name:'界面测试重命名',exact:true}).waitFor();
+    await page.getByRole('button',{name:'项目详情：界面测试重命名'}).focus();
+    await page.getByRole('button',{name:'项目详情：界面测试重命名'}).click();
+    await page.getByRole('button',{name:'编辑项目',exact:true}).click();
+    await page.evaluate(async()=>{document.documentElement.dataset.theme='dark';await new Promise(r=>setTimeout(r,170));});
+    await page.screenshot({path:join(output,'edit-dark.png')});
+    await page.getByRole('textbox',{name:'本机目录路径'}).fill(join(paths.b,'missing'));
+    await page.getByRole('button',{name:'添加',exact:true}).click();
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.locator('.project-error').waitFor();
+    assert.equal(await page.getByRole('textbox',{name:'项目名称',exact:true}).inputValue(),'界面测试重命名');
+    await page.getByRole('button',{name:'取消',exact:true}).click();
+    await page.getByRole('button',{name:'项目详情：界面测试重命名'}).focus();
+    await page.getByRole('button',{name:'项目详情：界面测试重命名'}).click();
+    await page.getByRole('button',{name:'编辑项目',exact:true}).click();
+    await page.getByRole('button',{name:'移除本地项目',exact:true}).click();
+    await page.getByRole('button',{name:'确认移除',exact:true}).click();
+    await page.locator('.project-dialog').waitFor({state:'detached'});
+    assert.equal(await page.getByRole('button',{name:'界面测试重命名',exact:true}).count(),0);
+    await page.setViewportSize({width:480,height:760});
+    await page.getByRole('button',{name:'打开导航',exact:true}).click();
+    await page.getByRole('button',{name:'项目详情：项目 B'}).focus();
+    await page.getByRole('button',{name:'项目详情：项目 B'}).click();
+    await page.getByRole('button',{name:'编辑项目',exact:true}).click();
+    await page.screenshot({path:join(output,'edit-narrow.png')});
+    const box=await page.locator('.project-dialog').boundingBox();assert(box.x>=0&&box.x+box.width<=480);
+    assert.equal(await page.locator('.project-threads .conversation-select svg').count(),0);
+    assert.deepEqual(errors,[]);
+    console.log('PROJECT_UI_SMOKE_OK: create/edit/multiple folders/primary, drafts isolated, compact text rows, folder toggle, keyboard popup/Escape, reload, error preserves draft, remove, light/dark/narrow');
+  } catch(error) {if(page){await page.screenshot({path:join(output,'failure.png')});console.error((await page.locator('body').innerText()).slice(0,2500));}throw error;} finally {await browser.close();}
+}

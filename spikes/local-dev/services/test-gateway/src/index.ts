@@ -33,6 +33,7 @@ import { ModelCredentialBroker } from "./model-credential-broker.js";
 import { readNativeServiceHost } from "./native-service-host.js";
 import { collectServiceMetrics } from "./service-metrics.js";
 import { ClientUpdates } from "./client-updates.js";
+import { ProjectCatalog, projectInput, publicProject, projectDeviceParams, projectInstructions, absoluteClientPath, type ClientProject } from "./projects.js";
 
 const nativeService=await readNativeServiceHost();
 
@@ -45,6 +46,9 @@ type GatewayRequest = {
   operation:
     | "session.initialize"
     | "model.list"
+    | "project.list"
+    | "project.save"
+    | "project.remove"
     | "conversation.create"
     | "conversation.resume"
     | "conversation.read"
@@ -448,17 +452,24 @@ let sequence = 0;
 const controlsEnabled = process.env.TEST_GATEWAY_ENABLE_CONTROLS === "1" && !process.env.PLATFORM_AUTH_FILE;
 let activeAttachmentSubmissions = 0;
 let stateExtensions: JsonObject = {};
+let projects = new ProjectCatalog();
 const stateEntryExtensions = new Map<string, JsonObject>();
 
 function loadState(): void {
     const parsed = readGatewayState(stateFile);
     const {version:_version,users:_users,...extensions} = parsed;
     stateExtensions = extensions;
+    projects = new ProjectCatalog(stateExtensions.projects ?? []);
     for (const [userId, entries] of Object.entries(parsed.users)) {
       if (!Array.isArray(entries)) continue;
       const owned = new Set<string>();
       for (const entry of entries) {
         if (!isRecord(entry) || typeof entry.id !== "string" || !isRecord(entry.summary)) continue;
+        if (entry.summary.clientProject !== undefined) {
+          const snapshot = entry.summary.clientProject;
+          projectInput(snapshot);
+          if (!isRecord(snapshot) || typeof snapshot.id !== "string" || !snapshot.id || !Number.isSafeInteger(snapshot.revision) || Number(snapshot.revision) < 1) throw Error("PROJECT_SNAPSHOT_CORRUPT");
+        }
         owned.add(entry.id);
         const {id:_id,summary:_summary,...entryExtensions} = entry;
         stateEntryExtensions.set(entry.id,entryExtensions);
@@ -482,7 +493,7 @@ function persistState(): void {
     users[userId] = [...ids].map((id) => ({ ...stateEntryExtensions.get(id), id, summary: threadSummaryById.get(id) ?? { id } }));
   }
   try {
-    writeGatewayState(stateFile, {...stateExtensions,version:1,users});
+    writeGatewayState(stateFile, {...stateExtensions,projects:projects.snapshot(),version:1,users});
   } catch (error) {
     console.warn(`[gateway-state] failed to persist ${stateFile}: ${error instanceof Error ? error.message : String(error)}`);
     // Do not acknowledge further inference/writes when ownership or the submission fence is not durable.
@@ -717,6 +728,7 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
       try {
         if (!threadId) throw new Error("REMOTE_BINDING_REQUIRED: tool has no owning thread");
         const binding = await ensureRemoteBinding(client, threadId);
+        if (agentMethod) toolArgs = projectDeviceParams(binding.projectRoot, agentMethod, toolArgs);
         if (agentMethod === "workspace/apply_patch") {
           const previewAgent = agents.get(client.deviceId);
           const clientPaths = supportsClientPaths(client.deviceId);
@@ -1001,6 +1013,44 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
   if(auth&&!auth.valid(client.principal!)){client.socket.close(4001,auth.failureReason(client.principal));return;}
   if (!message) return;
   if(auditFailed){send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
+  if (message.type === "request" && message.operation.startsWith("project.")) {
+    try {
+      audit(message.operation, "started", {userId:client.userId, deviceId:client.deviceId, requestId:message.requestId});
+      if (auditFailed) throw Error("AUDIT_STORAGE_UNAVAILABLE");
+      const payload = message.payload ?? {};
+      let data: unknown;
+      if (message.operation === "project.list") data = { projects: projects.list(client.userId, client.deviceId) };
+      else if (message.operation === "project.save") {
+        const binding = await ensureRemoteBinding(client);
+        if (!supportsClientPaths(client.deviceId)) throw Error("AGENT_UPGRADE_REQUIRED: 项目需要支持本机绝对路径的 Local Agent");
+        const input = projectInput(payload);
+        const folders = await Promise.all(input.folders.map(async path => {
+          const response = await sendAgentRequest(client.deviceId, "workspace/list", {path}, {binding, timeoutMs:15_000});
+          if (!response.ok || !isRecord(response.result)) throw Error(`${response.errorCode ?? "PROJECT_DIRECTORY_INVALID"}: ${response.error ?? "无法验证本机文件夹"}`);
+          return absoluteClientPath(response.result.path);
+        }));
+        assertBinding(binding, await ensureRemoteBinding(client));
+        const keys = folders.map(path => /^[A-Za-z]:|^\\\\/.test(path) ? path.toLowerCase().replace(/\\/g, "/") : path);
+        if (new Set(keys).size !== keys.length) throw Error("PROJECT_DUPLICATE_FOLDER: 同一个文件夹不能重复添加");
+        const before = projects.snapshot();
+        try { data = {project:projects.save(binding, payload, folders)}; persistState(); }
+        catch (error) { projects = new ProjectCatalog(before); throw error; }
+      } else if (message.operation === "project.remove") {
+        const before = projects.snapshot();
+        try { projects.remove(client.userId, client.deviceId, payload.id, payload.revision); persistState(); data = {removed:true}; }
+        catch (error) { projects = new ProjectCatalog(before); throw error; }
+      } else throw Error("UNSUPPORTED_OPERATION");
+      audit(message.operation, "succeeded", {userId:client.userId, deviceId:client.deviceId, requestId:message.requestId});
+      send(client.socket, {type:"response",requestId:message.requestId,ok:true,data});
+      if (message.operation !== "project.list") for (const target of clients.values()) {
+        if (target.userId === client.userId && target.deviceId === client.deviceId) send(target.socket, {type:"event",eventType:"project.changed",name:"project/changed",data:{},sequence:++sequence});
+      }
+    } catch (error) {
+      audit(message.operation, "failed", {userId:client.userId, deviceId:client.deviceId, requestId:message.requestId, errorCode:String(error).split(":")[0]});
+      send(client.socket, {type:"response",requestId:message.requestId,ok:false,error:String(error)});
+    }
+    return;
+  }
   const bridge=workers.forUser(client.userId);
   if (message.type === "approval.response") {
     const deviceApproval = pendingDeviceApprovals.get(message.requestId);
@@ -1117,6 +1167,7 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
     lastAppClientId = client.id;
     audit(message.operation, "started", { userId: client.userId, deviceId: client.deviceId, requestId: message.requestId });
     if(auditFailed)throw Error("AUDIT_STORAGE_UNAVAILABLE");
+    if (message.operation !== "conversation.create" && ("projectId" in (message.payload ?? {}) || "projectRevision" in (message.payload ?? {}))) throw Error("PROJECT_SNAPSHOT_IMMUTABLE: 已有对话的工作目录不可更改");
     if (["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.steer", "conversation.turn.cancel"].includes(message.operation)) {
       assertOwnedThread(client, message.payload ?? {});
     }
@@ -1128,19 +1179,39 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
       validateRemotePayload(message.payload ?? {});
       await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined);
     }
+    if (["conversation.resume", "conversation.turn.create"].includes(message.operation) && typeof message.payload?.threadId === "string") {
+      const binding = await ensureRemoteBinding(client, message.payload.threadId);
+      if (binding.projectRoot) {
+        const directory = await sendAgentRequest(client.deviceId,"workspace/list",{path:binding.projectRoot},{binding,timeoutMs:15_000});
+        if (!directory.ok) throw Error(`PROJECT_DIRECTORY_UNAVAILABLE: ${directory.error ?? "项目目录不可用，请恢复原目录后重试"}`);
+      }
+    }
     if (message.operation === "conversation.turn.steer" || (message.operation === "conversation.turn.create" && (message.payload?.clientMessageId !== undefined || message.payload?.attachments !== undefined))) {
       const result = await submitAttachmentTurn(client, message.payload ?? {}, message.operation === "conversation.turn.steer");
       send(client.socket, {type:"response", requestId:message.requestId, ok:true, data:result});
       return;
     }
+    let threadProject: ClientProject | undefined;
+    if (message.operation === "conversation.create" && message.payload?.projectId !== undefined) {
+      const project = projects.get(client.userId, client.deviceId, message.payload.projectId);
+      const binding = await ensureRemoteBinding(client);
+      if (!supportsClientPaths(client.deviceId)) throw Error("AGENT_UPGRADE_REQUIRED: 项目需要新版 Local Agent");
+      if (project.deviceKey !== binding.deviceKey || project.revision !== message.payload.projectRevision) throw Error("PROJECT_CONFLICT: 项目已变化，请刷新后重新发送");
+      threadProject = publicProject(project);
+    } else if (typeof message.payload?.threadId === "string") threadProject = threadSummaryById.get(message.payload.threadId)?.clientProject as ClientProject | undefined;
+    if (threadProject && message.operation === "conversation.create") {
+      const directory = await sendAgentRequest(client.deviceId,"workspace/list",{path:threadProject.folders[0]},{binding:await ensureRemoteBinding(client),timeoutMs:15_000});
+      if (!directory.ok) throw Error(`PROJECT_DIRECTORY_UNAVAILABLE: ${directory.error ?? "项目目录不可用"}`);
+    }
     const context = ["conversation.create", "conversation.resume"].includes(message.operation)
-      ? await sendAgentRequest(client.deviceId, "workspace/context", {}, { binding: await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined) })
+      ? await sendAgentRequest(client.deviceId, "workspace/context", threadProject ? {path:threadProject.folders[0]} : {}, { binding: await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined) })
       : undefined;
-    if (context && !context.ok) throw new Error(`${context.errorCode}: ${context.error}`);
-    const instructions = clientDeviceInstructions(client.deviceId) + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
+    if (context && !context.ok) throw new Error(`${threadProject ? "PROJECT_DIRECTORY_UNAVAILABLE" : context.errorCode}: ${context.error}`);
+    const instructions = clientDeviceInstructions(client.deviceId) + projectInstructions(threadProject) + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
+    const {projectId:_projectId, projectRevision:_projectRevision, ...nativePayload} = message.payload ?? {};
     const appPayload = message.operation === "conversation.create"
       ? {
-          ...(message.payload ?? {}),
+          ...nativePayload,
           developerInstructions: instructions,
           dynamicTools: clientDeviceTools(client.deviceId),
         }
@@ -1187,7 +1258,7 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
           )
         : result)
       : result;
-    if (message.operation === "session.initialize" && isRecord(visibleResult)) visibleResult = {...visibleResult, platformCapabilities:{remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
+    if (message.operation === "session.initialize" && isRecord(visibleResult)) visibleResult = {...visibleResult, platformCapabilities:{projects:true,remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
     if (message.operation === "conversation.create") {
       const createdId = threadIdFromResult(result);
       if (createdId) {
@@ -1196,14 +1267,15 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
         threadOwnerById.set(createdId, client.userId);
         const createdRecord = isRecord(result) && isRecord(result.thread) ? sanitizeThreadMetadata(result.thread) as JsonObject : undefined;
         const binding = await ensureRemoteBinding(client);
-        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId, deviceKey: binding.deviceKey, remoteWorkspace: binding });
+        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId, deviceKey: binding.deviceKey, remoteWorkspace: binding, ...(threadProject ? {clientProject:threadProject} : {}) });
+        if (isRecord(visibleResult) && isRecord(visibleResult.thread) && threadProject) visibleResult.thread = {...visibleResult.thread,clientProject:threadProject};
         persistState();
       }
     }
     if (["conversation.read", "conversation.resume"].includes(message.operation) && isRecord(visibleResult)) {
       const tid = String(message.payload?.threadId);
       reconcileSubmissions(tid, visibleResult);
-      visibleResult = { ...visibleResult, attachmentSubmissions: submissionsFor(tid), outputs:outputs.list(tid) };
+      visibleResult = { ...visibleResult, ...(isRecord(visibleResult.thread) ? {thread:{...visibleResult.thread,clientProject:threadSummaryById.get(tid)?.clientProject}} : {}), attachmentSubmissions: submissionsFor(tid), outputs:outputs.list(tid) };
     }
     if (["conversation.rename", "conversation.archive", "conversation.unarchive"].includes(message.operation)) {
       const changedId = typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined;
@@ -1401,11 +1473,16 @@ async function ensureRemoteBinding(client: ConnectedClient, threadId?: string): 
   if (threadId) {
     assertOwnedThread(client, {threadId});
     const summary = threadSummaryById.get(threadId)!;
+    const project = summary.clientProject as ClientProject | undefined;
+    if (project) {
+      if (!supportsClientPaths(client.deviceId)) throw Error("AGENT_UPGRADE_REQUIRED: 此项目对话需要新版 Local Agent");
+      binding.projectRoot = project.folders[0];
+    }
     if (summary.deviceId && summary.deviceId !== binding.deviceId) throw new Error("REMOTE_WORKSPACE_CHANGED: thread belongs to another device");
     if (summary.deviceKey && summary.deviceKey !== binding.deviceKey) throw new Error("REMOTE_WORKSPACE_CHANGED: device installation changed");
     if (summary.remoteWorkspace) {
       const previous = summary.remoteWorkspace as RemoteWorkspaceBinding;
-      assertBinding(previous, binding);
+      assertBinding({...previous, projectRoot:binding.projectRoot}, binding);
       if (!supportsClientPaths(client.deviceId) && previous.workspaceRoot !== binding.workspaceRoot) throw new Error("REMOTE_WORKSPACE_CHANGED: legacy client requires the original workspace directory");
     }
     else {
@@ -1450,6 +1527,8 @@ function sendAgentRequest(
   if (options.binding) {
     const agent = session.hello?.agent;
     if (options.binding.deviceKey !== agent?.deviceKey || options.binding.workspaceRoot !== agent?.workspaceRoot) return Promise.resolve({ok:false,error:"Bound workspace identity changed",errorCode:"REMOTE_WORKSPACE_CHANGED",retryable:false});
+    try { params = projectDeviceParams(options.binding.projectRoot, method, params); }
+    catch (error) { return Promise.resolve({ok:false,error:String(error),errorCode:"PROJECT_PATH_INVALID",retryable:false}); }
     if (method === "exec" || method.startsWith("workspace/")) params = {...params, __remoteWorkspace:options.binding};
   }
 
@@ -1649,6 +1728,7 @@ function filterOwnedThreads(result: unknown, ownedThreadIds: Set<string>, userId
         // not silently resurrect a locally archived conversation.
         if (current && Object.hasOwn(current, "isArchived")) merged.isArchived = current.isArchived;
         if (current && Object.hasOwn(current, "archivedAt")) merged.archivedAt = current.archivedAt;
+        if (current?.clientProject) merged.clientProject = current.clientProject;
         return merged;
       });
     const visibleIds = new Set(visible.map((item) => isRecord(item) && typeof item.id === "string" ? item.id : ""));
@@ -1671,11 +1751,13 @@ function sanitizeThreadMetadata(value: unknown): unknown {
   if(value.type==="imageGeneration") return {type:"imageGeneration",id:value.id,status:value.status,failure:value.failure};
   const sanitized: JsonObject = {};
   for (const [key, nested] of Object.entries(value)) {
-    if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath"].includes(key)) continue;
+    if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath", "clientProject"].includes(key)) continue;
     if (["url", "image_url", "imageUrl"].includes(key) && typeof nested === "string" && nested.startsWith("data:image/")) continue;
     sanitized[key] = ["message", "error"].includes(key) && typeof nested === "string" ? explainRuntimeError(nested) : sanitizeThreadMetadata(nested);
   }
   if (typeof value.id === "string") {
+    const project = threadSummaryById.get(value.id)?.clientProject;
+    if (project) sanitized.clientProject = project;
     const entries = threadSummaryById.get(value.id)?.attachmentSubmissions as AttachmentSubmission[] | undefined;
     for (const key of ["preview", "name"]) {
       const label = sanitized[key];
