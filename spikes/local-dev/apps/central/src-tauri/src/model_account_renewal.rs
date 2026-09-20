@@ -144,6 +144,10 @@ pub(super) fn current_bundle(root: &Path, id: &str) -> Result<Bundle> {
 pub(super) fn account_report(root: &Path, id: &str) -> Result<AccountReport> {
     let state = latest(root, id)?;
     let mut result = report(&state.bundle, id, now())?;
+    if shared::is_link(root, id)? {
+        shared::decorate(id, &mut result);
+        return Ok(result);
+    }
     if result.refresh_supported {
         result.renewal_state = match state.phase.as_str() {
             "ready" => "ready",

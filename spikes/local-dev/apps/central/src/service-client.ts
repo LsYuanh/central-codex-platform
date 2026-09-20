@@ -17,6 +17,7 @@ export type ServiceSnapshot = {
 };
 export type ServiceContext = { candidateStartAvailable: boolean; needsAdmin: boolean; configRevision: number };
 export type AccountReport = {
+  credentialSource?: 'snapshot' | 'dedicated' | 'codex-shared';
   accountId: string; provider: 'chatgpt'; accountHint: string; importedAt: number; checkedAt: number;
   accessExpiresAt: number | null; status: 'imported' | 'expired' | 'expiry-unknown';
   refreshSupported: boolean; remoteVerified: false;
@@ -69,6 +70,7 @@ export function readAccountReport(value: unknown): AccountReport {
   if (!record(value) || typeof value.accountId !== 'string' || !value.accountId || value.provider !== 'chatgpt' || typeof value.accountHint !== 'string' ||
       !integer(value.importedAt) || !integer(value.checkedAt) || !optionalNumber(value.accessExpiresAt) ||
       !['imported', 'expired', 'expiry-unknown'].includes(String(value.status)) || typeof value.refreshSupported !== 'boolean' || value.remoteVerified !== false ||
+      (value.credentialSource != null && !['snapshot', 'dedicated', 'codex-shared'].includes(String(value.credentialSource))) ||
       (value.renewalState != null && !['snapshot', 'ready', 'retrying', 'reauth-required'].includes(String(value.renewalState))) ||
       (value.renewalError != null && typeof value.renewalError !== 'string') || !optionalNumber(value.nextRetryAt)) throw invalid();
   return value as AccountReport;
@@ -90,6 +92,15 @@ export function readDiscoveredAccount(value: unknown): DiscoveredAccount {
   return value as DiscoveredAccount;
 }
 const errors: Record<string, string> = {
+  MODEL_SHARED_ACCOUNT_CHANGED: '本机 Codex 已切换账号，已停止更新此连接的凭据。请重新点击“复用本机 Codex 登录”，再停止并启动中央服务。',
+  MODEL_SHARED_SOURCE_CHANGED: '登录在检查期间发生变化，将重新读取并核对。',
+  MODEL_SHARED_RELOGIN_REQUIRED: 'Codex 登录已失效，请在中央机重新登录 Codex，再点击“复用本机 Codex 登录”。',
+  MODEL_SHARED_EXPIRY_UNKNOWN: '无法确认本机登录有效期，请在中央机重新登录 Codex。',
+  MODEL_SHARED_PROCESS_FAILED: 'Codex 认证进程无法完成检查，请核对中央运行包与网络后重试。',
+  MODEL_SHARED_PROTOCOL_INVALID: 'Codex 认证接口响应不兼容，请检查中央运行包。',
+  MODEL_SHARED_TIMEOUT: 'Codex 认证检查超时，后台将有限重试。',
+  MODEL_SHARED_CANCELLED: '中央服务正在停止，已取消登录检查。',
+  MODEL_SHARED_REFRESH_FAILED: 'Codex 未完成续期，请检查中央网络；后台将有限重试。',
   MODEL_LOGIN_BROWSER_FAILED: '无法打开浏览器，请手动访问 https://auth.openai.com/codex/device 完成授权。',
   MODEL_LOGIN_BUSY: '已有登录授权正在进行，请完成或取消后重试。',
   MODEL_LOGIN_EXPIRED: '登录授权已结束或超时，请重新开始中央专用登录。',

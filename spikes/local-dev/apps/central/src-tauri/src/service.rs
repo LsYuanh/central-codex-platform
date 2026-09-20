@@ -33,6 +33,8 @@ pub struct Service {
     dispatch: Mutex<()>,
     running_config: Mutex<Option<CentralConfig>>,
     running_account: Mutex<Option<(String, String, String, u64)>>,
+    auth_package: Mutex<Option<std::sync::Arc<runtime_package::PreparedServicePackage>>>,
+    auth_cancel: AtomicBool,
 }
 /// Trusted native-only endpoint description; never returned to the renderer.
 pub struct ManagementTarget {
@@ -171,6 +173,8 @@ impl Service {
             dispatch: Mutex::new(()),
             running_config: Mutex::new(None),
             running_account: Mutex::new(None),
+            auth_package: Mutex::new(None),
+            auth_cancel: AtomicBool::new(false),
         }
     }
     pub fn snapshot(&self) -> Snapshot {
@@ -195,10 +199,23 @@ impl Service {
             return Ok(());
         }
         let report = model_accounts::selected(root, &id)?;
-        if !report.refresh_supported || report.renewal_state == "reauth-required" {
+        if !report.refresh_supported {
             return Ok(());
         }
-        let _ = model_accounts::renewal::renew(root, &id);
+        if report.credential_source == "codex-shared" {
+            let package = self
+                .auth_package
+                .lock()
+                .map_err(|_| failure("SERVICE_STATE_FAILED"))?
+                .clone()
+                .ok_or_else(|| failure("MODEL_SHARED_PROCESS_FAILED"))?;
+            let _ = model_accounts::shared::renew(root, &id, &package, &self.auth_cancel, false);
+        } else {
+            if report.renewal_state == "reauth-required" {
+                return Ok(());
+            }
+            let _ = model_accounts::renewal::renew(root, &id);
+        }
         let credential = model_accounts::load_internal(root, &id)?;
         let digest = format!("{:x}", Sha256::digest(credential.access_token().as_bytes()));
         if digest == previous {
@@ -412,8 +429,10 @@ impl Service {
         if config.revision != request.expected_revision {
             return Err(failure("CONFIG_REVISION_CONFLICT"));
         }
-        let package = runtime_package::prepare_service(resources, &config.runtime_package_id)
-            .map_err(failure)?;
+        let package = std::sync::Arc::new(
+            runtime_package::prepare_service(resources, &config.runtime_package_id)
+                .map_err(failure)?,
+        );
         let data_path = Path::new(&config.data_directory);
         let data_guard = platform_security::central_secret_store::lock_runtime_root(data_path)
             .map_err(|_| failure("SERVICE_DATA_UNSAFE"))?;
@@ -448,9 +467,20 @@ impl Service {
             }
             None
         };
-        // Startup also renews expired managed sessions after an offline period.
-        // A temporary renewal failure may still use an unexpired access token.
-        let _ = model_accounts::renewal::renew(app_data, &request.account_id);
+        // Shared logins must pass an official authentication check at startup.
+        // Dedicated sessions may still use an unexpired token after a transient failure.
+        self.auth_cancel.store(false, Ordering::SeqCst);
+        if model_accounts::shared::is_link(app_data, &request.account_id)? {
+            model_accounts::shared::renew(
+                app_data,
+                &request.account_id,
+                &package,
+                &self.auth_cancel,
+                true,
+            )?;
+        } else {
+            let _ = model_accounts::renewal::renew(app_data, &request.account_id);
+        }
         let credential = model_accounts::load_internal(app_data, &request.account_id)?;
         let (cert, key) = tls::service_material(app_data, &config)?;
         #[derive(Serialize)]
@@ -523,7 +553,7 @@ impl Service {
             start_timeout: Duration::from_secs(45),
             stop_timeout: Duration::from_millis(stop_ms),
             force_timeout: Duration::from_millis(config.shutdown.force_ms),
-            owner_guard: Some(Box::new((package, data_guard))),
+            owner_guard: Some(Box::new((package.clone(), data_guard))),
         };
         self.open()?;
         self.record(&root, &request.request_id, &hash)?;
@@ -540,6 +570,10 @@ impl Service {
             .lock()
             .map_err(|_| failure("SERVICE_STATE_FAILED"))? = Some(config);
         let snapshot = self.process.start(spec).map_err(failure)?;
+        *self
+            .auth_package
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))? = Some(package);
         *self
             .running_account
             .lock()
@@ -573,9 +607,15 @@ impl Service {
             return Err(failure("SERVICE_INSTANCE_MISMATCH"));
         }
         self.record(&root, request_id, &hash)?;
+        self.auth_cancel.store(true, Ordering::SeqCst);
+        *self
+            .auth_package
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))? = None;
         self.process.stop().map_err(failure)
     }
     pub fn begin_shutdown(&self) {
+        self.auth_cancel.store(true, Ordering::SeqCst);
         let _dispatch = self
             .dispatch
             .lock()

@@ -17,6 +17,8 @@ const MAX_SOURCE: usize = 1024 * 1024;
 const MAX_ACCOUNTS: usize = 128;
 #[path = "model_account_renewal.rs"]
 pub mod renewal;
+#[path = "model_shared_login.rs"]
+pub mod shared;
 
 #[cfg(all(test, windows))]
 pub(crate) fn store_service_fixture(app_data: &Path) -> String {
@@ -50,6 +52,7 @@ pub struct DiscoveredAccount {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountReport {
+    pub credential_source: &'static str,
     pub account_id: String,
     pub provider: &'static str,
     pub account_hint: String,
@@ -235,6 +238,11 @@ fn hint(bundle: &Bundle) -> String {
 fn report(bundle: &Bundle, id: &str, checked_at: u64) -> Result<AccountReport> {
     let expires = validate(bundle)?;
     Ok(AccountReport {
+        credential_source: if bundle.refresh_token.is_some() {
+            "dedicated"
+        } else {
+            "snapshot"
+        },
         account_id: id.to_owned(),
         provider: "chatgpt",
         account_hint: hint(bundle),
@@ -437,6 +445,9 @@ fn load_base(app_data: &Path, id: &str) -> Result<Bundle> {
         let root = crate::config::resource_root(app_data, false)?;
         let bytes = platform_security::central_secret_store::load(&root, NAMESPACE, id)
             .map_err(|_| failure("MODEL_ACCOUNT_STORAGE_UNSAFE"))?;
+        if shared::has_reference_schema(&bytes) {
+            return shared::resolve_reference(&bytes);
+        }
         let bundle: Bundle =
             serde_json::from_slice(&bytes).map_err(|_| failure("MODEL_ACCOUNT_STORAGE_INVALID"))?;
         validate(&bundle)?;

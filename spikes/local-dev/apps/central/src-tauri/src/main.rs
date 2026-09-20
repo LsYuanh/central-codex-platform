@@ -362,6 +362,15 @@ async fn central_model_account_discover() -> config::Result<model_accounts::Disc
         .map_err(|_| config::failure("INTERNAL_ERROR"))?
 }
 #[tauri::command]
+async fn central_model_account_link(
+    app: tauri::AppHandle,
+) -> config::Result<model_accounts::AccountReport> {
+    let root = config_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || model_accounts::shared::link_existing(&root))
+        .await
+        .map_err(|_| config::failure("INTERNAL_ERROR"))?
+}
+#[tauri::command]
 async fn central_model_account_import(
     app: tauri::AppHandle,
 ) -> config::Result<model_accounts::AccountReport> {
@@ -751,6 +760,7 @@ fn main() {
             central_model_accounts_list,
             central_model_account_discover,
             central_model_account_import,
+            central_model_account_link,
             central_model_login_start,
             central_model_login_poll,
             central_model_login_cancel,

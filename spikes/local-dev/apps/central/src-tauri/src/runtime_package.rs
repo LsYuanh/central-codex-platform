@@ -334,6 +334,7 @@ struct ServiceManifest {
 /// Windows file handles deny write/delete sharing; directory handles deny
 /// delete sharing. This does not claim full isolation from a malicious owner.
 pub struct PreparedServicePackage {
+    pub app_server: PathBuf,
     pub root: PathBuf,
     pub node: PathBuf,
     pub gateway: PathBuf,
@@ -664,6 +665,7 @@ fn prepare_service_inner(
     inventory_service(&root, &root, &file_keys, &directory_keys, &mut directories)?;
     Ok((
         PreparedServicePackage {
+            app_server: root.join(&package.app_server),
             node: root.join(&package.node),
             gateway: root.join(&package.entrypoint),
             root,
