@@ -12,6 +12,9 @@ use std::{
 use zeroize::Zeroizing;
 
 pub const PROTOCOL: &str = "central-service-host/v1";
+pub(crate) fn random_control_id() -> Result<String, &'static str> {
+    native::random_id()
+}
 const MAX_BOOTSTRAP: usize = 1024 * 1024;
 const MAX_LINE: usize = 64 * 1024;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
@@ -90,6 +93,7 @@ pub enum State {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub account_updates_supported: bool,
     pub state: State,
     pub generation: u64,
     pub sequence: u64,
@@ -116,6 +120,12 @@ enum Command {
     Start(u64, String, Instant, LaunchSpec),
     Stop(u64),
     Force(u64),
+    Account(
+        u64,
+        String,
+        Zeroizing<Vec<u8>>,
+        mpsc::Sender<Result<(), &'static str>>,
+    ),
     Shutdown,
 }
 
@@ -133,8 +143,38 @@ impl Default for ServiceProcess {
 }
 
 impl ServiceProcess {
+    /// Secret payload goes only to the owned instance, with a bounded acknowledgement.
+    pub fn update_account(
+        &self,
+        instance: &str,
+        revision: u64,
+        account: &[u8],
+    ) -> Result<(), &'static str> {
+        let state = self.snapshot();
+        if state.state != State::Running || state.instance_id.as_deref() != Some(instance) {
+            return Err("SERVICE_INSTANCE_MISMATCH");
+        }
+        if !state.account_updates_supported {
+            return Err("SERVICE_ACCOUNT_UPDATE_UNSUPPORTED");
+        }
+        let update = native::random_id()?;
+        let mut frame=Zeroizing::new(format!("{{\"method\":\"central/service\",\"protocol\":\"{PROTOCOL}\",\"instanceId\":\"{instance}\",\"command\":\"account/update\",\"updateId\":\"{update}\",\"revision\":{revision},\"account\":").into_bytes());
+        if account.len() > 64 * 1024 {
+            return Err("SERVICE_ACCOUNT_UPDATE_INVALID");
+        }
+        frame.extend_from_slice(account);
+        frame.extend_from_slice(b"}\n");
+        let (send, receive) = mpsc::channel();
+        self.commands
+            .send(Command::Account(state.generation, update, frame, send))
+            .map_err(|_| "SERVICE_ACTOR_UNAVAILABLE")?;
+        receive
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "SERVICE_ACCOUNT_UPDATE_TIMEOUT")?
+    }
     pub fn new() -> Self {
         let state = Arc::new(Mutex::new(Snapshot {
+            account_updates_supported: false,
             state: State::Stopped,
             generation: 0,
             sequence: 0,
@@ -169,6 +209,7 @@ impl ServiceProcess {
             .checked_add(1)
             .ok_or("SERVICE_GENERATION_LIMIT")?;
         state.state = State::Starting;
+        state.account_updates_supported = false;
         state.instance_id = Some(instance_id.clone());
         state.cleanup_verified = false;
         state.forced_stop = false;
@@ -313,9 +354,11 @@ fn stop_frame(instance_id: &str) -> Zeroizing<Vec<u8>> {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
+    AccountUpdatesReady,
     Ready,
     Stopped,
     Failed,
+    AccountUpdated(String),
     Metrics { sequence: u64, counts: MetricCounts },
 }
 
@@ -334,6 +377,12 @@ fn control_event(line: &[u8], instance_id: &str) -> Option<Event> {
         "stopped" => Some(Event::Stopped),
         // Node's arbitrary failure text/code is deliberately not propagated.
         "failed" => Some(Event::Failed),
+        "accountUpdatesReady" => Some(Event::AccountUpdatesReady),
+        "accountUpdated" => value
+            .get("updateId")
+            .and_then(|v| v.as_str())
+            .filter(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(|s| Event::AccountUpdated(s.into())),
         "metrics" => {
             let sequence = value.get("sequence")?.as_u64()?;
             if sequence == 0 || sequence > MAX_SAFE_INTEGER {
@@ -430,6 +479,9 @@ fn actor(state: Shared, commands: mpsc::Receiver<Command>) {
             }
             Command::Shutdown => return,
             Command::Stop(_) | Command::Force(_) => {}
+            Command::Account(_, _, _, reply) => {
+                let _ = reply.send(Err("SERVICE_INSTANCE_MISMATCH"));
+            }
         }
     }
 }
@@ -450,9 +502,25 @@ fn supervise(
     let mut forcing: Option<Instant> = None;
     let mut failure: Option<&'static str> = None;
     let mut shutdown = false;
+    let mut account_update: Option<(String, Instant, mpsc::Sender<Result<(), &'static str>>)> =
+        None;
     loop {
         while let Ok(command) = commands.try_recv() {
             match command {
+                Command::Account(g, id, frame, reply) => {
+                    if g != generation
+                        || !ready
+                        || stopping.is_some()
+                        || forcing.is_some()
+                        || account_update.is_some()
+                    {
+                        let _ = reply.send(Err("SERVICE_ACCOUNT_UPDATE_UNAVAILABLE"));
+                    } else if let Err(code) = child.send_account(frame) {
+                        let _ = reply.send(Err(code));
+                    } else {
+                        account_update = Some((id, Instant::now() + Duration::from_secs(8), reply));
+                    }
+                }
                 Command::Stop(g) if g == generation => {
                     if stopping.is_none() {
                         stopping = Some(Instant::now() + stop_timeout);
@@ -475,6 +543,19 @@ fn supervise(
             Ok(events) => {
                 for event in events {
                     match event {
+                        Event::AccountUpdatesReady if ready => {
+                            update(state, generation, |s| s.account_updates_supported = true);
+                        }
+                        Event::AccountUpdated(id) => {
+                            if account_update
+                                .as_ref()
+                                .is_some_and(|(expected, _, _)| expected == &id)
+                            {
+                                if let Some((_, _, reply)) = account_update.take() {
+                                    let _ = reply.send(Ok(()));
+                                }
+                            }
+                        }
                         Event::Ready
                             if !ready
                                 && failure.is_none()
@@ -518,6 +599,13 @@ fn supervise(
         }
         if !ready && stopping.is_none() && Instant::now() >= start_deadline {
             failure.get_or_insert("SERVICE_START_TIMEOUT");
+        }
+        if account_update.as_ref().is_some_and(|(_, deadline, _)| {
+            Instant::now() >= *deadline || stopping.is_some() || forcing.is_some()
+        }) {
+            if let Some((_, _, reply)) = account_update.take() {
+                let _ = reply.send(Err("SERVICE_ACCOUNT_UPDATE_TIMEOUT"));
+            }
         }
         if failure.is_some() && stopping.is_none() && forcing.is_none() {
             stopping = Some(Instant::now() + stop_timeout);
@@ -615,6 +703,9 @@ mod native {
     }
     pub struct Child;
     impl Child {
+        pub fn send_account(&mut self, _: Zeroizing<Vec<u8>>) -> Result<(), &'static str> {
+            Err("SERVICE_PLATFORM_UNSUPPORTED")
+        }
         pub fn pid(&self) -> u32 {
             0
         }
@@ -905,9 +996,10 @@ mod native {
                     return;
                 }
                 drop(frame); // wipes the secret envelope immediately after bootstrap.
-                if let Ok(stop) = receiver.recv() {
-                    if stdin.write_all(&stop).is_err() {
+                while let Ok(frame) = receiver.recv() {
+                    if stdin.write_all(&frame).is_err() {
                         let _ = failed_sender.send(());
+                        break;
                     }
                 }
                 // EOF is also a graceful stop request in the gateway controller.
@@ -970,6 +1062,16 @@ mod native {
     impl Child {
         pub fn pid(&self) -> u32 {
             self.pid
+        }
+        pub fn send_account(&mut self, frame: Zeroizing<Vec<u8>>) -> Result<(), &'static str> {
+            if self.stop_sent {
+                return Err("SERVICE_ACCOUNT_UPDATE_UNAVAILABLE");
+            }
+            self.input
+                .as_ref()
+                .ok_or("SERVICE_PIPE_FAILED")?
+                .try_send(frame)
+                .map_err(|_| "SERVICE_PIPE_FAILED")
         }
         pub fn stop_sent(&self) -> bool {
             self.stop_sent
@@ -1347,7 +1449,10 @@ readline.createInterface({input:process.stdin}).on('line', line => {
     if(message.config.mode==='crash') { process.exit(9); return; }
     if(message.config.mode==='ignore-stop') descendant=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore',windowsHide:true});
     emit('ready');
+    emit('accountUpdatesReady');
     metric(1,2); metric(1,99); metric(2,3); metric(3,99,'stale-instance');
+  } else if(message.command==='account/update') {
+    process.stdout.write(JSON.stringify({method:'central/service',protocol:'central-service-host/v1',instanceId:bootstrap.instanceId,event:'accountUpdated',updateId:message.updateId})+'\n');
   } else if(message.command==='stop' && bootstrap.config.mode==='normal') {
     clearInterval(keepAlive); emit('stopped',()=>process.exit(0));
   }
@@ -1405,6 +1510,16 @@ readline.createInterface({input:process.stdin}).on('line', line => {
             s.state == State::Running && s.metrics.as_ref().is_some_and(|m| m.sequence == 2)
         });
         assert_eq!(running.metrics.as_ref().unwrap().online_devices, 3);
+        assert!(running.account_updates_supported);
+        service
+            .update_account(
+                running.instance_id.as_deref().unwrap(),
+                1,
+                br#"{"tokens":{"access_token":"SYNTHETIC_UPDATED","account_id":"fixture"}}"#,
+            )
+            .unwrap();
+        assert_eq!(service.snapshot().pid, running.pid);
+        assert!(service.update_account("stale-instance", 2, b"{}").is_err());
         assert_eq!(
             service.start(spec("normal")).unwrap_err(),
             "SERVICE_ALREADY_ACTIVE"

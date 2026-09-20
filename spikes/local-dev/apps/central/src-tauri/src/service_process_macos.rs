@@ -220,6 +220,14 @@ pub fn spawn(mut spec: LaunchSpec, instance: &str) -> Result<Child, &'static str
     Ok(child)
 }
 impl Child {
+    pub fn send_account(&mut self, frame: Zeroizing<Vec<u8>>) -> Result<(), &'static str> {
+        if self.stopped || self.offset != self.pending.len() {
+            return Err("SERVICE_ACCOUNT_UPDATE_UNAVAILABLE");
+        }
+        self.pending = frame;
+        self.offset = 0;
+        Ok(())
+    }
     pub fn pid(&self) -> u32 {
         self.process.id()
     }

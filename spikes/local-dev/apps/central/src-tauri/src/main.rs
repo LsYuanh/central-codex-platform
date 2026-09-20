@@ -660,6 +660,57 @@ async fn central_people_revoke_device(
 }
 
 static APP_EXIT_ALLOWED: AtomicBool = AtomicBool::new(false);
+#[tauri::command]
+async fn central_model_login_open() -> config::Result<()> {
+    tauri::async_runtime::spawn_blocking(|| {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            std::process::Command::new("rundll32.exe")
+                .args([
+                    "url.dll,FileProtocolHandler",
+                    "https://auth.openai.com/codex/device",
+                ])
+                .creation_flags(0x08000000)
+                .spawn()
+                .map_err(|_| config::failure("MODEL_LOGIN_BROWSER_FAILED"))?;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("/usr/bin/open")
+                .arg("https://auth.openai.com/codex/device")
+                .spawn()
+                .map_err(|_| config::failure("MODEL_LOGIN_BROWSER_FAILED"))?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|_| config::failure("INTERNAL_ERROR"))?
+}
+#[tauri::command]
+async fn central_model_login_start() -> config::Result<model_accounts::renewal::LoginStatus> {
+    tauri::async_runtime::spawn_blocking(model_accounts::renewal::login_start)
+        .await
+        .map_err(|_| config::failure("INTERNAL_ERROR"))?
+}
+#[tauri::command]
+async fn central_model_login_poll(
+    app: tauri::AppHandle,
+    login_id: String,
+) -> config::Result<model_accounts::renewal::LoginStatus> {
+    let root = config_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        model_accounts::renewal::login_poll(&root, &login_id)
+    })
+    .await
+    .map_err(|_| config::failure("INTERNAL_ERROR"))?
+}
+#[tauri::command]
+async fn central_model_login_cancel(login_id: String) -> config::Result<()> {
+    tauri::async_runtime::spawn_blocking(move || model_accounts::renewal::login_cancel(&login_id))
+        .await
+        .map_err(|_| config::failure("INTERNAL_ERROR"))?
+}
 static APP_EXIT_STARTED: AtomicBool = AtomicBool::new(false);
 fn begin_app_shutdown(app: &tauri::AppHandle) {
     if APP_EXIT_STARTED
@@ -700,6 +751,10 @@ fn main() {
             central_model_accounts_list,
             central_model_account_discover,
             central_model_account_import,
+            central_model_login_start,
+            central_model_login_poll,
+            central_model_login_cancel,
+            central_model_login_open,
             central_service_status,
             central_service_context,
             central_service_start,
@@ -717,6 +772,21 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("无法启动中央管理应用");
+    if let Ok(root) = config_root(app.handle()) {
+        let weak = Arc::downgrade(app.state::<Arc<service::Service>>().inner());
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(30));
+                let Some(controller) = weak.upgrade() else {
+                    break;
+                };
+                if APP_EXIT_STARTED.load(Ordering::SeqCst) {
+                    break;
+                }
+                let _ = controller.renew_account(&root);
+            }
+        });
+    }
     // Local developer/deployment launch convenience. Uses the same saved config,
     // native credential store and service gates as the UI; no secret argv/env.
     #[cfg(all(target_os = "macos", debug_assertions))]

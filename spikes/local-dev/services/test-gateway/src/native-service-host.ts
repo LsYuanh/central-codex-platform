@@ -21,6 +21,7 @@ export class NativeServiceHost {
   private stopRequested=false;
   private metricsEmitter:ServiceMetricsEmitter|undefined;
   private metricsStopped=false;
+  private accountRevision=0;
   constructor(private instanceId:string,bootstrap:Record<string,unknown>){
     if(!fields(bootstrap,['config','tls','account','admin']))throw Error('SERVICE_BOOTSTRAP_INVALID');
     if(process.platform!=='win32'&&process.platform!=='darwin')throw Error('SERVICE_PLATFORM_UNSUPPORTED');
@@ -64,7 +65,9 @@ export class NativeServiceHost {
     });
   }
   emit(event:'ready'|'stopped'|'failed',code?:string){
-    return new Promise<void>((done,reject)=>process.stdout.write(JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event,...(event==='ready'?{listening:true}:{}),...(code?{code}:{})})+'\n',error=>error?reject(Error('SERVICE_CONTROLLER_CLOSED')):done()));
+    const frame=JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event,...(event==='ready'?{listening:true}:{}),...(code?{code}:{})})+'\n';
+    const capability=event==='ready'?JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'accountUpdatesReady'})+'\n':'';
+    return new Promise<void>((done,reject)=>process.stdout.write(frame+capability,error=>error?reject(Error('SERVICE_CONTROLLER_CLOSED')):done()));
   }
   startMetrics(read:()=>ServiceMetrics){
     if(this.stopRequested||this.metricsStopped||this.metricsEmitter)return;
@@ -96,7 +99,27 @@ export class NativeServiceHost {
   get isStopping(){return this.stopRequested;}
   get serviceInstanceId(){return this.instanceId;}
   stop(){this.stopRequested=true;this.stopMetrics();this.stopHandler?.();}
-  accept(value:unknown){if(!record(value)||!fields(value,['method','protocol','instanceId','command'])||value.method!=='central/service'||value.protocol!==protocol||value.instanceId!==this.instanceId||value.command!=='stop')throw Error('SERVICE_CONTROL_INVALID');this.stop();}
+  accept(value:unknown){
+    if(!record(value)||value.method!=='central/service'||value.protocol!==protocol||value.instanceId!==this.instanceId)throw Error('SERVICE_CONTROL_INVALID');
+    if(value.command==='account/update'){
+      if(this.stopRequested||!fields(value,['method','protocol','instanceId','command','updateId','revision','account'])||
+        typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId)||!Number.isSafeInteger(value.revision)||
+        (value.revision as number)<this.accountRevision||!record(value.account)||!fields(value.account,['tokens'])||
+        !record(value.account.tokens)||!fields(value.account.tokens,['access_token','account_id']))throw Error('SERVICE_ACCOUNT_UPDATE_INVALID');
+      const tokens=value.account.tokens;
+      const previous=this.account.tokens as Record<string,unknown>;
+      if(value.revision===this.accountRevision&&tokens.access_token!==previous.access_token)throw Error('SERVICE_ACCOUNT_UPDATE_INVALID');
+      if(typeof tokens.access_token!=='string'||tokens.access_token.length>32768||tokens.account_id!==previous.account_id)throw Error('SERVICE_ACCOUNT_UPDATE_INVALID');
+      let claims:unknown;try{const parts=tokens.access_token.split('.');if(parts.length!==3)throw Error();claims=JSON.parse(Buffer.from(parts[1]!,'base64url').toString('utf8'));}catch{throw Error('SERVICE_ACCOUNT_UPDATE_INVALID');}
+      if(!record(claims)||typeof claims.exp!=='number'||claims.exp*1000<=Date.now()+30_000)throw Error('SERVICE_ACCOUNT_UPDATE_INVALID');
+      // ReadConfig identity stays unchanged: existing user leases and streams survive.
+      this.account=value.account;this.accountRevision=value.revision as number;
+      process.stdout.write(JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'accountUpdated',updateId:value.updateId})+'\n');
+      return;
+    }
+    if(!fields(value,['method','protocol','instanceId','command'])||value.command!=='stop')throw Error('SERVICE_CONTROL_INVALID');
+    this.stop();
+  }
   clear(){this.stopMetrics();this.tls.key='';this.account={};}
 }
 

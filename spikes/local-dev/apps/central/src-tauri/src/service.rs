@@ -32,6 +32,7 @@ pub struct Service {
     force_ms: AtomicU64,
     dispatch: Mutex<()>,
     running_config: Mutex<Option<CentralConfig>>,
+    running_account: Mutex<Option<(String, String, String, u64)>>,
 }
 /// Trusted native-only endpoint description; never returned to the renderer.
 pub struct ManagementTarget {
@@ -169,10 +170,58 @@ impl Service {
             force_ms: AtomicU64::new(5000),
             dispatch: Mutex::new(()),
             running_config: Mutex::new(None),
+            running_account: Mutex::new(None),
         }
     }
     pub fn snapshot(&self) -> Snapshot {
         self.process.snapshot()
+    }
+    /// Called by one native background loop, never by model tools or a renderer timer.
+    pub fn renew_account(&self, root: &Path) -> Result<()> {
+        self.open()?;
+        let Some((instance, id, previous, revision)) = self
+            .running_account
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))?
+            .clone()
+        else {
+            return Ok(());
+        };
+        let snapshot = self.snapshot();
+        if snapshot.state != State::Running
+            || snapshot.instance_id.as_deref() != Some(&instance)
+            || !snapshot.account_updates_supported
+        {
+            return Ok(());
+        }
+        let report = model_accounts::selected(root, &id)?;
+        if !report.refresh_supported || report.renewal_state == "reauth-required" {
+            return Ok(());
+        }
+        let _ = model_accounts::renewal::renew(root, &id);
+        let credential = model_accounts::load_internal(root, &id)?;
+        let digest = format!("{:x}", Sha256::digest(credential.access_token().as_bytes()));
+        if digest == previous {
+            return Ok(());
+        }
+        self.open()?;
+        let next = revision
+            .checked_add(1)
+            .ok_or_else(|| failure("SERVICE_STATE_FAILED"))?;
+        self.process
+            .update_account(&instance, next, &credential.as_broker_json()?)
+            .map_err(failure)?;
+        let mut running = self
+            .running_account
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))?;
+        if running
+            .as_ref()
+            .is_some_and(|(active, _, _, _)| active == &instance)
+        {
+            *running = Some((instance, id, digest, next));
+        }
+        Ok(())
     }
     pub fn management_target(
         &self,
@@ -399,6 +448,9 @@ impl Service {
             }
             None
         };
+        // Startup also renews expired managed sessions after an offline period.
+        // A temporary renewal failure may still use an unexpired access token.
+        let _ = model_accounts::renewal::renew(app_data, &request.account_id);
         let credential = model_accounts::load_internal(app_data, &request.account_id)?;
         let (cert, key) = tls::service_material(app_data, &config)?;
         #[derive(Serialize)]
@@ -487,7 +539,20 @@ impl Service {
             .running_config
             .lock()
             .map_err(|_| failure("SERVICE_STATE_FAILED"))? = Some(config);
-        self.process.start(spec).map_err(failure)
+        let snapshot = self.process.start(spec).map_err(failure)?;
+        *self
+            .running_account
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))? =
+            snapshot.instance_id.as_ref().map(|instance| {
+                (
+                    instance.clone(),
+                    request.account_id,
+                    format!("{:x}", Sha256::digest(credential.access_token().as_bytes())),
+                    0,
+                )
+            });
+        Ok(snapshot)
     }
     pub fn stop(
         &self,

@@ -13,12 +13,15 @@ export type ServiceSnapshot = {
   pid?: number | null; cleanupVerified: boolean; forcedStop: boolean;
   failureCode?: string | null; deadlineAt?: number | null;
   metrics?: ServiceMetrics | null;
+  accountUpdatesSupported?: boolean;
 };
 export type ServiceContext = { candidateStartAvailable: boolean; needsAdmin: boolean; configRevision: number };
 export type AccountReport = {
   accountId: string; provider: 'chatgpt'; accountHint: string; importedAt: number; checkedAt: number;
   accessExpiresAt: number | null; status: 'imported' | 'expired' | 'expiry-unknown';
-  refreshSupported: false; remoteVerified: false;
+  refreshSupported: boolean; remoteVerified: false;
+  renewalState?: 'snapshot' | 'ready' | 'retrying' | 'reauth-required';
+  renewalError?: string | null; nextRetryAt?: number | null;
 };
 export type AccountEntry = { accountId: string; report?: AccountReport | null; failure?: { code: string } | null };
 export type DiscoveredAccount = {
@@ -45,6 +48,7 @@ export function readServiceSnapshot(value: unknown): ServiceSnapshot {
   const metrics = value.metrics == null ? null : readServiceMetrics(value.metrics);
   if (metrics && (value.state !== 'running' || !value.instanceId)) throw invalid();
   return { generation: value.generation, sequence: value.sequence, instanceId: value.instanceId as string | null | undefined,
+    accountUpdatesSupported: value.accountUpdatesSupported === true,
     state: value.state as ServiceSnapshot['state'], pid: value.pid as number | null | undefined,
     cleanupVerified: value.cleanupVerified, forcedStop: value.forcedStop,
     failureCode: value.failureCode as string | null | undefined, deadlineAt: value.deadlineAt as number | null | undefined, metrics };
@@ -64,7 +68,9 @@ export function serviceTerminal(snapshot: ServiceSnapshot) { return ['stopped', 
 export function readAccountReport(value: unknown): AccountReport {
   if (!record(value) || typeof value.accountId !== 'string' || !value.accountId || value.provider !== 'chatgpt' || typeof value.accountHint !== 'string' ||
       !integer(value.importedAt) || !integer(value.checkedAt) || !optionalNumber(value.accessExpiresAt) ||
-      !['imported', 'expired', 'expiry-unknown'].includes(String(value.status)) || value.refreshSupported !== false || value.remoteVerified !== false) throw invalid();
+      !['imported', 'expired', 'expiry-unknown'].includes(String(value.status)) || typeof value.refreshSupported !== 'boolean' || value.remoteVerified !== false ||
+      (value.renewalState != null && !['snapshot', 'ready', 'retrying', 'reauth-required'].includes(String(value.renewalState))) ||
+      (value.renewalError != null && typeof value.renewalError !== 'string') || !optionalNumber(value.nextRetryAt)) throw invalid();
   return value as AccountReport;
 }
 export function readAccountEntries(value: unknown): AccountEntry[] {
@@ -84,6 +90,19 @@ export function readDiscoveredAccount(value: unknown): DiscoveredAccount {
   return value as DiscoveredAccount;
 }
 const errors: Record<string, string> = {
+  MODEL_LOGIN_BROWSER_FAILED: '无法打开浏览器，请手动访问 https://auth.openai.com/codex/device 完成授权。',
+  MODEL_LOGIN_BUSY: '已有登录授权正在进行，请完成或取消后重试。',
+  MODEL_LOGIN_EXPIRED: '登录授权已结束或超时，请重新开始中央专用登录。',
+  MODEL_LOGIN_UNAVAILABLE: '暂时无法进行设备授权，请检查网络及账号是否允许设备代码登录，然后重试。',
+  MODEL_LOGIN_RESPONSE_INVALID: '登录服务返回了无法识别的结果，请重新授权。',
+  MODEL_RENEWAL_NETWORK: '续期暂时无法连接服务，将按退避间隔有限重试。',
+  MODEL_RENEWAL_UNCERTAIN: '上次续期结果无法确认，请重新授权中央专用登录。',
+  MODEL_RENEWAL_REAUTH_REQUIRED: '中央登录无法继续续期，请重新授权。',
+  MODEL_RENEWAL_ACCOUNT_MISMATCH: '续期返回的账号不匹配，请重新授权。',
+  MODEL_RENEWAL_RESPONSE_INVALID: '续期响应无效，请重新授权。',
+  MODEL_RENEWAL_STORAGE_FAILED: '新凭据保存失败，请检查中央存储后重新授权。',
+  MODEL_RENEWAL_BUSY: '正在更新中央登录，请稍后刷新状态。',
+  SERVICE_ACCOUNT_UPDATE_UNSUPPORTED: '当前运行包不支持热更新模型凭据，请更新中央运行包。',
   MODEL_ACCOUNT_SOURCE_MISSING: '未找到本机 Codex 登录，请先在这台电脑登录，再重新检测。',
   MODEL_ACCOUNT_SOURCE_UNAVAILABLE: '暂时无法读取本机登录，请稍后重新检测。',
   MODEL_ACCOUNT_SOURCE_UNSAFE: '本机登录文件或路径未通过安全检查，未导入账号。',

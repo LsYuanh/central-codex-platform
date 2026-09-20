@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-//! Native central-account import. No local inference, refresh, ACL repair or IPC secrets.
+//! Native central accounts. Imported snapshots never acquire shared refresh tokens.
 //! Input format follows pinned Codex login/src/auth/storage.rs and token_data.rs;
 //! only the access_token/account_id pair used by the central broker is retained.
 use crate::config::{Result, failure};
@@ -15,6 +15,8 @@ use zeroize::{Zeroize, Zeroizing};
 const NAMESPACE: &str = "model-accounts-v1";
 const MAX_SOURCE: usize = 1024 * 1024;
 const MAX_ACCOUNTS: usize = 128;
+#[path = "model_account_renewal.rs"]
+pub mod renewal;
 
 #[cfg(all(test, windows))]
 pub(crate) fn store_service_fixture(app_data: &Path) -> String {
@@ -26,6 +28,7 @@ pub(crate) fn store_service_fixture(app_data: &Path) -> String {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"exp":4000000000}"#)
         ),
         account_id: "synthetic-service-account".into(),
+        refresh_token: None,
     };
     let root = crate::config::resource_root(app_data, true).unwrap();
     let bytes = Zeroizing::new(serde_json::to_vec(&bundle).unwrap());
@@ -55,6 +58,9 @@ pub struct AccountReport {
     pub access_expires_at: Option<u64>,
     pub status: &'static str,
     pub refresh_supported: bool,
+    pub renewal_state: &'static str,
+    pub renewal_error: Option<String>,
+    pub next_retry_at: Option<u64>,
     pub remote_verified: bool,
 }
 
@@ -74,11 +80,14 @@ struct Bundle {
     imported_at: u64,
     access_token: String,
     account_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    refresh_token: Option<String>,
 }
 impl Drop for Bundle {
     fn drop(&mut self) {
         self.access_token.zeroize();
         self.account_id.zeroize();
+        self.refresh_token.zeroize();
     }
 }
 
@@ -208,6 +217,7 @@ fn parse_source(bytes: &[u8], imported_at: u64) -> Result<Bundle> {
             .account_id
             .take()
             .ok_or_else(|| failure("MODEL_ACCOUNT_FORMAT_INVALID"))?,
+        refresh_token: None,
     };
     validate(&bundle)?;
     Ok(bundle)
@@ -238,7 +248,14 @@ fn report(bundle: &Bundle, id: &str, checked_at: u64) -> Result<AccountReport> {
         } else {
             "imported"
         },
-        refresh_supported: false,
+        refresh_supported: bundle.refresh_token.is_some(),
+        renewal_state: if bundle.refresh_token.is_some() {
+            "ready"
+        } else {
+            "snapshot"
+        },
+        renewal_error: None,
+        next_retry_at: None,
         remote_verified: false,
     })
 }
@@ -414,7 +431,7 @@ pub fn import_existing(app_data: &Path) -> Result<AccountReport> {
     }
 }
 
-fn load_bundle(app_data: &Path, id: &str) -> Result<Bundle> {
+fn load_base(app_data: &Path, id: &str) -> Result<Bundle> {
     #[cfg(any(windows, target_os = "macos"))]
     {
         let root = crate::config::resource_root(app_data, false)?;
@@ -432,7 +449,7 @@ fn load_bundle(app_data: &Path, id: &str) -> Result<Bundle> {
     }
 }
 pub fn selected(app_data: &Path, id: &str) -> Result<AccountReport> {
-    report(&load_bundle(app_data, id)?, id, now())
+    renewal::account_report(app_data, id)
 }
 pub fn list(app_data: &Path) -> Result<Vec<AccountEntry>> {
     #[cfg(any(windows, target_os = "macos"))]
@@ -466,7 +483,7 @@ pub fn list(app_data: &Path) -> Result<Vec<AccountEntry>> {
     }
 }
 pub(crate) fn load_internal(app_data: &Path, id: &str) -> Result<InternalCredential> {
-    let bundle = load_bundle(app_data, id)?;
+    let bundle = renewal::current_bundle(app_data, id)?;
     if validate(&bundle)?.is_some_and(|expires| expires <= now()) {
         return Err(failure("MODEL_ACCOUNT_EXPIRED"));
     }

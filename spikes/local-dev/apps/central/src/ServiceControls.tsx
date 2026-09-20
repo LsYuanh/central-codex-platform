@@ -112,6 +112,7 @@ export function ServiceControls({ configRevision, accountId, disabled = false }:
     </div>
     {snapshot?.state === 'starting' && <p className="field-hint" role="status">正在检查资源并启动服务，页面会自动更新结果。</p>}
     {snapshot?.state === 'stopping' && <p className="field-hint" role="status">正在关闭服务及模型进程，确认退出后才能重新启动。</p>}
+    {snapshot?.state === 'running' && snapshot.accountUpdatesSupported === false && <p className="management-error" role="alert">此运行包不支持凭据热更新，运行期间的自动续期未启用。请更新中央运行包。</p>}
     {snapshot?.forcedStop && <p className="field-hint">上次停止使用了强制回收；退出确认结果以上方状态为准。</p>}
     {snapshot?.deadlineAt && (snapshot.state === 'starting' || snapshot.state === 'stopping') && <p className="field-hint">当前操作时限：{new Date(snapshot.deadlineAt).toLocaleTimeString('zh-CN')}</p>}
     {context?.needsAdmin && stopped && <div className="resource-result"><strong>首次启动 · 设置中央管理员</strong><p>用于管理中央用户与设备。密码不会保存在页面草稿中。</p><div className="field-columns equal-columns">
