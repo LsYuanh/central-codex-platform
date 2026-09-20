@@ -186,7 +186,6 @@ export default function App() {
   const newDraftKey = () => `__new__:${draftProjectRef.current?.id ?? ""}`;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<ThreadSummary[]>([]);
-  const [threadQuery, setThreadQuery] = useState("");
   const [threadBusy, setThreadBusy] = useState<string | undefined>();
   const [renameTarget, setRenameTarget] = useState<ThreadSummary | undefined>();
   const [renameDraft, setRenameDraft] = useState("");
@@ -1429,13 +1428,7 @@ export default function App() {
     }
   }, [mode, sendGatewayRequest]);
 
-  const visibleThreads = threads.filter((thread) => {
-    if (thread.archived) return false;
-    const query = threadQuery.trim().toLowerCase();
-    if (!query) return true;
-    const project = projectService.projects.find(p => p.id === thread.clientProject?.id);
-    return `${thread.name ?? ""} ${thread.preview ?? ""} ${thread.id} ${thread.cwd ?? ""} ${project?.name ?? ""} ${project?.folders.join(" ") ?? ""}`.toLowerCase().includes(query);
-  }).sort((left, right) => {
+  const visibleThreads = threads.filter(thread => !thread.archived).sort((left, right) => {
     const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
     const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
     return rightTime - leftTime;
@@ -1530,16 +1523,14 @@ export default function App() {
         <button className="sidebar-close text-icon-button" aria-label="关闭导航" onClick={closeSidebar}><UiIcon name="close" /></button>
         {activePage === "conversation" ? (
           <>
-            <div className="sidebar-brand">远舟</div>
             <nav className="conversation-nav" aria-label="对话导航">
               <button className="sidebar-primary-action" onClick={() => { startConversationFromSidebar(); setSidebarOpen(false); }} disabled={sending || Boolean(threadBusy) || appState === "connecting"}>
                 <UiIcon name="edit" /><strong>新对话</strong>
               </button>
-              <div className="sidebar-search-wrap"><UiIcon name="search" /><input aria-label="搜索对话" value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder="搜索对话" />{threadQuery && <button type="button" className="text-icon-button" aria-label="清除搜索" onClick={() => setThreadQuery("")}><UiIcon name="close" /></button>}</div>
             </nav>
 
             <div className="sidebar-lists">
-            {mode === "central-gateway" && <ProjectSidebar key={projectScope} scope={projectScope} projects={projectService.projects} threads={visibleThreads} query={threadQuery} activeProjectId={currentProject?.id}
+            {mode === "central-gateway" && <ProjectSidebar key={projectScope} scope={projectScope} projects={projectService.projects} threads={visibleThreads} activeProjectId={currentProject?.id}
               disabled={sending || Boolean(threadBusy)} loading={projectService.loading} error={projectService.error}
               unavailable={appState !== "online" ? "连接后管理本机项目" : !platformCapabilities.projects ? "中央服务需更新后启用项目" : ""}
               refresh={projectService.refresh} save={projectService.save} remove={projectService.remove}
@@ -1551,7 +1542,7 @@ export default function App() {
               </div>
               <div className="conversation-list">
                 {recentThreads.length === 0 ? (
-                  <div className="sidebar-empty">{threadQuery ? "没有匹配的对话" : appState === "online" ? "还没有对话" : "连接后显示对话"}</div>
+                  <div className="sidebar-empty">{appState === "online" ? "还没有对话" : "连接后显示对话"}</div>
                 ) : recentThreads.slice(0, 40).map(renderThread)}
               </div>
             </section>

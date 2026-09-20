@@ -7,8 +7,8 @@ import { folderName, type ClientProject, type ProjectDraft } from "./projects";
 import type { ThreadSummary } from "./gateway-ui-events";
 
 type Preferences = Record<string,{collapsed?:boolean;pinned?:boolean}>;
-export function ProjectSidebar({ scope, projects, threads, query, activeProjectId, disabled, loading, error, unavailable, refresh, save, remove, newThread, renderThread }: {
-  scope:string; projects:ClientProject[]; threads:ThreadSummary[]; query:string; activeProjectId?:string;
+export function ProjectSidebar({ scope, projects, threads, activeProjectId, disabled, loading, error, unavailable, refresh, save, remove, newThread, renderThread }: {
+  scope:string; projects:ClientProject[]; threads:ThreadSummary[]; activeProjectId?:string;
   disabled:boolean; loading:boolean; error:string; unavailable:string;
   refresh:()=>Promise<void>; save:(p:ProjectDraft)=>Promise<ClientProject>; remove:(p:ClientProject)=>Promise<void>;
   newThread:(p:ClientProject)=>void; renderThread:(t:ThreadSummary)=>ReactNode;
@@ -30,17 +30,15 @@ export function ProjectSidebar({ scope, projects, threads, query, activeProjectI
     {(error || notice) && <div className="project-list-notice" role="alert">{error || notice}{error && <button className="button-quiet" onClick={() => void refresh()}>重试</button>}</div>}
     {sorted.map(p => {
       const children = threads.filter(t => t.clientProject?.id === p.id);
-      const matches = `${p.name} ${p.folders.join(" ")}`.toLowerCase().includes(query.toLowerCase().trim());
-      if (query && !matches && !children.length) return null;
-      const expanded = query ? true : !preferences[p.id]?.collapsed;
+      const expanded = !preferences[p.id]?.collapsed;
       return <div className="project-group" key={p.id}>
         <ProjectRow project={p} expanded={expanded} active={activeProjectId === p.id} count={children.length} pinned={!!preferences[p.id]?.pinned} disabled={disabled || !!unavailable}
           toggle={() => preference(p.id,{collapsed:expanded})} pin={() => preference(p.id,{pinned:!preferences[p.id]?.pinned})}
           edit={() => setEditing(p)} create={() => newThread(p)} />
         {expanded && <div className="project-threads" aria-label={`${p.name}的对话`}>
-          {children.slice(0,all.has(p.id) || query ? undefined : 5).map(renderThread)}
-          {!children.length && <button className="project-empty-thread" disabled={disabled || !!unavailable} onClick={() => newThread(p)}>{query ? "没有匹配的对话" : "开始新对话"}</button>}
-          {children.length > 5 && !query && <button className="project-show-more" onClick={() => setAll(s => {const next=new Set(s);next.has(p.id)?next.delete(p.id):next.add(p.id);return next;})}>{all.has(p.id)?"收起":"展开显示"}</button>}
+          {children.slice(0,all.has(p.id) ? undefined : 5).map(renderThread)}
+          {!children.length && <button className="project-empty-thread" disabled={disabled || !!unavailable} onClick={() => newThread(p)}>开始新对话</button>}
+          {children.length > 5 && <button className="project-show-more" onClick={() => setAll(s => {const next=new Set(s);next.has(p.id)?next.delete(p.id):next.add(p.id);return next;})}>{all.has(p.id)?"收起":"展开显示"}</button>}
         </div>}
       </div>;
     })}
