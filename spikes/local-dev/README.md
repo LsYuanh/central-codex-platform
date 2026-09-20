@@ -4,7 +4,7 @@
 
 这里是工作客户端、中央管理 App、中央网关和 Local Agent 的现有主工程。维护基线为 2026-09-20；功能、部署状态和操作说明见[文档导航](../../docs/README.md)。
 
-本机项目功能已在源码实现，尚未发布；使用方式见[客户端项目说明](../../docs/客户端维护手册.md)，协议与目录快照见 [AgentRPC](AGENTRPC.md)。项目回归入口为 `node scripts/project-gateway-smoke.mjs`，可选 `--ui` / `--native-ui` 的环境要求及验收边界见[验证手册](../../docs/验证与已知限制.md)。
+本机项目功能已在源码实现，中央网关已部署，客户端安装包尚未更新；使用方式见[客户端项目说明](../../docs/客户端维护手册.md)，协议与目录快照见 [AgentRPC](AGENTRPC.md)。项目回归入口为 `node scripts/project-gateway-smoke.mjs`，可选 `--ui` / `--native-ui` 的环境要求及验收边界见[验证手册](../../docs/验证与已知限制.md)。
 
 ## 架构
 

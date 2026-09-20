@@ -37,13 +37,13 @@ function writeHelper(message){check(helper&&!helper.stdin.destroyed,'QA_UI_UNAVA
 function send(message){writeHelper({kind:'send',message});}
 async function request(operation,payload={},timeout=45000){
   const requestId=randomUUID();let resolve,reject;const response=new Promise((r,j)=>{resolve=r;reject=j;});
-  pending.set(requestId,{resolve,reject});send({type:'request',requestId,operation,payload});
+  pending.set(requestId,{resolve,reject,operation});send({type:'request',requestId,operation,payload});
   const timer=setTimeout(()=>{pending.delete(requestId);reject(Error('QA_RPC_TIMEOUT'));},timeout);
   try{return await response;}finally{clearTimeout(timer);pending.delete(requestId);}
 }
 function gatewayMessage(message){
   if(message.type==='response'){
-    const task=pending.get(message.requestId);if(task){pending.delete(message.requestId);message.ok?task.resolve(message.data):task.reject(Error('QA_GATEWAY_REQUEST_FAILED'));}return;
+    const task=pending.get(message.requestId);if(task){pending.delete(message.requestId);if(!message.ok)emit({phase:'rpc-failed',operation:task.operation,errorCode:String(message.error??'').match(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/)?.[0]??'UNCLASSIFIED'});message.ok?task.resolve(message.data):task.reject(Error('QA_GATEWAY_REQUEST_FAILED'));}return;
   }
   if(message.type==='approval.request'){
     const allowed=config.legacyWorkspace===true&&message.method==='device/fileChange/requestApproval'
@@ -91,7 +91,7 @@ async function cleanup(){
 try{
   check(process.platform==='win32'&&(process.argv.length===2||formal4510),'QA_WINDOWS_STDIN_ONLY');
   await Promise.race([bootstrap,new Promise((_,reject)=>setTimeout(()=>reject(Error('QA_BOOTSTRAP_TIMEOUT')),15000).unref())]);
-  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects'].includes(key)),'QA_BOOTSTRAP_FIELDS');
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname==='192.0.2.10'&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
   check(path.isAbsolute(config.workspace)&&path.isAbsolute(config.output)&&!existsSync(config.output),'QA_OUTPUT_INVALID');
@@ -100,10 +100,11 @@ try{
   const workspace=realpathSync(config.workspace),root=path.dirname(workspace),tokenRoot=path.join(root,'central-live-token-data');
   check(lstatSync(workspace).isDirectory()&&!lstatSync(config.workspace).isSymbolicLink()&&!existsSync(tokenRoot),'QA_WORKSPACE_INVALID');
   check(config.legacyWorkspace===undefined||typeof config.legacyWorkspace==='boolean','QA_LEGACY_MODE_INVALID');
+  check((config.projects===undefined||typeof config.projects==='boolean')&&!(config.projects&&config.legacyWorkspace),'QA_PROJECT_MODE_INVALID');
   const project=config.legacyWorkspace?workspace:path.join(root,'external-project');
   if(!config.legacyWorkspace)mkdirSync(project);config.project=realpathSync(project);
-  config.toolCwd=config.legacyWorkspace?'.':config.project;
-  const toolPath=name=>config.legacyWorkspace?name:path.join(project,name);
+  config.toolCwd=config.legacyWorkspace||config.projects?'.':config.project;
+  const toolPath=name=>config.legacyWorkspace||config.projects?name:path.join(project,name);
   config.patch='*** Begin Patch\n*** Add File: compatibility-proof.txt\n+legacy-patch-ok\n*** End Patch';
   config.powershell=regular(path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'));
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','proof.ps1'];
@@ -137,14 +138,15 @@ try{
   let ready=false;const onlineDeadline=Date.now()+20000;
   while(!ready&&Date.now()<onlineDeadline){try{const context=await request('device.workspace.context',{},4000);ready=context?.ok===true;}catch{}if(!ready)await delay(200);if(failure)throw Error(failure);}
   check(ready,'QA_REAL_AGENT_OFFLINE');
-  const directRead=await request('device.workspace.read_text',{path:toolPath('input.txt')});check(directRead?.ok===true&&directRead.result?.content===inputMarker,'QA_REAL_AGENT_READ_FAILED');
+  const directPath=config.projects?path.join(project,'input.txt'):toolPath('input.txt');
+  const directRead=await request('device.workspace.read_text',{path:directPath});check(directRead?.ok===true&&directRead.result?.content===inputMarker,'QA_REAL_AGENT_READ_FAILED');
   if(formal4510){
     agent.kill();await agentExit;
     ({child:agent,exit:agentExit}=launch(config.agentBinary,['--workspace-root',workspace,'--gateway-url',agentUrl.toString()],{cwd:workspace,env:{...env,YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_CA:config.caPath,YUAN_PLATFORM_DATA_DIR:tokenRoot}}));
     agent.stdout.on('data',()=>{});agentDiagnostic='';agentTerminal=false;
     agent.stderr.on('data',chunk=>{agentDiagnostic=(agentDiagnostic+chunk.toString('utf8')).slice(-8192);if(/(?:^|\r?\n)Error: "?DEVICE_REVOKED"?\r?(?:\n|$)/.test(agentDiagnostic))agentTerminal=true;});
     let reconnected=false;const end=Date.now()+20000;
-    while(!reconnected&&Date.now()<end){try{const read=await request('device.workspace.read_text',{path:toolPath('input.txt')},2000);reconnected=read?.ok===true&&read.result?.content===inputMarker;}catch{}if(!reconnected)await delay(200);}
+    while(!reconnected&&Date.now()<end){try{const read=await request('device.workspace.read_text',{path:directPath},2000);reconnected=read?.ok===true&&read.result?.content===inputMarker;}catch{}if(!reconnected)await delay(200);}
     check(reconnected,'QA_REAL_AGENT_RECONNECT_FAILED');emit({phase:'reconnected',deviceId,persistedCredentialVerified:true});
   }
   if(config.legacyWorkspace){
@@ -153,7 +155,19 @@ try{
     check(denied?.ok===false&&/WORKSPACE_PATH_DENIED/.test(denied.errorCode??denied.error??''),'QA_LEGACY_BOUNDARY_NOT_ENFORCED');
   }
   emit({phase:'paired',deviceId});
-  const thread=await request('conversation.create',{model:config.model});threadId=thread?.thread?.id;check(typeof threadId==='string','QA_THREAD_MISSING');
+  let catalogProject;
+  if(config.projects){
+    check(initialized.platformCapabilities?.projects===true,'QA_PROJECT_CAPABILITY_MISSING');
+    catalogProject=(await request('project.save',{name:'项目发布验证',folders:[project,workspace],creationKey:randomUUID()})).project;
+    check(catalogProject?.folders[0]===project,'QA_PROJECT_CREATE_FAILED');
+  }
+  const thread=await request('conversation.create',{model:config.model,...(catalogProject?{projectId:catalogProject.id,projectRevision:catalogProject.revision}:{})});threadId=thread?.thread?.id;check(typeof threadId==='string','QA_THREAD_MISSING');
+  if(catalogProject){
+    check(thread.thread.clientProject?.folders[0]===project,'QA_PROJECT_SNAPSHOT_MISSING');
+    catalogProject=(await request('project.save',{...catalogProject,folders:[workspace,project]})).project;
+    // Native Codex persists a new Thread after its first Turn; do not resume an
+    // empty Thread. Executing below must still use the captured old directory.
+  }
   const prompt=`This is an authorized, isolated client QA project ${config.legacyWorkspace?'inside the legacy workspace':'outside the default output directory'}. Perform exactly: 1. device_workspace_read_text path ${JSON.stringify(toolPath('input.txt'))}. 2. device_exec with ${JSON.stringify({program:config.powershell,args,cwd:config.toolCwd})}. Run that command exactly once. 3. device_workspace_read_text path ${JSON.stringify(toolPath('proof.txt'))}. ${config.legacyWorkspace?'4. Call device_workspace_apply_patch exactly once with this patch (approval is provided): '+JSON.stringify(config.patch)+'. ':''}Final answer contains only the two exact markers read from input.txt and proof.txt. Do not call other tools, write/edit files except the explicitly requested patch, inspect other directories, run central commands, or rerun the command. The pre-created script generates its random marker only when Local Agent runs it.`;
   const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',input:[{type:'text',text:prompt}]});turnId=turn?.turn?.id;
   await until(()=>turnDone,180000,'QA_MODEL_TURN_TIMEOUT');
@@ -171,10 +185,18 @@ try{
     check(patches.length===1&&patches[0].done&&patches[0].succeeded,'QA_LEGACY_PATCH_RECEIPT_MISSING');
     evidence.legacyPatchVerified=true;
   }
-  await request('conversation.resume',{threadId});
+  const resumed=await request('conversation.resume',{threadId});
+  if(catalogProject)check(resumed.thread?.clientProject?.folders[0]===project,'QA_PROJECT_SNAPSHOT_CHANGED');
   const history=await request('conversation.read',{threadId,includeTurns:true});
   check(history.thread?.turns?.some(t=>t.id===turnId&&t.status==='completed'),'QA_RESUMED_HISTORY_MISSING');
   evidence.resumeHistoryVerified=true;
+  if(catalogProject){
+    await request('project.remove',{id:catalogProject.id,revision:catalogProject.revision});
+    check(!(await request('project.list')).projects.some(p=>p.id===catalogProject.id),'QA_PROJECT_REMOVE_FAILED');
+    const retained=await request('conversation.resume',{threadId});
+    check(retained.thread?.clientProject?.folders[0]===project,'QA_PROJECT_REMOVAL_LOST_SNAPSHOT');
+    evidence.projectCatalogVerified=true;evidence.immutableProjectSnapshotVerified=true;evidence.relativeProjectExecutionVerified=true;
+  }
   await request('conversation.archive',{threadId});
   completed=true;emit({phase:'completed',deviceId,evidence,summary});
   await until(()=>socketRevoked&&localRemoved,35000,'QA_REVOKE_NOT_OBSERVED');

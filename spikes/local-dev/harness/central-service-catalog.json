@@ -140,6 +140,29 @@
         "PRODUCTION_QUALIFICATION_PENDING",
         "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
       ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-d7fa381eb4e0e0a0",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 175964,
+        "sha256": "d7fa381eb4e0e0a0ac8ede33ccbe53d9c66232ead3f3c1baea028f57e475a21d"
+      },
+      "fileCount": 865,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
     }
   ]
 }

@@ -11,7 +11,10 @@ import {fileURLToPath} from 'node:url';
 if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('CENTRAL_MAC_REQUIRED');
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../..');
 const work=path.join(repo,'spikes/local-dev');
-const runDir=path.join(repo,'artifacts/shared-login-deploy-20260920');
+// Separate each release's immutable staging/backup evidence from earlier deployments.
+const runName=process.env.CENTRAL_MACOS_DEPLOY_NAME??'shared-login-deploy-20260920';
+if(!/^[a-z0-9][a-z0-9-]{2,79}$/.test(runName))throw Error('INVALID_DEPLOY_NAME');
+const runDir=path.join(repo,'artifacts',runName);
 const formal=path.join(repo,'artifacts/central-macos/formal-migration-20260911');
 const profile=path.join(homedir(),'Library/Application Support/com.yuanzhou.central');
 const installed=path.join(homedir(),'Applications/远舟中央管理.app');

@@ -4,7 +4,7 @@
 
 Current maintenance baseline: 2026-09-20. WSS plus `device-token-v1` is the deployed default. Sections explicitly marked historical describe legacy compatibility and protocol fixtures, not the current product startup path. See the [maintenance index](../../docs/README.md) for deployment and acceptance limits.
 
-## Client projects (2026-09-20, implemented locally; not deployed)
+## Client projects (2026-09-20, central deployed; desktop installer pending)
 
 The gateway advertises `platformCapabilities.projects`. Platform operations are `project.list`, `project.save` and `project.remove`; the desktop RPC adapter exposes `project/list`, `project/save` and `project/remove`. Catalog entries `{id,name,folders,revision}` are scoped to authenticated user/device and retained in the existing atomic gateway state file. `folders[0]` is primary. Save validates 1–8 existing directories through the target Agent's `workspace/list`, stores canonical client paths, checks device installation identity and revision, and rejects duplicate folders. Creation accepts a stable `creationKey` for idempotent retries. Remove requires `{id,revision}`; it changes grouping only. Successful mutations emit `project/changed` to that user's connected clients on the same device.
 
