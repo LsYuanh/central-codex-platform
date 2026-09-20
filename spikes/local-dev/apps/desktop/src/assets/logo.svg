@@ -1,0 +1,9 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#5279A6"/>
+  <g fill="#FFFFFF">
+    <path d="M14.5 41.5Q14 41.5 14.3 41L32.5 13.3Q33 12.6 33 13.5V41Q33 41.5 32.5 41.5Z"/>
+    <path d="M36.5 41.5Q36 41.5 36 41V23.5Q36 22.6 36.5 23.3L47.7 41Q48 41.5 47.5 41.5Z"/>
+    <path d="M13.5 45H50.5Q51.2 45 50.8 45.7C48.8 49.1 46.7 52 43.5 52H20.5C17.3 52 15.2 49.1 13.2 45.7Q12.8 45 13.5 45Z"/>
+  </g>
+</svg>

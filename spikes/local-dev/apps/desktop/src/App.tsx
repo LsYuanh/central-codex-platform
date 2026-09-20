@@ -1598,6 +1598,7 @@ export default function App() {
               <div ref={messageListRef} className="message-list" tabIndex={-1} onScroll={(event) => { const el = event.currentTarget; followMessagesRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; setShowLatest(!followMessagesRef.current); }} role="log" aria-live="polite" aria-label="对话消息">
                 {messages.length === 0 ? (
                   <div className="conversation-empty-state">
+                    <img className="welcome-brand-logo" src={new URL("./assets/logo.svg", import.meta.url).href} width={48} height={48} alt="远舟" />
                     <h1>{runtimeConfig?.needsSetup ? "先连接这台电脑" : appState === "online" ? "今天想完成什么？" : "连接后开始工作"}</h1>
                     <p>{appState === "online" ? "从一个想法开始，让远舟帮你把工作往前推进。" : "在设置中完成配对与连接，即可开始对话。"}</p>
                     {canStartConversation && !threadId && <div className="conversation-starters">{([

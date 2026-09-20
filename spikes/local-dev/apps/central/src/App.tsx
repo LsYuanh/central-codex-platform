@@ -106,7 +106,7 @@ export default function App() {
 
   return <div className="central-shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 23 16 5l2 12 8 6H6Z" /><path d="M5 27h22" /></svg></span><div><strong>远舟</strong><span>中央管理</span></div></div>
+      <div className="brand"><img className="brand-mark" src={new URL("./assets/logo.svg", import.meta.url).href} width={37} height={37} alt="" /><div><strong>远舟</strong><span>中央管理</span></div></div>
       <div className="workspace-card"><span className="machine-icon"><UiIcon name="monitor" /></span><div><strong>本机中央服务</strong><small>{environment}</small></div></div>
       <p className="nav-label">管理工作台</p>
       <nav aria-label="主导航">{navigation.map(item => <button key={item.id} className={page === item.id ? "nav-item selected" : "nav-item"} aria-current={page === item.id ? "page" : undefined} onClick={() => { setPage(item.id); setNotice(""); }}><UiIcon name={item.icon} /><span>{item.label}</span>{item.id === "setup" && !saved && <span className="nav-dot" />}</button>)}</nav>

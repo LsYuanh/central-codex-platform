@@ -968,6 +968,13 @@ a {
   color: var(--on-send-accent);
 }
 
+.welcome-brand-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 20px;
+}
+
 .send-button:not(.send-button-stop):hover:not(:disabled) { background: var(--send-accent-hover); }
 
 .send-button .ui-icon {

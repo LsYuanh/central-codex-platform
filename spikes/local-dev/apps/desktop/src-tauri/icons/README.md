@@ -1,11 +1,13 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial -->
 
-# 临时 Spike 图标
+# 远舟客户端图标
 
-`icon.png`、`icon.ico` 与 `icon.icns` 仅用于满足 Tauri macOS / Windows 资源构建要求，不是正式产品 Logo 或商标资产。
+2026-09-20 用户确认的第二版：蓝色 `#5279A6`、高低双帆、简化船身；中央管理使用深青色对称双帆及独立图标目录。
 
-`icon.png` 使用 RGBA 编码：macOS 的 Tauri 上下文生成不接受 RGB PNG。转换只补充全不透明 alpha 通道，保留原图像素及尺寸；不要重新保存为 RGB 或调色板格式。
+矢量源为 `../../src/assets/logo.svg`，同时用于客户端欢迎区及浏览器图标。PNG、ICO 和 ICNS 均由这份 SVG 生成，不从 AI 预览图裁切，不手工编辑派生文件。
 
-生成方式：Codex 内置 ImageGen。最终提示词要求“安全中央节点连接一台本地工作站”的无文字、无现有品牌相似性、深蓝/青色/琥珀色扁平几何图标；`icon.ico` 由生成的 PNG 机械转换而来。
+在 `spikes/local-dev/` 安装现有 npm 依赖后执行 `node scripts/generate-brand-icons.mjs`。脚本使用项目锁定的 Tauri CLI，为客户端与中央端分别生成图标；中间文件在忽略目录 `target/brand-icons/`，只复制 `icon.png`、`icon.ico`、`icon.icns` 到各自的 `src-tauri/icons/`。
 
-`icon.icns` 使用 Pillow 从同一 RGBA PNG 机械转换，包含 macOS 图标所需尺寸，未重新生成画面。
+PNG 为 RGBA，保留圆角外透明区域。ICO 包含 16、24、32、48、64、256px；ICNS 包含常用 1x/2x 尺寸。开发配置与安装配置均应指向本应用的图标，不再让中央端引用客户端资源。
+
+本次只更新源码资源，不代表已打包、安装或发布；macOS Dock 外观需在后续 Mac 原生验收中确认。
