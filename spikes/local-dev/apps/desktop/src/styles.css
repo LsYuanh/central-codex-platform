@@ -11,7 +11,9 @@
   --send-accent: #c44482;
   --send-accent-hover: #aa326d;
   --on-send-accent: #fff;
-  --composer-shadow: 0 2px 8px rgba(30,40,55,.025), 0 12px 40px rgba(30,40,55,.045);
+  --composer-border: #eeeef1;
+  --composer-border-focus: #e4e4e9;
+  --composer-shadow: 0 2px 6px rgba(30,40,55,.025), 0 8px 28px rgba(30,40,55,.035);
   --group: #fff;
   --surface-raised: #fff;
   --surface-inset: #f3f3f3;
@@ -64,7 +66,9 @@
   --send-accent: #e58ab5;
   --send-accent-hover: #eda4c6;
   --on-send-accent: #261b21;
-  --composer-shadow: 0 4px 24px rgba(0,0,0,.16);
+  --composer-border: #343434;
+  --composer-border-focus: #444444;
+  --composer-shadow: 0 2px 8px rgba(0,0,0,.10), 0 8px 28px rgba(0,0,0,.12);
   --group: #232323;
   --surface-raised: #2a2a2a;
   --surface-inset: #292929;
@@ -862,7 +866,7 @@ a {
   flex-direction: column;
   min-height: 0;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--composer-border);
   border-radius: 22px;
   background: var(--surface-raised);
   box-shadow: var(--composer-shadow);
@@ -886,7 +890,7 @@ a {
 }
 
 .composer-shell:has(textarea:focus) {
-  border-color: var(--line-strong);
+  border-color: var(--composer-border-focus);
 }
 
 .composer-footer {
