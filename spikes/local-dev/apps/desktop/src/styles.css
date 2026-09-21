@@ -922,7 +922,7 @@ a {
 .composer-project-trigger { display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; height: 28px; padding: 4px 9px; background: transparent; color: var(--ink); font-size: 12px; border-radius: 16px; }
 .composer-project-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer-project-trigger:hover:not(:disabled),.composer-project-chip:focus-within { background: var(--hover); }
-.composer-project-clear { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 22px; height: 22px; padding: 3px; opacity: 0; pointer-events: none; border-radius: 50%; background: var(--hover); color: var(--ink-muted); }
+.composer-project-clear { position: absolute; left: 3px; top: 3px; opacity: 0; pointer-events: none; }
 .composer-project-chip.has-project:is(:hover,:focus-within) .composer-project-trigger > svg { opacity: 0; }
 .composer-project-chip:is(:hover,:focus-within) .composer-project-clear { opacity: 1; pointer-events: auto; }
 .composer-project-popover { position: fixed; z-index: 120; display: flex; flex-direction: column; width: min(320px,calc(100vw - 16px)); padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-raised); color: var(--ink); box-shadow: var(--popover-shadow); overflow-y: auto; }
@@ -2021,6 +2021,11 @@ a {
   color: var(--ink);
   background: transparent;
 }
+
+button.composer-remove-button { display: grid; place-items: center; flex: none; width: 22px; height: 22px; padding: 3px; border-radius: 50%; background: transparent; color: var(--ink-muted); }
+.composer-remove-button:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.composer-remove-button:disabled { background: transparent; color: var(--disabled-ink); }
+.composer-remove-button .ui-icon { width: 14px; height: 14px; }
 
 .attachment-file-icon {
   padding: 0 4px;

@@ -2,6 +2,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { UiIcon } from "./UiIcon";
 import type { AttachmentRef, MessageAttachment } from "../../../packages/agentrpc-types/src/index";
 export type { AttachmentRef, MessageAttachment };
 export type DraftAttachment = Partial<AttachmentRef> & {id:string; name:string; source:AttachmentRef["source"]; preview?:string; clipboard?:File; error?:string};
@@ -84,7 +85,7 @@ export function useAttachments(locked:boolean, enabled:boolean) {
   );
   const controls=<>
     {adding&&<p className="attachment-notice" role="status">正在本机准备预览…</p>}
-    {drafts.length>0&&<div className="attachment-list">{drafts.map(draft=><div className={`attachment-card ${draft.error?"attachment-error":""}`} key={draft.id} title={draft.path??"剪贴板图片：发送时保存到本机"}>{draft.preview?<img src={draft.preview} alt={draft.name}/>:<span className="attachment-file-icon">▤</span>}<div><strong>{draft.name}</strong><small>{sizeLabel(draft.bytes)} · {draft.error??"待发送"}</small></div><button type="button" aria-label={`移除 ${draft.name}`} disabled={locked||adding} onClick={()=>setDrafts(current=>current.filter(item=>item.id!==draft.id))}>×</button></div>)}</div>}
+    {drafts.length>0&&<div className="attachment-list">{drafts.map(draft=><div className={`attachment-card ${draft.error?"attachment-error":""}`} key={draft.id} title={draft.path??"剪贴板图片：发送时保存到本机"}>{draft.preview?<img src={draft.preview} alt={draft.name}/>:<span className="attachment-file-icon">▤</span>}<div><strong>{draft.name}</strong><small>{sizeLabel(draft.bytes)} · {draft.error??"待发送"}</small></div><button type="button" className="composer-remove-button" aria-label={`移除 ${draft.name}`} disabled={locked||adding} onClick={()=>setDrafts(current=>current.filter(item=>item.id!==draft.id))}><UiIcon name="close" /></button></div>)}</div>}
     {error&&<p role="alert" className="attachment-error-text">{error}</p>}
     {drafts.length>0&&<p className="attachment-notice">点击发送后，附件内容会经中央推理链路处理。普通文件按需读取。</p>}
   </>;

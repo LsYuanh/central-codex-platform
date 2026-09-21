@@ -39,7 +39,7 @@ export function ComposerProjectPicker({ selected, projects, disabled, unavailabl
     <div className={`composer-project-chip${selected ? " has-project" : ""}`}>
       <button ref={trigger} type="button" className="composer-project-trigger" disabled={disabled} aria-label={selected ? `选择项目：${selected.name}` : "选择项目"} aria-haspopup="dialog" aria-expanded={open} title={selected?.folders[0] ?? "使用默认工作目录"}
         onClick={() => { setQuery(""); setActive(Math.max(0, sorted.findIndex(p => p.id === selected?.id))); setOpen(!open); }}><UiIcon name="folder" /><span>{selected?.name ?? "选择项目"}</span></button>
-      {selected && <button type="button" className="composer-project-clear" disabled={disabled} aria-label="取消项目选择" title="不在项目中工作" onClick={() => select()}><UiIcon name="close" /></button>}
+      {selected && <button type="button" className="composer-remove-button composer-project-clear" disabled={disabled} aria-label="取消项目选择" title="不在项目中工作" onClick={() => select()}><UiIcon name="close" /></button>}
     </div>
     {open && createPortal(<div ref={panel} role="dialog" aria-label="选择新对话项目" className="composer-project-popover" style={position}
       onBlur={e => { if (e.relatedTarget instanceof Node && !e.currentTarget.contains(e.relatedTarget) && !trigger.current?.contains(e.relatedTarget)) setOpen(false); }}
