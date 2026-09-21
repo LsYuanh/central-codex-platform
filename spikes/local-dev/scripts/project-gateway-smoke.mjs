@@ -38,12 +38,19 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(q.method==='model/list')result={data:[]};
  if(q.method==='thread/start'){if('projectId' in q.params || 'cwd' in q.params)throw Error('platform field leaked'); const t={id:'project-thread-'+process.pid+'-'+ ++n,name:'项目测试',turns:[],instructions:q.params.developerInstructions};threads.set(t.id,t);result={thread:t};}
  if(q.method==='thread/list')result={data:[...threads.values()]};
+ if(q.method==='thread/name/set'){threads.get(q.params.threadId).name=q.params.name;}
  if(q.method==='thread/read')result={thread:threads.get(q.params.threadId)||{id:q.params.threadId,turns:[]}};
  if(q.method==='thread/resume'){let t=threads.get(q.params.threadId)||{id:q.params.threadId,turns:[]};t.instructions=q.params.developerInstructions;threads.set(t.id,t);result={thread:t};}
  if(q.method==='turn/start')result={turn:{id:'turn-'+ ++n}};
  process.stdout.write(JSON.stringify({id:q.id,result})+'\\n');
  if(q.method==='turn/start'){
    const text=q.params.input[0]?.text;let spec;try{spec=JSON.parse(text);}catch{};
+   if(text==='SIDEBAR_STREAM'){
+     const emit=(method,params)=>process.stdout.write(JSON.stringify({method,params})+'\\n');
+     emit('turn/started',{threadId:q.params.threadId,turn:result.turn});
+     for(const [ms,delta] of [[100,'第一段'],[1700,'第二段']])setTimeout(()=>emit('item/agentMessage/delta',{threadId:q.params.threadId,turnId:result.turn.id,itemId:'reply-'+result.turn.id,delta}),ms);
+     setTimeout(()=>emit('turn/completed',{threadId:q.params.threadId,turn:{...result.turn,status:'completed'}}),1800);
+   }
    if(spec?.tool){const id='tool-'+ ++n;tools.set(id,q.params.threadId);threads.get(q.params.threadId).lastTool=null;process.stdout.write(JSON.stringify({id,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:spec.tool,arguments:spec.args||{}}})+'\\n');}
  }
 });`);
@@ -105,6 +112,7 @@ try {
  await rename(paths.a,paths.a+'-moved');
  await assert.rejects(reconnected('conversation.turn.create',{threadId:ta.id,input:[]}),/PROJECT_DIRECTORY_UNAVAILABLE/);
  if(process.argv.includes('--ui')) await (await import('./project-ui-smoke.mjs')).runProjectUi({port,paths});
+ if(process.argv.includes('--sidebar-ui')) await (await import('./sidebar-drag-ui-smoke.mjs')).runSidebarUi({port,paths,request:reconnected});
  if(process.argv.includes('--native-ui')) await (await import('./project-native-ui-smoke.mjs')).runNativeProjectUi({port,paths,root,client});
  console.log('PROJECT_GATEWAY_SMOKE_OK: catalog isolation, directory validation, creation replay, revisions, restart, immutable thread snapshots, concurrent client paths, actual client cwd and approved patch, removed directory fails closed');
 } finally {clearTimeout(timer);for(const s of sockets)s.close();for(const p of processes)if(p.exitCode===null)p.kill();}

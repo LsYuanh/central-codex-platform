@@ -3,8 +3,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { UiIcon } from "./UiIcon";
 
-export function ThreadActions({ title, disabled, rename, archive }: {
+export function ThreadActions({ title, disabled, rename, archive, organize, moveUp, moveDown }: {
   title: string; disabled: boolean; rename: () => void; archive: () => void;
+  organize?:()=>void; moveUp?:()=>void; moveDown?:()=>void;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -47,12 +48,13 @@ export function ThreadActions({ title, disabled, rename, archive }: {
     {open && createPortal(<div ref={menu} id={id} className="thread-actions-menu" style={position} role="menu" aria-label={`${title}的操作`} onKeyDown={event => {
       if (event.key === "Escape") { event.preventDefault(); close(true); }
       if (event.key === "Tab") close(true);
-      const buttons = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const buttons = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
       const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
       const next = event.key === "ArrowDown" ? (current + 1) % buttons.length : event.key === "ArrowUp" ? (current + buttons.length - 1) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : undefined;
       if (next !== undefined) { event.preventDefault(); buttons[next]?.focus(); }
     }}>
       <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); rename(); }}><UiIcon name="edit" />重命名</button>
+      {organize && <><button type="button" role="menuitem" disabled={disabled||!moveUp} onClick={()=>{close(true);moveUp?.();}}>上移</button><button type="button" role="menuitem" disabled={disabled||!moveDown} onClick={()=>{close(true);moveDown?.();}}>下移</button><button type="button" role="menuitem" disabled={disabled} onClick={()=>{close(true);organize();}}>移动到项目或最近</button></>}
       <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); archive(); }}><UiIcon name="archive" />归档对话</button>
     </div>, document.body)}
   </>;

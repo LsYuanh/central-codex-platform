@@ -39,6 +39,27 @@ export async function runNativeProjectUi({port,paths,root,client}) {
     await page.getByRole('textbox',{name:'项目名称',exact:true}).fill('客户端项目已编辑');
     await page.getByRole('button',{name:'保存',exact:true}).click();
     await page.getByRole('button',{name:'客户端项目已编辑',exact:true}).waitFor();
+    if(process.argv.includes('--sidebar-native')){
+      const p=(await request('project.list')).projects.find(p=>p.id===project.id);
+      const ids=[];for(let i=0;i<2;i++)ids.push((await request('conversation.create',{projectId:p.id,projectRevision:p.revision})).thread.id);
+      await page.getByRole('button',{name:'刷新对话',exact:true}).click();
+      const row=id=>page.locator(`[data-thread-id="${id}"]`);
+      await row(ids[1]).waitFor();
+      async function drag(id,target,fraction){
+        const a=await row(id).locator('.conversation-select').boundingBox(),b=await target.boundingBox();
+        await page.mouse.move(a.x+60,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+60,b.y+b.height*fraction,{steps:10});
+        await page.locator('.thread-drop-before,.thread-drop-after,.thread-drop-group').first().waitFor({timeout:3000});
+        await page.screenshot({path:join(output,'native-drag-insertion.png')});await page.mouse.up();
+      }
+      const group=page.locator(`[data-thread-group="${p.id}"]`);
+      const first=await group.locator('[data-thread-id]').first().getAttribute('data-thread-id');
+      const last=ids.find(id=>id!==first);await drag(last,row(first),.1);
+      assert.equal(await group.locator('[data-thread-id]').first().getAttribute('data-thread-id'),last);
+      await drag(last,page.locator('[data-thread-group=""] .conversation-list-heading'),.5);
+      assert.equal(await page.locator(`[data-thread-group=""] [data-thread-id="${last}"]`).count(),1);
+      await page.screenshot({path:join(output,'native-drag-result.png')});
+      console.log('SIDEBAR_NATIVE_DRAG_OK: actual Windows WebView pointer reorder and move to recent');
+    }
     console.log('PROJECT_NATIVE_UI_OK: actual Tauri WebView, managed real Agent, edit/save, light/dark, native picker entry');
   } catch(error){if(page&&!page.isClosed()){await page.screenshot({path:join(output,'native-failure.png')}).catch(()=>{});console.error((await page.locator('body').innerText()).slice(0,2000));}throw error;}
   finally {

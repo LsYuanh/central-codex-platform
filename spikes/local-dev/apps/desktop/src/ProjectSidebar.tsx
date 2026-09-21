@@ -7,17 +7,28 @@ import { folderName, type ClientProject, type ProjectDraft } from "./projects";
 import type { ThreadSummary } from "./gateway-ui-events";
 
 type Preferences = Record<string,{collapsed?:boolean;pinned?:boolean}>;
-export function ProjectSidebar({ scope, projects, threads, activeProjectId, disabled, loading, error, unavailable, refresh, save, remove, newThread, renderThread }: {
+export function ProjectSidebar({ scope, projects, threads, activeProjectId, disabled, loading, error, unavailable, refresh, save, remove, newThread, renderThread, groupFor, dropGroup, dragging }: {
   scope:string; projects:ClientProject[]; threads:ThreadSummary[]; activeProjectId?:string;
   disabled:boolean; loading:boolean; error:string; unavailable:string;
   refresh:()=>Promise<void>; save:(p:ProjectDraft)=>Promise<ClientProject>; remove:(p:ClientProject)=>Promise<void>;
   newThread:(p:ClientProject)=>void; renderThread:(t:ThreadSummary)=>ReactNode;
+  groupFor:(t:ThreadSummary)=>string|null; dropGroup?:string|null; dragging:boolean;
 }) {
   const storageKey = `yuanzhou-project-view-v1:${scope}`;
   const [preferences,setPreferences] = useState<Preferences>(() => { try { const p=JSON.parse(localStorage.getItem(storageKey) || "{}");return p&&typeof p==="object"&&!Array.isArray(p)?p:{}; } catch { return {}; } });
   const [notice,setNotice] = useState("");
   const [editing,setEditing] = useState<ClientProject | "new">();
   const [all,setAll] = useState<Set<string>>(new Set());
+  useEffect(()=>{
+    if(!dragging||!dropGroup)return;
+    const timer=setTimeout(()=>setPreferences(s=>{
+      if(!s[dropGroup]?.collapsed)return s;
+      const next={...s,[dropGroup]:{...s[dropGroup],collapsed:false}};
+      try{localStorage.setItem(storageKey,JSON.stringify(next));}catch{setNotice("展开状态未保存");}
+      return next;
+    }),600);
+    return()=>clearTimeout(timer);
+  },[dragging,dropGroup,storageKey]);
   const preference = (id:string, patch:Preferences[string]) => {
     const next = {...preferences,[id]:{...preferences[id],...patch}};
     setPreferences(next);
@@ -29,10 +40,10 @@ export function ProjectSidebar({ scope, projects, threads, activeProjectId, disa
     {unavailable ? <p className="project-list-notice">{unavailable}</p> : loading && !projects.length ? <p className="project-list-notice" role="status">正在加载项目…</p> : !projects.length && !error ? <button className="project-empty" disabled={disabled} onClick={() => setEditing("new")}><UiIcon name="folderPlus" />添加本机项目</button> : null}
     {(error || notice) && <div className="project-list-notice" role="alert">{error || notice}{error && <button className="button-quiet" onClick={() => void refresh()}>重试</button>}</div>}
     {sorted.map(p => {
-      const children = threads.filter(t => t.clientProject?.id === p.id);
+      const children = threads.filter(t => groupFor(t) === p.id);
       const expanded = !preferences[p.id]?.collapsed;
-      return <div className="project-group" key={p.id}>
-        <ProjectRow project={p} expanded={expanded} active={activeProjectId === p.id} count={children.length} pinned={!!preferences[p.id]?.pinned} disabled={disabled || !!unavailable}
+      return <div data-thread-group={p.id} className={`project-group${dropGroup === p.id ? " thread-drop-group" : ""}`} key={p.id}>
+        <ProjectRow dragging={dragging} project={p} expanded={expanded} active={activeProjectId === p.id} count={children.length} pinned={!!preferences[p.id]?.pinned} disabled={disabled || !!unavailable}
           toggle={() => preference(p.id,{collapsed:expanded})} pin={() => preference(p.id,{pinned:!preferences[p.id]?.pinned})}
           edit={() => setEditing(p)} create={() => newThread(p)} />
         {expanded && <div className="project-threads" aria-label={`${p.name}的对话`}>
@@ -46,7 +57,7 @@ export function ProjectSidebar({ scope, projects, threads, activeProjectId, disa
   </section>;
 }
 
-function ProjectRow({project:p,expanded,active,count,pinned,disabled,toggle,pin,edit,create}:{project:ClientProject;expanded:boolean;active:boolean;count:number;pinned:boolean;disabled:boolean;toggle:()=>void;pin:()=>void;edit:()=>void;create:()=>void}) {
+function ProjectRow({project:p,expanded,active,count,pinned,disabled,toggle,pin,edit,create,dragging}:{project:ClientProject;expanded:boolean;active:boolean;count:number;pinned:boolean;disabled:boolean;toggle:()=>void;pin:()=>void;edit:()=>void;create:()=>void;dragging:boolean}) {
   const [open,setOpen] = useState(false);
   const [position,setPosition] = useState({left:0,top:0});
   const row = useRef<HTMLDivElement>(null), card = useRef<HTMLDivElement>(null), more = useRef<HTMLButtonElement>(null);
@@ -55,6 +66,7 @@ function ProjectRow({project:p,expanded,active,count,pinned,disabled,toggle,pin,
   const cancel = () => clearTimeout(timer.current);
   const leave = () => {cancel();timer.current=setTimeout(()=>{if(!card.current?.contains(document.activeElement))setOpen(false);},180);};
   useEffect(() => () => cancel(),[]);
+  useEffect(() => {if(dragging){cancel();setOpen(false);}},[dragging]);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {const r=row.current?.getBoundingClientRect(),c=card.current;if(r&&c)setPosition({left:Math.max(8,Math.min(r.right+6,innerWidth-c.offsetWidth-8)),top:Math.max(8,Math.min(r.top,innerHeight-c.offsetHeight-8))});};
@@ -64,7 +76,7 @@ function ProjectRow({project:p,expanded,active,count,pinned,disabled,toggle,pin,
     document.addEventListener("pointerdown",outside);document.addEventListener("keydown",escape);
     return()=>{window.removeEventListener("resize",place);window.removeEventListener("scroll",place,true);document.removeEventListener("pointerdown",outside);document.removeEventListener("keydown",escape);};
   },[open]);
-  return <div ref={row} className={`project-row${active?" active":""}`} onPointerEnter={e=>{if(e.pointerType==="mouse"){cancel();timer.current=setTimeout(()=>setOpen(true),400);}}} onPointerLeave={leave}>
+  return <div ref={row} className={`project-row${active?" active":""}`} onPointerEnter={e=>{if(!dragging&&e.pointerType==="mouse"){cancel();timer.current=setTimeout(()=>setOpen(true),400);}}} onPointerLeave={leave}>
     <button className="project-select" aria-expanded={expanded} onClick={toggle}><UiIcon name={expanded?"folderOpen":"folder"}/><span>{p.name}</span></button>
     <div className="project-row-actions"><button ref={more} className="text-icon-button" aria-label={`项目详情：${p.name}`} aria-haspopup="dialog" aria-expanded={open} onClick={()=>{cancel();focusCard.current=!open;setOpen(v=>!v);}}><UiIcon name="more"/></button><button className="text-icon-button" disabled={disabled} title="新建对话" aria-label={`在${p.name}中新建对话`} onClick={()=>{setOpen(false);create();}}><UiIcon name="edit"/></button></div>
     {open && createPortal(<div ref={card} className="project-popover" style={position} role="dialog" aria-label={`${p.name}项目详情`} onPointerEnter={cancel} onPointerLeave={leave} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget)&&!row.current?.contains(e.relatedTarget))setOpen(false);}}>
