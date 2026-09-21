@@ -9,8 +9,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('CENTRAL_MAC_REQUIRED');
-const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const work=path.join(repo,'.');
+const work=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
+// Build snapshots may live under artifacts while the live profile/toolchain stays
+// at the original deployment root. Never copy private profile data into a snapshot.
+if(process.env.CENTRAL_MACOS_DEPLOY_ROOT&&!path.isAbsolute(process.env.CENTRAL_MACOS_DEPLOY_ROOT))throw Error('ABSOLUTE_DEPLOY_ROOT_REQUIRED');
+const repo=process.env.CENTRAL_MACOS_DEPLOY_ROOT??work;
 // Separate each release's immutable staging/backup evidence from earlier deployments.
 const runName=process.env.CENTRAL_MACOS_DEPLOY_NAME??'shared-login-deploy-20260920';
 if(!/^[a-z0-9][a-z0-9-]{2,79}$/.test(runName))throw Error('INVALID_DEPLOY_NAME');

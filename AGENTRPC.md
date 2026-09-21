@@ -436,7 +436,7 @@ When `TEST_GATEWAY_ENABLE_CONTROLS=1` is set, the UI WebSocket also accepts
 `timeoutMs` is clamped to 100–10,000 ms. This operation never writes to Codex
 App Server stdin and is disabled by default, so it is only a Day 5 test hook.
 
-## Managed personal skills (`skills/v1`, 2026-09-21 source only)
+## Managed personal skills (`skills/v1`, Mac central deployed 2026-09-21)
 
 The authenticated UI uses platform operations `skill.list/read/draft/preview/save/update/remove/discard`. These are gateway-owned, not native App Server passthrough. `skill.draft` takes an idempotent creationKey and optional skillId; preview takes a draft id; save takes its expiring previewId; update/remove require id and revision. UI cannot supply a native skill path. `conversation.turn.create` may supply up to four `{id, revision}` entries in `skills`, or known `$name` mentions in text; skill selections are not accepted for steering.
 

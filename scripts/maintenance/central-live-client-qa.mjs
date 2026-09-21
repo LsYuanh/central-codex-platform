@@ -62,7 +62,7 @@ function gatewayMessage(message){
   }
   if(message.eventType==='turn.completed')turnDone=data.turn;
   if(message.eventType==='device.tool.started'){
-    if(!['device_workspace_context','device_workspace_read_text','device_exec',...(config.legacyWorkspace?['device_workspace_apply_patch']:[])].includes(data.tool)){fail('QA_UNEXPECTED_TOOL');return;}
+    if(!['device_workspace_context','device_workspace_read_text','device_exec',...(config.skills?['device_skill_load']:[]),...(config.legacyWorkspace?['device_workspace_apply_patch']:[])].includes(data.tool)){fail('QA_UNEXPECTED_TOOL');return;}
     if(data.tool==='device_exec'&&(data.program!==config.powershell||data.cwd!==config.toolCwd))fail('QA_UNEXPECTED_COMMAND');
     if(toolCalls.size>=12)fail('QA_TOO_MANY_TOOLS');
     toolCalls.set(data.requestId,{tool:data.tool,done:false});
@@ -77,7 +77,7 @@ function gatewayMessage(message){
 function launch(binary,args,options){
   const child=spawn(binary,args,{...options,windowsHide:true,shell:false,stdio:['pipe','pipe','pipe']});children.add(child);child.stdin.on('error',()=>{});
   const exit=new Promise(resolve=>{child.once('error',()=>{fail('QA_CHILD_SPAWN_FAILED');resolve({code:null,spawnFailed:true});});child.once('close',(code,signal)=>{children.delete(child);resolve({code,signal});});});
-  let stderrBytes=0;child.stderr.on('data',chunk=>{stderrBytes+=chunk.length;if(stderrBytes>1024*1024)fail('QA_CHILD_DIAGNOSTIC_LIMIT');});
+  let stderrBytes=0;child.stderr.on('data',chunk=>{stderrBytes+=chunk.length;if(stderrBytes>1024*1024)fail('QA_CHILD_DIAGNOSTIC_LIMIT');const code=chunk.toString().match(/\bQA_HELPER_[A-Z_]+\b/)?.[0];if(code)fail(code);});
   return {child,exit};
 }
 async function cleanup(){
@@ -91,7 +91,7 @@ async function cleanup(){
 try{
   check(process.platform==='win32'&&(process.argv.length===2||formal4510),'QA_WINDOWS_STDIN_ONLY');
   await Promise.race([bootstrap,new Promise((_,reject)=>setTimeout(()=>reject(Error('QA_BOOTSTRAP_TIMEOUT')),15000).unref())]);
-  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills'].includes(key)),'QA_BOOTSTRAP_FIELDS');
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname==='192.0.2.10'&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
   check(path.isAbsolute(config.workspace)&&path.isAbsolute(config.output)&&!existsSync(config.output),'QA_OUTPUT_INVALID');
@@ -155,7 +155,22 @@ try{
     check(denied?.ok===false&&/WORKSPACE_PATH_DENIED/.test(denied.errorCode??denied.error??''),'QA_LEGACY_BOUNDARY_NOT_ENFORCED');
   }
   emit({phase:'paired',deviceId});
-  let catalogProject;
+  let catalogProject,personalSkill;
+  if(config.skills){
+    check(!config.legacyWorkspace&&!config.projects&&initialized.platformCapabilities?.skills===true,'QA_SKILL_CAPABILITY_MISSING');
+    const draft=(await request('skill.draft',{creationKey:randomUUID()})).draft;
+    const localRoot=path.join(process.env.LOCALAPPDATA,'com.centralcodex.localspike','skills-v1');
+    check(typeof draft?.path==='string'&&path.resolve(draft.path).startsWith(localRoot+path.sep),'QA_SKILL_DRAFT_PATH_INVALID');
+    const name='qa-skill-'+randomUUID();
+    mkdirSync(path.join(draft.path,'scripts'));mkdirSync(path.join(draft.path,'references'));
+    writeFileSync(path.join(draft.path,'scripts/proof.ps1'),proofScript,{flag:'wx'});
+    writeFileSync(path.join(draft.path,'references/input.txt'),inputMarker,{flag:'wx'});
+    writeFileSync(path.join(draft.path,'SKILL.md'),`---\nname: ${name}\ndescription: "Authorized client skill deployment proof"\n---\nBefore use call device_skill_load with name ${name}. Let R be its returned CLIENT directory. Read R/references/input.txt with device_workspace_read_text. Execute exactly once device_exec with program ${JSON.stringify(config.powershell)}, args ["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",R+"/scripts/proof.ps1"], cwd ${JSON.stringify(config.toolCwd)}. Then read ${JSON.stringify(toolPath('proof.txt'))}. Reply only with the two exact random markers. Do not edit files, inspect other directories, run central commands, or call other tools.\n`,{flag:'wx'});
+    const preview=await request('skill.preview',{id:draft.id});
+    personalSkill=(await request('skill.save',{previewId:preview.previewId})).skill;
+    check((await request('skill.list')).skills.some(s=>s.id===personalSkill.id),'QA_NATIVE_SKILL_DISCOVERY_FAILED');
+    emit({phase:'skill-saved',skillId:personalSkill.id,revision:personalSkill.revision});
+  }
   if(config.projects){
     check(initialized.platformCapabilities?.projects===true,'QA_PROJECT_CAPABILITY_MISSING');
     catalogProject=(await request('project.save',{name:'项目发布验证',folders:[project,workspace],creationKey:randomUUID()})).project;
@@ -169,7 +184,7 @@ try{
     // empty Thread. Executing below must still use the captured old directory.
   }
   const prompt=`This is an authorized, isolated client QA project ${config.legacyWorkspace?'inside the legacy workspace':'outside the default output directory'}. Perform exactly: 1. device_workspace_read_text path ${JSON.stringify(toolPath('input.txt'))}. 2. device_exec with ${JSON.stringify({program:config.powershell,args,cwd:config.toolCwd})}. Run that command exactly once. 3. device_workspace_read_text path ${JSON.stringify(toolPath('proof.txt'))}. ${config.legacyWorkspace?'4. Call device_workspace_apply_patch exactly once with this patch (approval is provided): '+JSON.stringify(config.patch)+'. ':''}Final answer contains only the two exact markers read from input.txt and proof.txt. Do not call other tools, write/edit files except the explicitly requested patch, inspect other directories, run central commands, or rerun the command. The pre-created script generates its random marker only when Local Agent runs it.`;
-  const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',input:[{type:'text',text:prompt}]});turnId=turn?.turn?.id;
+  const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',...(personalSkill?{clientMessageId:randomUUID(),skills:[{id:personalSkill.id,revision:personalSkill.revision}]}:{}),input:[{type:'text',text:personalSkill?`$${personalSkill.name} Follow this selected personal skill exactly. Its resources are on the client. Run its proof script once as instructed and return the two markers.`:prompt}]});turnId=turn?.turn?.id;
   await until(()=>turnDone,180000,'QA_MODEL_TURN_TIMEOUT');
   check(turnDone.status==='completed'&&!turnDone.error,'QA_MODEL_TURN_FAILED');
   const reads=[...toolCalls.values()].filter(call=>call.tool==='device_workspace_read_text'&&call.done&&call.succeeded),execs=[...toolCalls.values()].filter(call=>call.tool==='device_exec');
@@ -190,6 +205,15 @@ try{
   const history=await request('conversation.read',{threadId,includeTurns:true});
   check(history.thread?.turns?.some(t=>t.id===turnId&&t.status==='completed'),'QA_RESUMED_HISTORY_MISSING');
   evidence.resumeHistoryVerified=true;
+  if(personalSkill){
+    const calls=[...toolCalls.values()].filter(c=>c.tool==='device_skill_load');
+    check(calls.length===1&&calls[0].succeeded,'QA_SKILL_LOAD_NOT_VERIFIED');
+    const recorded=JSON.stringify(history.thread.turns.find(t=>t.id===turnId)).replace(/\\+/g,'/');
+    check(recorded.includes('scripts/proof.ps1')&&recorded.includes('references/input.txt'),'QA_SKILL_RESOURCES_NOT_USED');
+    await request('skill.remove',{id:personalSkill.id,revision:personalSkill.revision});
+    check(!(await request('skill.list')).skills.some(s=>s.id===personalSkill.id),'QA_SKILL_REMOVE_FAILED');
+    evidence.managedSkillNativeInputVerified=true;evidence.skillResourceExecutionVerified=true;evidence.skillRemoved=true;
+  }
   if(catalogProject){
     await request('project.remove',{id:catalogProject.id,revision:catalogProject.revision});
     check(!(await request('project.list')).projects.some(p=>p.id===catalogProject.id),'QA_PROJECT_REMOVE_FAILED');

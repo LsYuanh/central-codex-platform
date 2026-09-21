@@ -202,7 +202,7 @@ See `../docs/验证与已知限制.md` for results and limitations.
   unavailable in this fork. Existing attachment input remains supported; do not claim image
   generation feature parity until a reviewed extension path is enabled.
 
-## Managed personal skills (source implementation, 2026-09-21)
+## Managed personal skills (Mac central deployed, 2026-09-21)
 
 The fixed upstream version remains 0.153.4. `yuan-zhou-managed-skills/1` is an additional initialization marker, required with platform authentication before the gateway advertises skills. This is a selective restoration of the upstream skills extension/provider, discovery and skill input, not a general feature-flag change.
 
@@ -210,7 +210,7 @@ The fixed upstream version remains 0.153.4. `yuan-zhou-managed-skills/1` is an a
 
 The authenticated gateway owns full packages outside worker directories. It projects normalized name/description and instruction body only; scripts, templates and references never enter the native discovery directory. Explicit selections are converted from platform IDs/revisions or known `$name` mentions to genuine native skill inputs. `device_skill_load` prepares and hashes resources through the bound Local Agent before the model uses them. Instructions direct the model to client resource paths. Native executors and all other existing restrictions remain enforced.
 
-Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. Existing production binaries/catalogs were not replaced by this task; new Windows AppContainer and real-model end-to-end qualification are still required before rollout.
+Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. The authorized LAN Mac deployment now uses `macos-arm64-node24-qa1-4d44bb4938c6e2c4` (config revision 9). Real central-model/Windows-Agent skill execution and history verification passed; the Windows AppContainer build, Mac client, and multi-machine matrix remain unqualified. Client installers were not republished.
 
 ## Verification and rollback
 

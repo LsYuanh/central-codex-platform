@@ -25,12 +25,18 @@ const bundled=process.argv.includes('--bundle');
 const installed=process.argv.includes('--installed');
 const legacyWorkspace=process.argv.includes('--legacy');
 const projects=process.argv.includes('--projects');
+const skills=process.argv.includes('--skills');
+if(skills&&(projects||legacyWorkspace||installed))throw Error('SKILLS_REQUIRE_CURRENT_AGENT_ONLY');
 if(projects&&legacyWorkspace)throw Error('PROJECTS_REQUIRE_CLIENT_PATHS');
 if(legacyWorkspace&&installed)throw Error('CHOOSE_LEGACY_OR_INSTALLED');
 const pair=management(bundled?'pair-bundle':'pair');
+// The native five-minute ceiling uses the client clock. Allow transport time
+// for the observed sub-second central clock lead without changing code expiry.
+if(bundled)await new Promise(resolve=>setTimeout(resolve,2000));
 const child=spawn(process.execPath,[path.join(root,'scripts/maintenance/central-live-client-qa.mjs'),'--formal-4510'],{cwd:root,stdio:['pipe','pipe','pipe'],windowsHide:true});
 const config={gateway:'wss://192.0.2.10:4510/ws',caPath:bundled?'':path.join(root,'target/central-macos/formal-ca.pem'),code:pair.code,agentBinary:legacyWorkspace?path.resolve(root,'artifacts/client-paths-20260914/windows-installed-before/local-agent.exe'):installed?path.join(process.env.LOCALAPPDATA,'远舟/local-agent.exe'):path.join(root,'target/debug/local-agent.exe'),helperBinary:path.join(root,'target/debug/examples/central-live-client.exe'),workspace:path.join(output,'workspace'),output:path.join(output,'client-result.json'),model:'gpt-6-astra',legacyWorkspace};
 if(projects)config.projects=true;
+if(skills)config.skills=true;
 const bytes=Buffer.from(JSON.stringify(config)+'\n');child.stdin.write(bytes,()=>bytes.fill(0));pair.code='';config.code='';
 let buffer='',deviceId,failed=false;const phases=[];
 child.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{
