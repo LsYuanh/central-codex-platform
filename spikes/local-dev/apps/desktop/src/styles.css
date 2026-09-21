@@ -960,7 +960,7 @@ a {
 
 .composer-input-wrap textarea {
   display: block;
-  min-height: 56px;
+  min-height: 34px;
   max-height: 180px;
   padding: 0;
   border: 0;

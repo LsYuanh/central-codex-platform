@@ -379,7 +379,7 @@ export default function App() {
     const input = composerInputRef.current;
     if (!input) return;
     input.style.height = "auto";
-    input.style.height = `${Math.min(180, Math.max(48, input.scrollHeight))}px`;
+    input.style.height = `${Math.min(180, Math.max(34, input.scrollHeight))}px`;
   }, [composer, activePage]);
 
   useEffect(() => {
@@ -1666,7 +1666,7 @@ export default function App() {
                     {mode === "central-gateway" && attachments.controls}
                     {sending && <p className="attachment-notice" role="status">{sendStage || "正在核对提交结果…"}{sendStage && sendStage !== "正在追加要求…" && sendStage !== "正在提交中央模型" && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(String(e)));}}>取消准备</button>}</p>}
                     {uncertainSubmission && <div className="attachment-error-text">提交结果未知，草稿已保留。<button type="button" disabled={sending||appState!=="online"} onClick={()=>void reconcileSubmission()}>核对历史</button></div>}
-                  <div className="composer-input-wrap"><textarea ref={composerInputRef} aria-label="发送消息" onPaste={attachments.paste} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); } }} disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? "中央引擎不可用，请重新连接并核对任务状态" : mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : "描述任务，按 Enter 发送"} rows={2} /></div>
+                  <div className="composer-input-wrap"><textarea ref={composerInputRef} aria-label="发送消息" onPaste={attachments.paste} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); } }} disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? "中央引擎不可用，请重新连接并核对任务状态" : mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : "描述任务，按 Enter 发送"} rows={1} /></div>
                   </div>
                   <div className="composer-footer">
                     {mode === "central-gateway" && attachments.pickerButton}
