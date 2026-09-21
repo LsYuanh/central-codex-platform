@@ -19,6 +19,7 @@ function Fixture() {
   const [id, setId] = useState("t1");
   const [stepCount, setStepCount] = useState(0);
   const [stepComplete, setStepComplete] = useState(false);
+  const [answer, setAnswer] = useState("");
   const rows: ChatMessage[] = [
     { id: "u", role: "user", content: "整理一份实施方案" },
     { id: "r", role: "assistant", kind: "reasoning", content: "检查现有消息类型，确认需要保留的事件。" },
@@ -29,7 +30,7 @@ function Fixture() {
     ...Array.from({ length: stepCount }, (_, index): ChatMessage => ({ id: `live-${index}`, role: "assistant", kind: "tool",
       itemStatus: index < stepCount - 1 || stepComplete ? "completed" : "running", content: `最新步骤 ${index + 1}` })),
     { id: "s", role: "user", content: "文件也要保留可见" },
-    { id: "f", role: "assistant", phase: "final_answer", content: "最终结果：消息分类和历史恢复已完成。" },
+    { id: "f", role: "assistant", phase: "final_answer", content: answer },
     { id: "file", role: "assistant", content: "", outputs: [{ id: "file", name: "实施方案.doc" } as never] },
     { id: "legacy", role: "assistant", content: "旧版普通回复仍可见" },
   ];
@@ -44,7 +45,8 @@ function Fixture() {
       </div>
       <output data-testid="menu-action">{action}</output></nav>
     <nav aria-label="测试控制"><button onClick={() => setStatus("completed")}>完成测试</button><button onClick={() => setTick(tick + 1000)}>更新时钟</button>
-      <button onClick={() => { setId("t2"); setStatus("running"); setStepCount(0); }}>下一轮测试</button><button onClick={() => setStatus("unknown")}>断线测试</button><button onClick={() => setStatus("failed")}>失败测试</button>
+      <button onClick={() => setAnswer(value => value + "最终结果：消息分类和历史恢复已完成。")}>输出最终回答</button>
+      <button onClick={() => { setId(value => value + "-next"); setStatus("running"); setStepCount(0); setAnswer(""); }}>下一轮测试</button><button onClick={() => setStatus("unknown")}>断线测试</button><button onClick={() => setStatus("failed")}>失败测试</button>
       <button onClick={() => { setStepCount(stepCount + 1); setStepComplete(false); }}>追加步骤</button><button onClick={() => setStepComplete(true)}>步骤完成</button></nav>
     <main className="message-list" style={{ height: "calc(100vh - 48px)" }}>
       <TurnConversation key={id} group={{ id, turnId: id, messages: rows.map(row => ({ ...row, turnId: id })) }}

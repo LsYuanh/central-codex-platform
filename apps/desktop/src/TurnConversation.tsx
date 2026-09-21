@@ -35,9 +35,14 @@ function ExecutionSequence({ rows, renderRow, reveal }: {
 export function TurnConversation({ group, timing, running, now, executions, renderMessage, renderExecution }: Props) {
   const contentId = useId();
   const mode = running ? "running" : timing?.status ?? "completed";
+  const hasFinalAnswer = group.messages.some(row => row.role === "assistant" && row.phase === "final_answer"
+    && (row.content.trim().length > 0 || Boolean(row.outputs?.length)));
+  // Final text can start streaming before the turn completes. Collapse once at
+  // that boundary, while preserving manual toggles during subsequent deltas.
+  const disclosureMode = hasFinalAnswer && (running || mode === "completed") ? "answer" : mode;
   const [choice, setChoice] = useState<{ mode: string; open: boolean }>();
   const [revealExecutions, setRevealExecutions] = useState(false);
-  const open = choice?.mode === mode ? choice.open : false;
+  const open = choice?.mode === disclosureMode ? choice.open : disclosureMode === "running";
   const rows = compactConversationRows(group.messages.filter(row => !row.timingOnly), executions);
   const firstReply = rows.findIndex(row => row.role !== "user");
   const leading = firstReply < 0 ? rows : rows.slice(0, firstReply);
@@ -82,11 +87,11 @@ export function TurnConversation({ group, timing, running, now, executions, rend
     {leading.map(renderMessage)}
     {showHeader && <div className="turn-process-header">
       <button type="button" className="turn-process-toggle" aria-label={`${open ? "收起" : "展开"}处理过程`} aria-expanded={open} aria-controls={contentId}
-        disabled={!hasProcess} onClick={() => { setChoice({ mode, open: !open }); setRevealExecutions(false); }}>
+        disabled={!hasProcess} onClick={() => { setChoice({ mode: disclosureMode, open: !open }); setRevealExecutions(false); }}>
         {running && <span className="spinner" aria-hidden="true" />}
         <span>{label}</span>{hasProcess && <span className={`turn-process-chevron${open ? " is-open" : ""}`} aria-hidden="true">›</span>}
       </button>
-      {uncertainChanges && <button type="button" className="turn-process-warning" onClick={() => { setChoice({mode, open:true}); setRevealExecutions(true); }}>文件修改结果需要核对，查看详情</button>}
+      {uncertainChanges && <button type="button" className="turn-process-warning" onClick={() => { setChoice({mode: disclosureMode, open:true}); setRevealExecutions(true); }}>文件修改结果需要核对，查看详情</button>}
     </div>}
     <div className="turn-content" id={contentId}>
       {entries.map(entry => Array.isArray(entry)

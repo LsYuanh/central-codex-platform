@@ -32,7 +32,7 @@ export async function verifyExecutionLayout(page, output, workspace) {
     assert(result.form.bottom<=height+1&&result.footer.bottom<=height+1,'Composer leaves viewport');
     assert(result.inputBodyScroll<=2&&result.formOutsideScroll<=2,'Short composer unexpectedly scrolls');
     assert(result.pageScroll<=2&&result.dockScroll<=2,'Extra page or execution-list scrollbar');
-    if(phase==='running')assert(!result.historyOpen,'Running execution should remain collapsed');
+    if(phase==='running')assert(result.historyOpen,'Running execution should default to expanded');
     if(phase==='completed')assert(!result.historyOpen,'Completed execution should collapse');
     await page.screenshot({path:path.join(output,`${phase}-${width}x${height}.png`),fullPage:true});
     evidence.push({phase,...result});
