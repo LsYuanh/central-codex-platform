@@ -14,6 +14,7 @@ const paths = {
   arrow: "M20 12H4m6-6-6 6 6 6",
   activity: "M2 12h5l3-8 4 16 3-8h5",
   review: "M8 4v16M16 4v7a5 5 0 0 1-5 5H8M5 4h6M5 20h6M13 4h6",
+  skill: "m12 2 8 5v10l-8 5-8-5V7l8-5Zm0 0v20M4 7l8 5 8-5M4 12l8 5 8-5",
   build: "m4 20 10-10m-2-6 3-2 7 7-2 3-4-4-3 3-4-4z",
   bug: "M8 8h8v8a4 4 0 0 1-8 0zM9 8V5h6v3M4 10h4M16 10h4M4 15h4M16 15h4M6 21l3-3M15 18l3 3",
   close: "m6 6 12 12M6 18 18 6",

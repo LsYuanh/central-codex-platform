@@ -15,7 +15,7 @@ export async function exerciseComposerProjectPicker({page,paths,request,native=f
   const choose=async name=>{await trigger.click();await page.getByRole('combobox',{name:'搜索项目'}).fill(name);await page.getByRole('option').click();};
   await newDraft();assert.equal(await trigger.innerText(),'选择项目');
   // The shell padding and footer gap should behave like the text entry area.
-  const assertComposerFocused=()=>page.waitForFunction(()=>document.activeElement===document.querySelector('.composer textarea'));
+  const assertComposerFocused=()=>page.waitForFunction(()=>document.activeElement===document.querySelector('.composer .composer-editor'));
   const shell=page.locator('.composer-shell');
   const shellBox=await shell.boundingBox();
   for(const position of [{x:shellBox.width/2,y:4},{x:shellBox.width/2,y:shellBox.height-4}]) {
@@ -28,23 +28,23 @@ export async function exerciseComposerProjectPicker({page,paths,request,native=f
   // Selecting a destination must not overwrite another project's saved draft.
   await sidebarDraft(b.name);await composer.fill('乙独立草稿');
   await sidebarDraft(a.name);await composer.fill('当前草稿');
-  await choose(b.name);assert.equal(await composer.inputValue(),'当前草稿');
-  await sidebarDraft(b.name);assert.equal(await composer.inputValue(),'乙独立草稿');
-  await sidebarDraft(a.name);assert.equal(await composer.inputValue(),'当前草稿');
+  await choose(b.name);assert.equal(await composer.innerText(),'当前草稿');
+  await sidebarDraft(b.name);assert.equal(await composer.innerText(),'乙独立草稿');
+  await sidebarDraft(a.name);assert.equal(await composer.innerText(),'当前草稿');
   assert.equal(await trigger.innerText(),a.name);
   if(native){
     await composer.evaluate(el=>{const data=new DataTransfer();const bytes=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5YQAAAAASUVORK5CYII='),c=>c.charCodeAt(0));data.items.add(new File([bytes],'test.png',{type:'image/png'}));el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:data}));});
     await page.locator('.composer .attachment-card').waitFor();
   }
   await choose(b.name);await page.locator('.composer-project-chip').hover();await page.getByRole('button',{name:'取消项目选择',exact:true}).click();
-  assert.equal(await trigger.innerText(),'选择项目');assert.equal(await composer.inputValue(),'当前草稿');
+  assert.equal(await trigger.innerText(),'选择项目');assert.equal(await composer.innerText(),'当前草稿');
   if(native){assert.equal(await page.locator('.composer .attachment-card').count(),1);await page.locator('.composer .attachment-card button').click();}
   await trigger.click();const search=page.getByRole('combobox',{name:'搜索项目'});
   await search.fill('不存在的项目');await page.getByText('没有匹配的项目',{exact:true}).waitFor();
   await search.fill('notes');assert(await page.getByRole('option').count()>0);
   await page.keyboard.press('Escape');assert.equal(await trigger.evaluate(e=>e===document.activeElement),true);
   await trigger.click();await search.fill(b.name);await page.keyboard.press('Enter');assert.equal(await trigger.innerText(),b.name);
-  assert.equal(await composer.inputValue(),'当前草稿');
+  assert.equal(await composer.innerText(),'当前草稿');
   const before=(await request('conversation.list')).data.length;
   await trigger.click();await page.getByRole('button',{name:'新建项目',exact:true}).click();
   await page.getByRole('dialog',{name:'添加项目'}).waitFor();
@@ -53,7 +53,7 @@ export async function exerciseComposerProjectPicker({page,paths,request,native=f
     await page.getByRole('textbox',{name:'项目名称',exact:true}).fill('从输入框新建');
     await page.getByRole('textbox',{name:'本机目录路径'}).fill(paths.extra);await page.getByRole('button',{name:'添加',exact:true}).click();
     await page.getByRole('button',{name:'创建',exact:true}).click();await page.locator('.project-dialog').waitFor({state:'detached'});
-    assert.equal(await trigger.innerText(),'从输入框新建');assert.equal(await composer.inputValue(),'当前草稿');
+    assert.equal(await trigger.innerText(),'从输入框新建');assert.equal(await composer.innerText(),'当前草稿');
     assert.equal((await request('conversation.list')).data.length,before,'creating a project must not submit the composer form');
   }
   await choose(b.name);
@@ -71,7 +71,7 @@ export async function exerciseComposerProjectPicker({page,paths,request,native=f
   // Deleted selection must fail explicitly instead of silently using default cwd.
   await newDraft();await choose(a.name);await composer.fill('项目被移除时保留草稿');await request('project.remove',{id:a.id,revision:a.revision});
   await page.getByRole('button',{name:a.name,exact:true}).waitFor({state:'detached'});
-  await page.getByRole('button',{name:'发送',exact:true}).click();await page.getByText('项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留',{exact:true}).waitFor();assert.equal(await composer.inputValue(),'项目被移除时保留草稿');
+  await page.getByRole('button',{name:'发送',exact:true}).click();await page.getByText('项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留',{exact:true}).waitFor();assert.equal(await composer.innerText(),'项目被移除时保留草稿');
   await assertComposerFocused();
   await trigger.click();await page.getByRole('button',{name:'不在项目中工作',exact:true}).click();
   const existing=new Set((await request('conversation.list')).data.map(t=>t.id));
@@ -81,17 +81,17 @@ export async function exerciseComposerProjectPicker({page,paths,request,native=f
   await newDraft();await composer.fill('发送期间主动切换焦点');
   await page.evaluate(()=>{
     window.composerFocusMoved=false;
-    const input=document.querySelector('.composer textarea');
+    const input=document.querySelector('.composer .composer-editor');
     const observer=new MutationObserver(()=>{
-      if(!input.disabled)return;
+      if(input.isContentEditable)return;
       observer.disconnect();
       document.querySelector('.model-picker > summary').focus();
       window.composerFocusMoved=true;
     });
-    observer.observe(input,{attributes:true,attributeFilter:['disabled']});
+    observer.observe(input,{attributes:true,attributeFilter:['contenteditable']});
   });
   await page.keyboard.press('Enter');await trigger.waitFor({state:'detached'});
-  await page.waitForFunction(()=>!document.querySelector('.composer textarea').disabled);
+  await page.waitForFunction(()=>document.querySelector('.composer .composer-editor').isContentEditable);
   assert(await page.evaluate(()=>window.composerFocusMoved),'focus must move during the pending send');
   assert(await model.evaluate(el=>el===document.activeElement),'send completion must not steal deliberately moved focus');
   console.log(`COMPOSER_PROJECT_${native?'NATIVE':'BROWSER'}_OK: destination, draft preservation, search/keyboard, create/cancel, clear, immutable snapshot, deleted-project failure, default directory${native?', actual clipboard attachment preserved':''}`);

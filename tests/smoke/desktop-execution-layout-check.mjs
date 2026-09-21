@@ -17,7 +17,7 @@ export async function verifyExecutionLayout(page, output, workspace) {
     await page.waitForTimeout(200);
     const result=await page.evaluate(()=>{
       const list=document.querySelector('.message-list'), form=document.querySelector('.composer');
-      const body=document.querySelector('.composer-body'), input=document.querySelector('.composer textarea'),footer=document.querySelector('.composer-footer');
+      const body=document.querySelector('.composer-body'), input=document.querySelector('.composer .composer-editor'),footer=document.querySelector('.composer-footer');
       const dock=document.querySelector('.execution-dock'),group=[...document.querySelectorAll('.conversation-turn')].at(-1);
       const rect=e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height};};
       return {viewport:{width:innerWidth,height:innerHeight},list:rect(list),form:rect(form),input:rect(input),footer:rect(footer),

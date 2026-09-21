@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "./platform-gateway-client";
 import { UiIcon } from "./UiIcon";
-interface Skill { id:string; name:string; description:string; revision:number; enabled:boolean; automatic:boolean; platforms:string[]; programs:string[] }
+export interface Skill { id:string; name:string; description:string; revision:number; enabled:boolean; automatic:boolean; platforms:string[]; programs:string[] }
 interface Draft { id:string; path:string; skillId?:string; revision?:number }
 interface Preview { previewId:string; name:string; description:string; platforms:string[]; programs:string[]; files:{path:string;bytes:number;content?:string}[] }
 export function useSkills(scope:string,client:RpcClient|undefined,available:boolean){
@@ -22,12 +22,13 @@ export function useSkills(scope:string,client:RpcClient|undefined,available:bool
   useEffect(()=>{setRows([]);setDrafts([]);setError('');setLoading(false);void refresh();const off=client?.subscribe(e=>{if(e.method==='skill/changed')void refresh();});return()=>{generation.current++;off?.();};},[refresh,client]);
   return {rows,drafts,error,loading,refresh,request,available};
 }
-type Service=ReturnType<typeof useSkills>;
-export function SkillPicker({service,disabled,insert,manage}:{service:Service;disabled:boolean;insert:(text:string)=>void;manage:()=>void}){
+export type SkillService=ReturnType<typeof useSkills>;
+type Service=SkillService;
+export function SkillPicker({service,disabled,insert,manage}:{service:Service;disabled:boolean;insert:(skill:Skill)=>void;manage:()=>void}){
   const ref=useRef<HTMLDetailsElement>(null);
   return <details ref={ref} className="skill-picker" onKeyDown={e=>{if(e.key==='Escape'){e.currentTarget.open=false;e.currentTarget.querySelector('summary')?.focus();}}}>
     <summary aria-label="选择技能"><UiIcon name="review" /><span>技能</span></summary>
-    <div className="skill-picker-menu"><strong>个人技能</strong>{!service.available?<p>中央服务更新后可用</p>:service.loading?<p role="status">正在加载…</p>:service.error?<><p role="alert">{service.error}</p><button type="button" onClick={()=>void service.refresh()}>重试</button></>:service.rows.filter(s=>s.enabled).length===0?<p>还没有启用的技能</p>:service.rows.filter(s=>s.enabled).map(s=><button type="button" key={s.id} disabled={disabled} onClick={()=>{insert(`$${s.name} `);if(ref.current)ref.current.open=false;}}><span>{s.name}</span><small>{s.description}</small></button>)}<button type="button" onClick={()=>{manage();if(ref.current)ref.current.open=false;}}>管理我的技能</button></div>
+    <div className="skill-picker-menu"><strong>个人技能</strong>{!service.available?<p>中央服务更新后可用</p>:service.loading?<p role="status">正在加载…</p>:service.error?<><p role="alert">{service.error}</p><button type="button" onClick={()=>void service.refresh()}>重试</button></>:service.rows.filter(s=>s.enabled).length===0?<p>还没有启用的技能</p>:service.rows.filter(s=>s.enabled).map(s=><button type="button" key={s.id} disabled={disabled} onClick={()=>{insert(s);if(ref.current)ref.current.open=false;}}><span>{s.name}</span><small>{s.description}</small></button>)}<button type="button" onClick={()=>{manage();if(ref.current)ref.current.open=false;}}>管理我的技能</button></div>
   </details>;
 }
 export function SkillsPanel({service,disabled,startDraft}:{service:Service;disabled:boolean;startDraft:(prompt:string)=>void}){

@@ -26,15 +26,15 @@ export async function runProjectUi({port,paths}) {
     await page.getByRole('button',{name:'创建',exact:true}).click();
     await page.locator('.project-dialog').waitFor({state:'detached'});
     await page.getByRole('button',{name:'选择项目：界面测试',exact:true}).waitFor();
-    const composer=page.locator('.composer textarea');
+    const composer=page.locator('.composer .composer-editor');
     // Independent unsent project drafts must survive switching projects and recent.
     await composer.fill('项目一草稿');
     await page.getByRole('button',{name:'在项目 B中新建对话'}).focus();
     await page.getByRole('button',{name:'在项目 B中新建对话'}).click();
-    assert.equal(await composer.inputValue(),'');await composer.fill('项目二草稿');
+    assert.equal(await composer.innerText(),'');await composer.fill('项目二草稿');
     await page.getByRole('button',{name:'在界面测试中新建对话'}).focus();
     await page.getByRole('button',{name:'在界面测试中新建对话'}).click();
-    assert.equal(await composer.inputValue(),'项目一草稿');
+    assert.equal(await composer.innerText(),'项目一草稿');
     const project=page.locator('.project-group').filter({has:page.getByRole('button',{name:'界面测试',exact:true})});
     const toggle=project.getByRole('button',{name:'界面测试',exact:true});
     assert.equal(await toggle.getAttribute('aria-expanded'),'true');

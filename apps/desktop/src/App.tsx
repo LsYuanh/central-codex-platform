@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
-import { useSkills, SkillsPanel, SkillPicker } from "./skills";
+import { useSkills, SkillsPanel, SkillPicker, type Skill } from "./skills";
+import { SkillComposer, type ComposerDocument, type SkillMention } from "./SkillComposer";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
 import { useSidebarOrganization, useThreadDrag, OrganizeThreadDialog } from "./SidebarOrganization";
@@ -69,6 +70,7 @@ interface GatewayStatus {
 }
 
 interface ThreadDraft {
+  mentions?: SkillMention[];
   text: string;
   attachments: DraftAttachment[];
 }
@@ -204,15 +206,21 @@ export default function App() {
   const archivedThreadIdsRef = useRef<Set<string>>(new Set());
   const restoredThreadIdsRef = useRef<Set<string>>(new Set());
   const [turnIdsByThread, setTurnIdsByThread] = useState<Map<string, string>>(() => new Map());
-  const [composer, setComposer] = useState("");
+  const [composerDoc, setComposerDoc] = useState<ComposerDocument>({text:"",mentions:[]});
+  const composer = composerDoc.text;
+  const setComposer = useCallback((next:string|((text:string)=>string)) => setComposerDoc(current => {
+    const text=typeof next === "function" ? next(current.text) : next;
+    return {text,mentions:current.mentions.filter(m=>text.slice(m.start,m.end)==="$"+m.name)};
+  }), []);
+  const insertSkillRef = useRef<((skill:Skill)=>void)|null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const threadMessageCacheRef = useRef(new Map<string, ChatMessage[]>());
   const threadDraftsRef = useRef(new Map<string, ThreadDraft>());
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const conversationSurfaceRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
-  const composerInputRef = useRef<HTMLTextAreaElement>(null);
-  const restoreComposerFocusRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerInputRef = useRef<HTMLDivElement>(null);
+  const restoreComposerFocusRef = useRef<HTMLDivElement | null>(null);
   const followMessagesRef = useRef(true);
   const scrollThreadRef = useRef<string | undefined>(undefined);
   const [showLatest, setShowLatest] = useState(false);
@@ -286,12 +294,12 @@ export default function App() {
   }, []);
 
   const persistCurrentDraft = useCallback(() => {
-    threadDraftsRef.current.set(threadIdRef.current ?? newDraftKey(), { text: composer, attachments: attachments.drafts });
-  }, [attachments.drafts, composer]);
+    threadDraftsRef.current.set(threadIdRef.current ?? newDraftKey(), { text: composer, mentions: composerDoc.mentions, attachments: attachments.drafts });
+  }, [attachments.drafts, composerDoc, composer]);
 
   const restoreThreadDraft = useCallback((id?: string) => {
     const draft = threadDraftsRef.current.get(id ?? newDraftKey());
-    setComposer(draft?.text ?? "");
+    setComposerDoc({text:draft?.text ?? "",mentions:draft?.mentions ?? []});
     attachments.setDrafts(draft?.attachments ?? []);
   }, [attachments]);
 
@@ -309,8 +317,8 @@ export default function App() {
   useEffect(() => { runningThreadIdsRef.current = runningThreadIds; }, [runningThreadIds]);
 
   useEffect(() => {
-    threadDraftsRef.current.set(threadId ?? newDraftKey(), { text: composer, attachments: attachments.drafts });
-  }, [attachments.drafts, composer, threadId, draftProject]);
+    threadDraftsRef.current.set(threadId ?? newDraftKey(), { text: composer, mentions: composerDoc.mentions, attachments: attachments.drafts });
+  }, [attachments.drafts, composerDoc, composer, threadId, draftProject]);
 
   useEffect(() => {
     if (!approval) return;
@@ -411,8 +419,10 @@ export default function App() {
     const input = restoreComposerFocusRef.current;
     restoreComposerFocusRef.current = null;
     // Run after React has removed disabled, without moving the message scroller.
-    if (input && input === composerInputRef.current && !input.disabled && document.hasFocus()) {
-      input.focus({ preventScroll: true });
+    // A newly created Thread remounts the editor to isolate its undo history.
+    // Pointer/focus changes above still cancel this pending restoration.
+    if (input && composerInputRef.current?.isContentEditable && document.hasFocus()) {
+      composerInputRef.current.focus({ preventScroll: true });
     }
   }, [sending, activePage]);
 
@@ -1187,6 +1197,7 @@ export default function App() {
     if (attachments.drafts.length) { setAppError("运行中追加目前仅支持文字，请移除附件后发送"); return; }
     if (!turnId) { setAppError("当前轮次尚未确认，请等待启动完成或重新选择对话"); return; }
     const target = threadId;
+    if (composerDoc.mentions.length) { setAppError("当前轮次结束后才能调用新选择的技能；请先移除技能标记，或等待完成后发送"); return; }
     const text = composer;
     const clientMessageId = crypto.randomUUID();
     restoreComposerFocusRef.current = composerInputRef.current;
@@ -1217,7 +1228,7 @@ export default function App() {
         delivery("unknown"); updateUncertainSubmission(target, {id:clientMessageId,threadId:target});
       }
     } finally { sendGuard.current = false; steeringRequestRef.current = false; setSending(false); setSendStage(""); }
-  }, [threadId,turnId,composer,uncertainSubmission,appState,engineState,mode,attachments.drafts,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
+  }, [threadId,turnId,composerDoc,composer,uncertainSubmission,appState,engineState,mode,attachments.drafts,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
 
   const sendTurn = useCallback(async () => {
     if (configApplyingRef.current) return;
@@ -1225,6 +1236,13 @@ export default function App() {
     const text = composer;
     const codexia = codexiaRef.current;
     if (engineState === "unavailable" || (!text.trim() && !attachments.drafts.length) || !codexia || appState !== "online" || turnRunning || threadBusy || sendGuard.current || attachments.adding || uncertainSubmission) return;
+    const selectedSkills = new Map<string, {id:string;revision:number}>();
+    for (const mention of composerDoc.mentions) {
+      const skill = skillService.rows.find(row => row.id === mention.id);
+      if (!skill?.enabled || skill.revision !== mention.revision) { setAppError(`技能 ${mention.name} 已更新、停用或移除，请删除标记并重新选择；草稿已保留`); return; }
+      selectedSkills.set(mention.id, {id:mention.id,revision:mention.revision});
+    }
+    if (selectedSkills.size > 4) { setAppError("每条消息最多选择 4 个技能，请移除多余的技能标记"); return; }
     if (attachments.drafts.length && deviceState !== "online") { setAppError("Local Agent 离线，请等待设备上线后重试"); return; }
     sendGuard.current = true; cancelSendRef.current = false;
     restoreComposerFocusRef.current = composerInputRef.current;
@@ -1262,7 +1280,7 @@ export default function App() {
       pendingMessageRef.current = {threadId:targetThreadId,clientMessageId};
       const response = await codexia.turnStart({
         threadId:targetThreadId, input:[{type:"text",text}],
-        ...(mode === "central-gateway" ? {clientMessageId,attachments:refs,...(identity?{deviceKey:identity.deviceKey}:{})} : {}),
+        ...(mode === "central-gateway" ? {clientMessageId,attachments:refs,...(selectedSkills.size?{skills:[...selectedSkills.values()]}:{}),...(identity?{deviceKey:identity.deviceKey}:{})} : {}),
         ...(appModel.trim() ? {model:appModel.trim()} : {}),
         ...(appEffort.trim() ? {effort:appEffort.trim()} : {}),
         ...(appServiceTier.trim() ? {serviceTierForTurn:appServiceTier.trim()} : {}),
@@ -1301,7 +1319,7 @@ export default function App() {
       sendGuard.current=false;pendingMessageRef.current=undefined;setSending(false);setSendStage("");
       if (creatingThread) setThreadBusy(undefined);
     }
-  }, [draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composer,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
+  }, [draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composerDoc,composer,skillService.rows,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
 
   const reconcileSubmission = async () => {
     if (!uncertainSubmission || !codexiaRef.current) return;
@@ -1703,17 +1721,20 @@ export default function App() {
                   const target = event.target;
                   if (!(target instanceof Element) || target.closest("button, a, input, textarea, select, label, summary, [role='button'], [role='menu'], [role='dialog'], [contenteditable='true'], .model-picker-popover")) return;
                   const input = composerInputRef.current;
-                  if (input && !input.disabled && !window.getSelection()?.toString()) input.focus({ preventScroll: true });
+                  if (input && input.isContentEditable && !window.getSelection()?.toString()) input.focus({ preventScroll: true });
                 }}>
                   <div className="composer-body">
                     {mode === "central-gateway" && attachments.controls}
                     {sending && <p className="attachment-notice" role="status">{sendStage || "正在核对提交结果…"}{sendStage && sendStage !== "正在追加要求…" && sendStage !== "正在提交中央模型" && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(String(e)));}}>取消准备</button>}</p>}
                     {uncertainSubmission && <div className="attachment-error-text">提交结果未知，草稿已保留。<button type="button" disabled={sending||appState!=="online"} onClick={()=>void reconcileSubmission()}>核对历史</button></div>}
-                  <div className="composer-input-wrap"><textarea ref={composerInputRef} aria-label="发送消息" onPaste={attachments.paste} value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); } }} disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? "中央引擎不可用，请重新连接并核对任务状态" : mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : "描述任务，按 Enter 发送"} rows={1} /></div>
+                  <div className="composer-input-wrap"><SkillComposer key={`${projectScope}:${threadId ?? newDraftKey()}`} editorRef={composerInputRef} insertSkillRef={insertSkillRef} value={composerDoc} onChange={setComposerDoc}
+                    scope={`${projectScope}:${threadId ?? newDraftKey()}`} service={skillService} skillsDisabled={turnRunning || mode !== "central-gateway"}
+                    onPaste={attachments.paste} onSend={() => { if (mode !== "fake-central") void sendTurn(); }} manage={() => openSettings("skills")}
+                    disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? "中央引擎不可用，请重新连接并核对任务状态" : mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : "描述任务，按 Enter 发送"} /></div>
                   </div>
                   <div className="composer-footer">
                     {mode === "central-gateway" && attachments.pickerButton}
-                    {mode === "central-gateway" && <SkillPicker service={skillService} disabled={sending || turnRunning || appState !== "online"} insert={text => {setComposer(current => current + (current && !/\s$/.test(current) ? " " : "") + text);composerInputRef.current?.focus();}} manage={() => openSettings("skills")} />}
+                    {mode === "central-gateway" && <SkillPicker service={skillService} disabled={sending || turnRunning || appState !== "online"} insert={skill => insertSkillRef.current?.(skill)} manage={() => openSettings("skills")} />}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
                       <summary aria-label="切换模型、推理强度和速度"><span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || "自动"}</span><span className="model-picker-chevron" aria-hidden="true" /></summary>
                       <div className="model-picker-popover">
