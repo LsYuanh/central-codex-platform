@@ -12,6 +12,8 @@ use tauri::Manager;
 mod platform;
 mod runtime;
 mod updates;
+#[cfg(windows)]
+mod webview_runtime;
 mod window_frame;
 use runtime::{DesktopConfig, DesktopRuntime};
 use std::{
@@ -255,7 +257,20 @@ fn spawn_local_agent(config: &DesktopConfig) -> Result<Child, String> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let context = tauri::generate_context!();
+    #[cfg(windows)]
+    let identifier = context.config().identifier.clone();
+    #[cfg(windows)]
+    match webview_runtime::configure() {
+        Ok(choice) => {
+            webview_runtime::log(&identifier, &format!("RUNTIME {choice:?}"));
+        }
+        Err(error) => {
+            webview_runtime::report_failure(&identifier, &error);
+            std::process::exit(1);
+        }
+    }
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
@@ -308,25 +323,34 @@ fn main() {
                 window.app_handle().exit(0);
             }
         })
-        .build(tauri::generate_context!())
-        .expect("failed to build desktop Spike")
-        .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested {
-                code: None, api, ..
-            } = &event
-            {
-                if app.state::<updates::UpdateState>().ensure_idle().is_err() {
-                    api.prevent_exit();
-                }
+        .build(context);
+    #[cfg(windows)]
+    let app = match app {
+        Ok(app) => app,
+        Err(error) => {
+            webview_runtime::report_failure(&identifier, &error.to_string());
+            std::process::exit(1);
+        }
+    };
+    #[cfg(not(windows))]
+    let app = app.expect("failed to build desktop Spike");
+    app.run(|app, event| {
+        if let tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } = &event
+        {
+            if app.state::<updates::UpdateState>().ensure_idle().is_err() {
+                api.prevent_exit();
             }
-            if matches!(event, tauri::RunEvent::Exit) {
-                // Includes the application menu / Cmd+Q path, which does not close
-                // each window first. Wait for any configuration change before cleanup.
-                if let Some(state) = app.try_state::<DesktopRuntime>() {
-                    tauri::async_runtime::block_on(async {
-                        state.0.write().await.process.take();
-                    });
-                }
+        }
+        if matches!(event, tauri::RunEvent::Exit) {
+            // Includes the application menu / Cmd+Q path, which does not close
+            // each window first. Wait for any configuration change before cleanup.
+            if let Some(state) = app.try_state::<DesktopRuntime>() {
+                tauri::async_runtime::block_on(async {
+                    state.0.write().await.process.take();
+                });
             }
-        });
+        }
+    });
 }

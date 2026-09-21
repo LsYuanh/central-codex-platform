@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPortableWindowsRuntime } from "./windows-runtime-check.mjs";
+import { prepareInstaller, runtimeSpec } from "./desktop-webview2.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktop = join(root, "apps", "desktop");
@@ -77,13 +78,24 @@ function run(command, arguments_, options = {}) {
 const host = run("rustc", ["--print", "host-tuple"], { stdio: ["ignore", "pipe", "inherit"], encoding: "utf8" }).stdout.trim();
 const supported = process.platform === "win32" ? ["x86_64-pc-windows-msvc"] : ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 if (!supported.includes(host)) throw new Error(`Unsupported package target: ${host}`);
+if (process.platform === "win32") {
+  const bundleConfig = config.startsWith("{") ? JSON.parse(config) : JSON.parse(readFileSync(join(desktop, config), "utf8"));
+  // Do not use Tauri's fixedRuntime mode: it unconditionally selects a private
+  // runtime, including on machines whose users did not install the component.
+  bundleConfig.bundle.windows.webviewInstallMode = { type: "downloadBootstrapper" };
+  bundleConfig.bundle.windows.nsis.template = join(targetDir, "webview2-installer", "installer.nsi");
+  config = JSON.stringify(bundleConfig);
+  delete env.TAURI_CONFIG;
+}
 if (flags.has("--plan")) {
   console.log(JSON.stringify({ rc, host, profile: debug ? "debug" : "release", targetDir,
-    config: rc || updater ? JSON.parse(config) : config,
+    config: config.startsWith("{") ? JSON.parse(config) : config,
+    ...(process.platform === "win32" ? { optionalWebView2: { ...runtimeSpec, defaultSelected: false, preserveOnUpgrade: true } } : {}),
     bundles: process.platform === "win32" ? ["nsis"] : ["app", "dmg"],
   }, null, 2));
   process.exit(0);
 }
+if (process.platform === "win32") await prepareInstaller(targetDir);
 // Tauri sets static CRT flags for its own build; our separate Cargo sidecar build
 // must do the same so fresh Windows machines do not need vc_redist installed.
 const agentEnv = { ...env };
@@ -115,6 +127,12 @@ if (process.platform === "win32") {
   const pe = appBinary.readUInt32LE(0x3c);
   if (appBinary.readUInt32LE(pe) !== 0x00004550 || appBinary.readUInt16LE(pe + 24 + 68) !== 2) {
     throw new Error("DESKTOP_PACKAGE_REJECTED: Windows desktop executable must use the GUI subsystem");
+  }
+  const installers = join(targetDir, host, debug ? "debug" : "release", "bundle", "nsis");
+  for (const name of readdirSync(installers).filter(name => name.endsWith(".exe"))) {
+    if (statSync(join(installers, name)).size > 512 * 1024 * 1024) {
+      throw Error("Windows installer exceeds the client's 512 MiB update limit");
+    }
   }
 }
 console.log(`DESKTOP_PACKAGE_OK: ${join(targetDir, host, debug ? "debug" : "release", "bundle")}`);
