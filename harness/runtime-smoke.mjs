@@ -65,20 +65,29 @@ try {
   const initialized=await rpc('initialize',{clientInfo:{name:'yuan_zhou_boundary_smoke',version:'1'},capabilities:{experimentalApi:true}});
   assert.match(initialized.result?.userAgent??'',/yuan-zhou-remote-workspace\/1/);
   send({method:'initialized',params:{}});
-  for(const [method,params] of [['command/exec',{command:['/bin/sh','-c',`touch ${sideEffect}`]}],['fs/readFile',{path:sentinel}],['skills/list',{}]]) {
+  for(const [method,params] of [['command/exec',{command:['/bin/sh','-c',`touch ${sideEffect}`]}],['fs/readFile',{path:sentinel}]]) {
     const result=await rpc(method,params);assert.match(result.error?.message??'',/REMOTE_WORKSPACE_UNSUPPORTED/,method);
   }
-  const overridden=await rpc('thread/start',{cwd:run});
+  const skillDir=join(worker,'managed-skills','native-probe','1');mkdirSync(skillDir,{recursive:true});
+  writeFileSync(join(skillDir,'SKILL.md'),'---\nname: native-probe\ndescription: Native managed skill verification\n---\nMANAGED_SKILL_BODY_NATIVE_LOADED\n');
+  writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify(['native-probe/1']));
+  const discovered=await rpc('skills/list',{cwds:[],forceReload:true});
+  assert.equal(discovered.result?.data?.[0]?.skills?.[0]?.name,'native-probe',JSON.stringify(discovered));
+  assert.equal((await rpc('skills/list',{cwds:[run]})).error?.message,'REMOTE_SKILL_SCOPE_DENIED');
+  const forged=await rpc('turn/start',{threadId:'fake',input:[{type:'skill',name:'forged',path:sentinel}]});
+  assert.match(forged.error?.message??'',/REMOTE_SKILL_PATH_DENIED/);
+  const overridden=await rpc('thread/start' ,{cwd:run});
   assert.match(overridden.error?.message??'',/REMOTE_WORKSPACE_OVERRIDE_DENIED/);
   const thread=await rpc('thread/start',{ephemeral:true,dynamicTools:[{type:'function',name:'device_workspace_context',description:'Return the bound client workspace context.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{type:'function',name:'device_bad_plugin',description:'Must be filtered.',inputSchema:{type:'object',properties:{}}}]});
   assert(thread.result?.thread?.id,JSON.stringify(thread));
-  const turn=await rpc('turn/start',{threadId:thread.result.thread.id,input:[{type:'text',text:'Run the boundary fixture.'}]});
+  const turn=await rpc('turn/start',{threadId:thread.result.thread.id,input:[{type:'text',text:'Run the boundary fixture.'},{type:'skill',name:'native-probe',path:join(skillDir,'SKILL.md')}]});
   assert(turn.result,JSON.stringify(turn));
   const deadline=Date.now()+45000;
   while(Date.now()<deadline && !notifications.some(x=>x.method==='turn/completed')) await new Promise(resolve=>setTimeout(resolve,100));
   const completed=notifications.find(x=>x.method==='turn/completed');assert(completed,`Missing terminal notification; ${stderr}`);
   assert.equal(completed.params.turn.status,'completed',JSON.stringify(completed));
   assert.equal(requests.length,3);
+  assert.match(JSON.stringify(requests[0]),/MANAGED_SKILL_BODY_NATIVE_LOADED/);
   const tools=requests[0].tools.map(tool=>tool.name);
   assert.deepEqual(tools,['device_workspace_context']);
   assert.equal(dynamicCalls,1);

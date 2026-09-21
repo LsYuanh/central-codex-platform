@@ -31,6 +31,7 @@ export const AGENTRPC_MESSAGE_TYPES = [
 export type AgentRpcMessageType = (typeof AGENTRPC_MESSAGE_TYPES)[number];
 
 export type AgentRpcMethod =
+  | "skills/create" | "skills/inspect" | "skills/read" | "skills/check"
   | "file/write_text"
   | "file/write_begin"
   | "file/write_chunk"
@@ -269,6 +270,7 @@ export function legacyRequestFrom(value: unknown): LegacyAgentRequest | undefine
 }
 
 export const AGENTRPC_METHODS: readonly AgentRpcMethod[] = [
+  "skills/create", "skills/inspect", "skills/read", "skills/check",
   "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths",
   "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer",
   "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch",

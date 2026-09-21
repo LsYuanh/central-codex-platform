@@ -435,3 +435,18 @@ When `TEST_GATEWAY_ENABLE_CONTROLS=1` is set, the UI WebSocket also accepts
 `approval.request` and completes through the normal `approval.response` path;
 `timeoutMs` is clamped to 100–10,000 ms. This operation never writes to Codex
 App Server stdin and is disabled by default, so it is only a Day 5 test hook.
+
+## Managed personal skills (`skills/v1`, 2026-09-21 source only)
+
+The authenticated UI uses platform operations `skill.list/read/draft/preview/save/update/remove/discard`. These are gateway-owned, not native App Server passthrough. `skill.draft` takes an idempotent creationKey and optional skillId; preview takes a draft id; save takes its expiring previewId; update/remove require id and revision. UI cannot supply a native skill path. `conversation.turn.create` may supply up to four `{id, revision}` entries in `skills`, or known `$name` mentions in text; skill selections are not accepted for steering.
+
+A Local Agent advertising `skills/v1` additionally accepts the following gateway-only RPCs. All require the gateway-selected user `scope` and draft/cache `id`; neither is taken from model-supplied ownership fields.
+
+| RPC | Parameters beyond scope/id | Result |
+| --- | --- | --- |
+| `skills/create` | none | client directory and OS |
+| `skills/inspect` | none | bounded manifest of regular files: path/bytes/SHA-256 |
+| `skills/read` | relative file, SHA-256, offset | base64 chunk, nextOffset, done; rejects changed source |
+| `skills/check` | programs (at most 12 basenames) | missing client PATH commands; never executes them |
+
+Full package limit is 64 files/8 MiB, depth six; each transfer chunk is at most 256 KiB. The gateway validates portable paths, metadata and hashes, then uses existing `file/write_begin/chunk/commit/abort` for client preparation and re-inspects the final manifest. Transfers bind to the same live Agent session; disconnect, re-pair, cancellation and checksum failure are errors. Native RPC skill input uses only gateway-resolved managed paths. The new exact dynamic tool `device_skill_load({name})` resolves from the turn's user catalog snapshot, checks current enabled membership, single-flights the selected version, and returns instructions plus verified **client** directory/resources. It grants no new system permissions. Existing command approval/transport boundaries remain intact.

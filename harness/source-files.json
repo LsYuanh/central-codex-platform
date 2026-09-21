@@ -82,7 +82,7 @@
   {
     "path": "codex-rs/ext/skills/src/host_service.rs",
     "upstreamSha256": "4e73a4d6b97c85e8d9b564411c020f1c3f0ac860fee4da9eaa65a2c39c4eadd6",
-    "patchedSha256": "0423f93ed97849502effb2599348f915f575313a6c3d46903128cb40fe36f96d"
+    "patchedSha256": "89959d32351ffa9a2ac8379526886363efadb3381665ed64509fec32a718fb9b"
   },
   {
     "path": "codex-rs/exec-server/src/environment.rs",
@@ -102,7 +102,7 @@
   {
     "path": "codex-rs/app-server/src/extensions.rs",
     "upstreamSha256": "5e578d25d67d0692c65fb36d8d5c88bf01a0996ce7e9b82f38c5477789abda04",
-    "patchedSha256": "2b31fb7df5cd897fdc46bc1bf12aee8e23b64479da73423b976d2825f51d04cc"
+    "patchedSha256": "8208eb3a03aa2452a35c42613f61b212062b64382c8e664a98ecded5726c92c1"
   },
   {
     "path": "codex-rs/app-server/src/lib.rs",

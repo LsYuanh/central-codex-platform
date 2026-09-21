@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Applies only audited edits to a pinned, clean Codex 0.153.4 source tree.
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -90,12 +90,14 @@ replace('codex-rs/codex-mcp/src/connection_manager.rs', '    ) -> Self {\n      
 at('core-plugins/src/manager.rs', '    pub async fn plugins_for_config(&self, config: &PluginsConfigInput) -> PluginLoadOutcome {', `        if ${condition} { return PluginLoadOutcome::default(); }`);
 at('ext/skills/src/host_service.rs', '    ) -> HostSkillsSnapshot {\n        let roots = self.skill_roots_for_config(input, fs).await;', '');
 replace('codex-rs/ext/skills/src/host_service.rs', '    ) -> HostSkillsSnapshot {\n        let roots = self.skill_roots_for_config(input, fs).await;\n', `    ) -> HostSkillsSnapshot {
-        if ${condition} { return HostSkillsSnapshot::new(Arc::new(Default::default())); }
+        if ${condition} { return self.managed_snapshot(input).await; }
         let roots = self.skill_roots_for_config(input, fs).await;`);
+at('ext/skills/src/host_service.rs', 'impl HostSkillsService {', readFileSync(join(here, 'managed-skills-host.rs.inc'), 'utf8'));
+at('ext/skills/src/host_service.rs', '    fn ensure_system_skills_installed(&self) {', `        if ${condition} { return; }`);
 at('ext/skills/src/host_service.rs', '    ) -> Vec<AbsolutePathBuf> {', `        if ${condition} { return Vec::new(); }`);
 at('ext/skills/src/host_service.rs', '    ) -> HostSkillsSnapshot {\n        let bundled_skills_enabled =', '');
 replace('codex-rs/ext/skills/src/host_service.rs', '    ) -> HostSkillsSnapshot {\n        let bundled_skills_enabled =\n', `    ) -> HostSkillsSnapshot {
-        if ${condition} { return HostSkillsSnapshot::new(Arc::new(Default::default())); }
+        if ${condition} { return self.managed_snapshot(input).await; }
         let bundled_skills_enabled =`);
 at('exec-server/src/environment.rs', '    ) -> Result<PreparedEnvironmentManager, ExecServerError> {', `        if ${condition} {
             return Ok(PreparedEnvironmentManager { source: PreparedEnvironmentSource::Snapshot(DefaultEnvironmentProvider::new(Some("none".into())).snapshot_inner()) });
@@ -107,7 +109,13 @@ at('git-utils/src/info.rs', 'pub fn get_git_repo_root(base_dir: &Path) -> Option
 at('git-utils/src/info.rs', 'pub async fn collect_git_info(cwd: &Path) -> Option<GitInfo> {', `    if ${condition} { return None; }`);
 at('git-utils/src/info.rs', 'fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {', `    if ${condition} { return None; }`);
 at('git-utils/src/git_process.rs', 'fn spawn_git_command(command: &mut Command) -> Option<(Child, KillGitProcessTreeOnDrop)> {', `    if ${condition} { return None; }`);
-at('app-server/src/extensions.rs', '    let mut builder = ExtensionRegistryBuilder::<Config>::with_event_sink(Arc::clone(&event_sink));', '    if codex_core::remote_workspace::enabled() { return Arc::new(builder.build()); }');
+at('app-server/src/extensions.rs', '    let mut builder = ExtensionRegistryBuilder::<Config>::with_event_sink(Arc::clone(&event_sink));', `    if codex_core::remote_workspace::enabled() {
+        let providers = codex_skills_extension::SkillProviders::new().with_host_provider(Arc::new(codex_skills_extension::HostSkillProvider::new()));
+        codex_skills_extension::install_with_providers_and_metrics(&mut builder, providers, codex_otel::global(), |config: &Config| codex_skills_extension::SkillsExtensionConfig {
+            include_instructions: config.include_skill_instructions, max_context_tokens: config.skill_max_context_tokens, bundled_skills_enabled: false, orchestrator_skills_enabled: false, shadow_selection_enabled: false,
+        });
+        return Arc::new(builder.build());
+    }`);
 at('app-server/src/lib.rs', '    runtime_options: AppServerRuntimeOptions,\n) -> IoResult<()> {', `    let mut runtime_options = runtime_options;
     if codex_core::remote_workspace::enabled() {
         runtime_options.plugin_startup_tasks = PluginStartupTasks::Skip;
@@ -147,8 +155,8 @@ for (const [path, item] of edits) {
   files.push({ path, upstreamSha256: createHash('sha256').update(item.original).digest('hex'),
     patchedSha256: createHash('sha256').update(readFileSync(join(root, path), 'utf8').replace(/\r\n/g, '\n')).digest('hex') });
 }
-const moduleText = readFileSync(join(here, 'remote_workspace.rs'), 'utf8');
-copyFileSync(join(here, 'remote_workspace.rs'), join(root, 'codex-rs/core/src/remote_workspace.rs'));
+const moduleText = readFileSync(join(here, 'remote_workspace.rs'), 'utf8').replace(/\r\n/g, '\n');
+writeFileSync(join(root, 'codex-rs/core/src/remote_workspace.rs'), moduleText);
 const moduleLines = moduleText.trimEnd().split('\n');
 patch += `diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_workspace.rs\nnew file mode 100644\n--- /dev/null\n+++ b/codex-rs/core/src/remote_workspace.rs\n@@ -0,0 +1,${moduleLines.length} @@\n` + moduleLines.map(line => '+' + line).join('\n') + '\n';
 writeFileSync(join(here, 'remote-workspace.patch'), patch);

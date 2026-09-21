@@ -30,6 +30,7 @@ export function assertBinding(binding: RemoteWorkspaceBinding, current: RemoteWo
 
 /** Do not permit a UI payload to replace the worker's execution policy/configuration. */
 export function validateRemotePayload(payload: Record<string, unknown>): void {
+  if (Array.isArray(payload.input) && payload.input.some(v => v && typeof v === "object" && v.type === "skill")) throw new Error("REMOTE_SKILL_INPUT_DENIED: submit an owned skill ID and revision, never a host path");
   if ("clientProject" in payload) throw new Error("REMOTE_POLICY_OVERRIDE: clientProject is managed by the gateway");
   for (const key of ["cwd", "sandbox", "sandboxPolicy", "approvalPolicy", "config", "baseInstructions", "developerInstructions", "dynamicTools", "mcpServers", "remoteWorkspace", "environment", "permissions", "serviceName"]) {
     if (key in payload) throw new Error(`REMOTE_POLICY_OVERRIDE: ${key} is managed by the gateway`);

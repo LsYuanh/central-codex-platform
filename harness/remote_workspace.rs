@@ -3,7 +3,7 @@
 use serde_json::Value;
 use std::sync::OnceLock;
 
-pub const MARKER: &str = "yuan-zhou-remote-workspace/1";
+pub const MARKER: &str = "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1";
 
 pub fn enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
@@ -28,6 +28,7 @@ pub fn device_tool(name: &str) -> bool {
             | "device_workspace_git_status"
             | "device_workspace_git_diff"
             | "device_workspace_apply_patch"
+            | "device_skill_load"
     )
 }
 
@@ -51,12 +52,25 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
             | "model/list"
             | "account/read"
             | "account/rateLimits/read"
+            | "skills/list"
     ) {
         return Err(format!("REMOTE_WORKSPACE_UNSUPPORTED: {method}"));
     }
     let Some(params) = request.get("params").and_then(Value::as_object) else {
         return Ok(());
     };
+    if method == "skills/list" {
+        // Discovery never accepts client-controlled host roots or cwd values.
+        if params
+            .keys()
+            .any(|key| key != "forceReload" && key != "cwds")
+            || params
+                .get("cwds")
+                .is_some_and(|v| v.as_array().is_none_or(|a| !a.is_empty()))
+        {
+            return Err("REMOTE_SKILL_SCOPE_DENIED".into());
+        }
+    }
     for key in [
         "config",
         "permissions",
@@ -83,9 +97,63 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
         for item in input {
             if !matches!(
                 item.get("type").and_then(Value::as_str),
-                Some("text" | "image")
+                Some("text" | "image" | "skill")
             ) {
                 return Err("REMOTE_WORKSPACE_UNSUPPORTED: local input or skill".into());
+            }
+            if item.get("type").and_then(Value::as_str) == Some("skill") {
+                let raw = item
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .ok_or("REMOTE_SKILL_PATH_DENIED")?;
+                let root = std::env::current_dir()
+                    .map_err(|e| e.to_string())?
+                    .join("managed-skills");
+                let canonical_cwd =
+                    std::fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
+                        .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
+                let canonical_root =
+                    std::fs::canonicalize(&root).map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
+                if canonical_root != canonical_cwd.join("managed-skills")
+                    || std::fs::canonicalize(root.join("catalog.json")).ok()
+                        != Some(canonical_root.join("catalog.json"))
+                {
+                    return Err("REMOTE_SKILL_PATH_DENIED".into());
+                }
+                let path = std::path::Path::new(raw);
+                let canonical =
+                    std::fs::canonicalize(path).map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
+                let relative = path
+                    .strip_prefix(&root)
+                    .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
+                if relative.components().count() != 3
+                    || relative
+                        .components()
+                        .any(|c| !matches!(c, std::path::Component::Normal(_)))
+                    || path.file_name().and_then(|v| v.to_str()) != Some("SKILL.md")
+                    || canonical
+                        != std::fs::canonicalize(&root)
+                            .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?
+                            .join(relative)
+                {
+                    return Err("REMOTE_SKILL_PATH_DENIED".into());
+                }
+                let catalog: Value = serde_json::from_slice(
+                    &std::fs::read(root.join("catalog.json"))
+                        .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?,
+                )
+                .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
+                let key = relative
+                    .parent()
+                    .ok_or("REMOTE_SKILL_PATH_DENIED")?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if !catalog
+                    .as_array()
+                    .is_some_and(|rows| rows.iter().any(|v| v.as_str() == Some(&key)))
+                {
+                    return Err("REMOTE_SKILL_PATH_DENIED".into());
+                }
             }
             if item.get("type").and_then(Value::as_str) == Some("image")
                 && !item
@@ -113,7 +181,6 @@ mod tests {
             "fuzzyFileSearch",
             "review/start",
             "thread/fork",
-            "skills/list",
             "mcpServer/reload",
         ] {
             assert!(validate_request(&json!({"method": method})).is_err());
@@ -152,5 +219,24 @@ mod tests {
         ] {
             assert!(!device_tool(name));
         }
+    }
+
+    #[test]
+    fn managed_skill_discovery_rejects_host_overrides() {
+        assert!(
+            validate_request(
+                &json!({"method":"skills/list","params":{"forceReload":true,"cwds":[]}})
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_request(&json!({"method":"skills/list","params":{"cwds":["/private"]}}))
+                .is_err()
+        );
+        assert!(
+            validate_request(&json!({"method":"skills/list","params":{"perCwdExtraUserRoots":[]}}))
+                .is_err()
+        );
+        assert!(validate_request(&json!({"method":"turn/start","params":{"input":[{"type":"skill","name":"forged","path":"/private/SKILL.md"}]}})).is_err());
     }
 }

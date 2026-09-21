@@ -39,8 +39,9 @@ assert.equal(userInput.kind === "approval" && userInput.approval.threadId, "thre
 assert.equal(normalizeGatewayUiEvent({id:1,method:"item/commandExecution/requestApproval",params:{}}).kind, "approval");
 assert.equal(normalizeGatewayUiEvent({id:1,method:"item/tool/call",params:{}}).kind, "protocol", "legacy dynamic-tool bridge remains explicit");
 assert.equal(event("serverRequest/resolved", {requestId:"question"}).kind, "approval-resolved");
-const capabilities = event("gateway/capabilities", {remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false});
+const capabilities = event("gateway/capabilities", {skills:true,remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false});
 assert.equal(capabilities.kind === "capabilities" && capabilities.capabilities.imageGeneration, false);
+assert.equal(capabilities.kind === "capabilities" && capabilities.capabilities.skills, true);
 const patchApproval = normalizeGatewayUiEvent({id:"patch",method:"device/fileChange/requestApproval",requestKind:"approval",params:{threadId:"thread-a",deviceId:"client-a",patch:"*** Begin Patch"}});
 assert.equal(patchApproval.kind === "approval" && patchApproval.approval.method, "device/fileChange/requestApproval");
 const saving = event("output/state", {output:{id:"file",threadId:"thread-a",deviceId:"client-a",name:"file.png",source:"generatedImage",kind:"image",status:"saving"}});

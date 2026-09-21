@@ -194,13 +194,23 @@ See `../docs/验证与已知限制.md` for results and limitations.
   the existing Device Broker. Dynamic tool call IDs retain upstream Thread/Turn ownership.
 - Config/permissions/sandbox/approval/environment/path overrides are rejected. A supplied
   `cwd` must equal the central worker's current directory. Client paths are tool parameters.
-- Turn input accepts text and inline `data:image/` only; central localImage/skill input is rejected.
+- Turn input accepts text, inline `data:image/`, and gateway-resolved managed skill input. Central localImage and arbitrary skill paths are rejected.
 - Upstream Thread/Turn state, streaming, context, dynamic tool result handling and interrupts
   remain the agent engine. Device cancellation, idempotency and uncertain delivery stay platform-owned.
 - Feature-flagged behavior is conservatively off for this initial mode. Native image generation,
-  web search, plugins/skills, hooks, queue/goals/history-note extensions, and subagents are
+  web search, plugins, hooks, queue/goals/history-note extensions, and subagents are
   unavailable in this fork. Existing attachment input remains supported; do not claim image
   generation feature parity until a reviewed extension path is enabled.
+
+## Managed personal skills (source implementation, 2026-09-21)
+
+The fixed upstream version remains 0.153.4. `yuan-zhou-managed-skills/1` is an additional initialization marker, required with platform authentication before the gateway advertises skills. This is a selective restoration of the upstream skills extension/provider, discovery and skill input, not a general feature-flag change.
+
+`managed-skills-host.rs.inc` is inserted by `apply-fork.mjs`. It reads a fresh `runtime/managed-skills/catalog.json` on every snapshot and permits only listed `<skill-id>/<revision>/SKILL.md` plus gateway-generated `agents/openai.yaml` invocation policy. Paths must be canonical and within the worker root. User/project/system scanning, installation of system skills, arbitrary extra roots, plugin and orchestrator sources remain disabled. `skills/list` accepts only an empty `cwds` and optional `forceReload`. Input skill paths must be current catalog members. Do not re-enable the former host scanner to add support for more resources.
+
+The authenticated gateway owns full packages outside worker directories. It projects normalized name/description and instruction body only; scripts, templates and references never enter the native discovery directory. Explicit selections are converted from platform IDs/revisions or known `$name` mentions to genuine native skill inputs. `device_skill_load` prepares and hashes resources through the bound Local Agent before the model uses them. Instructions direct the model to client resource paths. Native executors and all other existing restrictions remain enforced.
+
+Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. Existing production binaries/catalogs were not replaced by this task; new Windows AppContainer and real-model end-to-end qualification are still required before rollout.
 
 ## Verification and rollback
 

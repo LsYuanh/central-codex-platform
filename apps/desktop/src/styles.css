@@ -2,6 +2,40 @@
 
 /* YuanZhou V0.3: shared geometry, semantic colors, no per-component theme overrides. */
 
+.skills-settings { display:grid; gap:20px; }
+.skills-settings .settings-card { padding:24px; }
+.skills-toolbar, .skills-list-heading, .skill-row, .skill-draft, .skill-dialog-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.skills-toolbar h2, .skills-toolbar p { margin:0 0 8px; }
+.skills-toolbar > button { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.skills-list-heading { padding:16px 0; color:var(--ink-muted); }
+.skill-row, .skill-draft { padding:20px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+.skill-row > div:first-child, .skill-draft > div:first-child { flex:1; min-width:200px; }
+.skill-row p { margin:8px 0; overflow-wrap:anywhere; }
+.skill-row small, .skill-state, .skills-settings .muted { color:var(--ink-muted); }
+.skill-state { margin-left:12px; font-size:12px; }
+.skill-row-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.skills-empty { padding:32px 16px; text-align:center; color:var(--ink-muted); }
+.skills-empty > svg { width:32px; height:32px; }
+.skill-draft code { display:block; margin-top:8px; overflow-wrap:anywhere; }
+.skill-dialog, .skill-delete-dialog { border:1px solid var(--line); border-radius:16px; background:var(--canvas); color:var(--ink); padding:24px; width:min(800px,calc(100vw - 40px)); max-height:calc(100dvh - 48px); overflow:auto; box-shadow:var(--popover-shadow); }
+.skill-delete-dialog { width:min(480px,calc(100vw - 40px)); }
+.skill-dialog::backdrop, .skill-delete-dialog::backdrop { background:var(--overlay); }
+.skill-file-select { display:flex; align-items:center; gap:12px; margin:16px 0; }
+.skill-file-select select { flex:1; min-width:0; }
+.skill-file-content { padding:16px; border:1px solid var(--line); border-radius:8px; background:var(--surface-inset); color:var(--ink); min-height:180px; max-height:45dvh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:var(--text-code); }
+.skill-dialog-actions { justify-content:flex-end; margin-top:20px; }
+.skill-picker { position:relative; flex-shrink:0; }
+.skill-picker > summary { display:flex; align-items:center; gap:5px; cursor:pointer; border-radius:6px; min-height:36px; padding:0 8px; color:var(--ink-muted); list-style:none; }
+.skill-picker > summary::-webkit-details-marker { display:none; }
+.skill-picker > summary:hover { background:var(--hover); color:var(--ink); }
+.skill-picker-menu { position:absolute; left:0; bottom:calc(100% + 10px); z-index:25; width:min(300px,calc(100vw - 80px)); max-height:340px; overflow:auto; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-raised); box-shadow:var(--popover-shadow); }
+.skill-picker-menu > strong { display:block; padding:4px 8px 12px; }
+.skill-picker-menu p { color:var(--ink-muted); padding:0 8px; overflow-wrap:anywhere; }
+.skill-picker-menu button { width:100%; display:flex; flex-direction:column; gap:4px; text-align:left; background:transparent; color:var(--ink); padding:10px 8px; border:0; }
+.skill-picker-menu button:hover { background:var(--hover); }
+.skill-picker-menu small { color:var(--ink-muted); overflow-wrap:anywhere; }
+@media(max-width:600px) { .skills-toolbar { align-items:flex-start; flex-direction:column; } .skill-row-actions { width:100%; } .skill-picker > summary span { display:none; } .skill-dialog { padding:16px; } }
+
 :root {
   --shell: #edf3f8;
   --canvas: #fff;

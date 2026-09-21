@@ -1,0 +1,2 @@
+# Generated patches are byte-pinned; preserve LF and allow blank context lines.
+harness/remote-workspace.patch -text whitespace=-blank-at-eol

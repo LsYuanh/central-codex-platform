@@ -34,6 +34,7 @@ import { readNativeServiceHost } from "./native-service-host.js";
 import { collectServiceMetrics } from "./service-metrics.js";
 import { ClientUpdates } from "./client-updates.js";
 import { ProjectCatalog, projectInput, publicProject, projectDeviceParams, projectInstructions, absoluteClientPath, type ClientProject } from "./projects.js";
+import { SkillStore, skillScope, writeClientFiles, SKILL_INSTRUCTIONS, type SkillOwner, type SkillAgent } from "./skills.js";
 
 const nativeService=await readNativeServiceHost();
 
@@ -46,6 +47,7 @@ type GatewayRequest = {
   operation:
     | "session.initialize"
     | "model.list"
+    | "skill.list" | "skill.draft" | "skill.preview" | "skill.save" | "skill.update" | "skill.remove" | "skill.discard" | "skill.read"
     | "project.list"
     | "project.save"
     | "project.remove"
@@ -169,6 +171,7 @@ const MAX_COMMAND_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 // them through its Local Agent instead of touching the Mac worker filesystem.
 const CLIENT_DEVICE_TOOLS = [
   ...WORKSPACE_TOOLS,
+  {type:"function",name:"device_skill_load",description:"Load an enabled personal skill by name. Prepare its versioned files on the bound CLIENT and return instructions, dependency status and client resource directory. Always call before following a skill from the native catalog; never pass host catalog paths to client file tools.",inputSchema:{type:"object",properties:{name:{type:"string"}},required:["name"]}},
   {
     type:"function", name:"device_write_file",
     description:"Write UTF-8 text to the client and return verified saved-file metadata. path is a client absolute path (or workspace-relative); omit path and set name to save in the client configured default output directory. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Never use a central path.",
@@ -532,6 +535,11 @@ if(deviceCertificates)auth!.setCertificates(deviceCertificates);
 // an inherited CA path cannot silently enable it or downgrade a client.
 const tlsOptions = auth ? {cert:nativeService?.tls.cert??readFileSync(process.env.PLATFORM_TLS_CERT ?? ""),key:nativeService?.tls.key??readFileSync(process.env.PLATFORM_TLS_KEY ?? ""),minVersion:"TLSv1.2" as const,...(deviceCertificates?{ca:deviceCertificates.caPem,requestCert:true,rejectUnauthorized:false,secureOptions:cryptoConstants.SSL_OP_NO_TICKET}: {})} : undefined;
 const modelBroker=isolation||windowsWorker?await ModelCredentialBroker.start({configFile:resolve(process.env.PLATFORM_MODEL_BINDINGS!),...(nativeService&&auth?{memorySource:nativeService.modelSource(auth)}:{}),forbiddenRoots:[workerRoot],onRevoke:userId=>workers.stopUser(userId),audit:event=>{audit(event.action,event.status,{userId:event.userId,errorCode:event.errorCode});if(auditFailed)throw Error('AUDIT_STORAGE_UNAVAILABLE');}}):undefined;
+const skills = new SkillStore(resolve(dirname(stateFile), "personal-skills.json"));
+const skillUsers = new Set<string>();
+type SkillTurn = {catalog:Map<string, ReturnType<SkillStore['resolve']>>; loads:Map<string, Promise<Awaited<ReturnType<typeof prepareSkill>>>>};
+const turnSkillLoads = new Map<string, SkillTurn>();
+const pendingSkillTurns = new Map<string, SkillTurn>();
 const workers = new WorkerManager({
   root:workerRoot,perUser:Boolean(auth),nativeManagedPaths:windowsWorker,
   maxWorkers:workerLimit("PLATFORM_MAX_WORKERS",8),perUserTurns:workerLimit("PLATFORM_USER_TURNS",2),totalTurns:workerLimit("PLATFORM_TOTAL_TURNS",8),
@@ -588,6 +596,8 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
   const notification = isRecord(message.params) ? message.params : {};
   const belongs=(threadId:string)=>!workerUserId||threadOwnerById.get(threadId)===workerUserId;
   if (message.method === "gateway/runtimeUnavailable") {
+    for(const [key] of turnSkillLoads)if(belongs(key.slice(0,key.lastIndexOf(':'))))turnSkillLoads.delete(key);
+    for(const [threadId] of pendingSkillTurns)if(belongs(threadId))pendingSkillTurns.delete(threadId);
     for (const threadId of threadOwnerById.keys()) if(belongs(threadId))turnCancelVersions.set(threadId,(turnCancelVersions.get(threadId)??0)+1);
     for (const approval of pendingDeviceApprovals.values()) if(belongs(approval.threadId))approval.finish("CANCELLED: central runtime stopped before approval");
     for(const [id,pending] of pendingServerRequests)if(pending.bridge===bridge){clearTimeout(pending.timer);pendingServerRequests.delete(id);const client=clients.get(pending.clientId);if(client)send(client.socket,{type:"approval.resolved",requestId:id,status:"failed",sequence:++sequence});}
@@ -610,6 +620,12 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
     void outputs.image(notification.threadId, typeof notification.turnId === "string" ? notification.turnId : undefined, notification.item);
   }
   if (message.method === "turn/completed" && typeof notification.threadId === "string" && isRecord(notification.turn)) {
+    if(typeof notification.turn.id === "string") {
+      const key=`${notification.threadId}:${notification.turn.id}`;
+      turnSkillLoads.delete(key);
+      stoppedNativeTurns.add(key);
+      if(stoppedNativeTurns.size>2000)stoppedNativeTurns.delete(stoppedNativeTurns.values().next().value!);
+    }
     if (["interrupted","failed"].includes(String(notification.turn.status))) {
       if (typeof notification.turn.id === "string") {
         stoppedNativeTurns.add(`${notification.threadId}:${notification.turn.id}`);
@@ -718,7 +734,7 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
       streaming: agentMethod === "exec" && agents.get(client.deviceId)?.hello?.agent.capabilities.includes("exec-stream/v1") === true,
     });
     void (async () => {
-      if (!agentMethod && !listOutputs) {
+      if (!agentMethod && !listOutputs && toolName !== "device_skill_load") {
         bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text: `Unsupported client device tool: ${toolName}` }] });
         audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "UNSUPPORTED_DEVICE_TOOL" });
         emitTool("completed", { status: "failed", durationMs: Date.now() - startedAt, error: `Unsupported client device tool: ${toolName}` });
@@ -728,6 +744,25 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
       try {
         if (!threadId) throw new Error("REMOTE_BINDING_REQUIRED: tool has no owning thread");
         const binding = await ensureRemoteBinding(client, threadId);
+        if (toolName === "device_skill_load") {
+          assertNotStopped();
+          if (!skillUsers.has(client.userId)) throw Error("SKILL_RUNTIME_UPGRADE_REQUIRED");
+          const key = `${threadId}:${turnId}`;
+          const snapshot = turnSkillLoads.get(key) ?? pendingSkillTurns.get(threadId);
+          if(!snapshot)throw Error('SKILL_TURN_UNAVAILABLE: 请在新一轮对话调用技能');
+          const name = String(toolArgs.name),row=snapshot.catalog.get(name);
+          if(!row)throw Error('SKILL_NOT_FOUND');
+          // A disable/delete takes effect immediately; a content update cannot replace
+          // the package already selected by this turn's native catalog.
+          skills.resolve(client.userId,row.id);
+          let pending=snapshot.loads.get(name);
+          if(!pending){pending=prepareSkill(client,row,threadId,assertNotStopped);snapshot.loads.set(name,pending);}
+          let prepared;
+          try{prepared=await pending;}catch(error){snapshot.loads.delete(name);throw error;}
+          assertNotStopped();
+          bridge.respond(message.id!, {success:true,contentItems:[{type:"inputText",text:JSON.stringify(prepared)}]});
+          emitTool("completed", {status:"succeeded",durationMs:Date.now()-startedAt});return;
+        }
         if (agentMethod) toolArgs = projectDeviceParams(binding.projectRoot, agentMethod, toolArgs);
         if (agentMethod === "workspace/apply_patch") {
           const previewAgent = agents.get(client.deviceId);
@@ -1013,6 +1048,9 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
   if(auth&&!auth.valid(client.principal!)){client.socket.close(4001,auth.failureReason(client.principal));return;}
   if (!message) return;
   if(auditFailed){send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
+  if (message.type === "request" && message.operation.startsWith("skill.")) {
+    await handleSkillRequest(client, message); return;
+  }
   if (message.type === "request" && message.operation.startsWith("project.")) {
     try {
       audit(message.operation, "started", {userId:client.userId, deviceId:client.deviceId, requestId:message.requestId});
@@ -1203,11 +1241,12 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
       const directory = await sendAgentRequest(client.deviceId,"workspace/list",{path:threadProject.folders[0]},{binding:await ensureRemoteBinding(client),timeoutMs:15_000});
       if (!directory.ok) throw Error(`PROJECT_DIRECTORY_UNAVAILABLE: ${directory.error ?? "项目目录不可用"}`);
     }
+    if (skillUsers.has(client.userId) && ["conversation.create", "conversation.resume"].includes(message.operation)) skills.project(client.userId, skillDirectory(client.userId));
     const context = ["conversation.create", "conversation.resume"].includes(message.operation)
       ? await sendAgentRequest(client.deviceId, "workspace/context", threadProject ? {path:threadProject.folders[0]} : {}, { binding: await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined) })
       : undefined;
     if (context && !context.ok) throw new Error(`${threadProject ? "PROJECT_DIRECTORY_UNAVAILABLE" : context.errorCode}: ${context.error}`);
-    const instructions = clientDeviceInstructions(client.deviceId) + projectInstructions(threadProject) + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
+    const instructions = clientDeviceInstructions(client.deviceId) + (skillUsers.has(client.userId) ? SKILL_INSTRUCTIONS : "") + projectInstructions(threadProject) + (context ? `\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}` : "");
     const {projectId:_projectId, projectRevision:_projectRevision, ...nativePayload} = message.payload ?? {};
     const appPayload = message.operation === "conversation.create"
       ? {
@@ -1258,7 +1297,10 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
           )
         : result)
       : result;
-    if (message.operation === "session.initialize" && isRecord(visibleResult)) visibleResult = {...visibleResult, platformCapabilities:{projects:true,remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
+    if (message.operation === "session.initialize" && isRecord(visibleResult)) {
+      if (typeof visibleResult.userAgent === "string" && visibleResult.userAgent.includes("yuan-zhou-managed-skills/1") && Boolean(auth)) skillUsers.add(client.userId); else skillUsers.delete(client.userId);
+      visibleResult = {...visibleResult, platformCapabilities:{skills:skillUsers.has(client.userId),projects:true,remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
+    }
     if (message.operation === "conversation.create") {
       const createdId = threadIdFromResult(result);
       if (createdId) {
@@ -1362,6 +1404,76 @@ function reconcileSubmissions(threadId: string, result: JsonObject): void {
   persistState();
 }
 
+function skillDirectory(userId:string){return resolve(workerRoot,skillScope(userId),'runtime');}
+async function skillAgent(client:ConnectedClient,threadId?:string,check=()=>{}):Promise<{owner:SkillOwner;call:SkillAgent}> {
+  const binding=await ensureRemoteBinding(client,threadId);
+  const connected=agents.get(client.deviceId);
+  if(!connected?.hello?.agent.capabilities.includes('skills/v1'))throw Error('SKILL_AGENT_UPGRADE_REQUIRED: 请更新客户端技能组件');
+  return {owner:{userId:client.userId,deviceId:client.deviceId,deviceKey:binding.deviceKey},call:async(method,params)=>{
+    check();if(auth)auth.assert(client.principal);
+    if(agents.get(client.deviceId)!==connected)throw Error('SKILL_DEVICE_CHANGED');
+    const response=await sendAgentRequest(client.deviceId,method as AgentRpcMethod,params,{binding,timeoutMs:15_000});
+    check();if(auth)auth.assert(client.principal);
+    if(agents.get(client.deviceId)!==connected)throw Error('SKILL_DEVICE_CHANGED');
+    if(!response.ok||!isRecord(response.result))throw Error(`${response.errorCode??'SKILL_AGENT_FAILED'}: ${response.error??'技能文件准备失败'}`);
+    return response.result;
+  }};
+}
+async function prepareSkill(client:ConnectedClient,row:ReturnType<SkillStore['resolve']>,threadId?:string,check=()=>{}) {
+  const {owner,call}=await skillAgent(client,threadId,check);
+  const cacheId=randomUUID(),scope=skillScope(owner.userId);
+  const made=await call('skills/create',{scope,id:cacheId});
+  if(typeof made.path!=='string')throw Error('SKILL_AGENT_INVALID');
+  if(row.platforms.length&&!row.platforms.includes(String(made.os)))throw Error(`SKILL_PLATFORM_UNSUPPORTED: ${row.name} 支持 ${row.platforms.join(' / ')}`);
+  const deps=await call('skills/check',{scope,id:cacheId,programs:row.programs});
+  if(Array.isArray(deps.missing)&&deps.missing.length)throw Error(`SKILL_DEPENDENCY_MISSING: 本机缺少 ${deps.missing.join('、')}`);
+  await writeClientFiles(call,made.path,row.files);
+  const verified=await call('skills/inspect',{scope,id:cacheId});
+  const expected=row.files.map(({path,bytes,sha256})=>({path,bytes,sha256})).sort((a,b)=>a.path.localeCompare(b.path));
+  const actual=Array.isArray(verified.files)?verified.files as {path:string;bytes:number;sha256:string}[]:[];
+  if(actual.length!==expected.length||expected.some(f=>!actual.some(v=>v.path===f.path&&v.bytes===f.bytes&&v.sha256===f.sha256)))throw Error('SKILL_CLIENT_CHECKSUM_MISMATCH');
+  return {id:row.id,name:row.name,revision:row.revision,source:'client',directory:made.path,files:expected,programs:row.programs,instructions:Buffer.from(row.files.find(f=>f.path==='SKILL.md')!.data,'base64').toString('utf8')};
+}
+const skillBusy=new Set<string>();
+async function handleSkillRequest(client:ConnectedClient,message:GatewayRequest){
+  const mutating=!['skill.list','skill.read'].includes(message.operation);
+  const deadline=Date.now()+35_000;
+  let admitted=false;
+  try{
+    if(!skillUsers.has(client.userId)||!auth)throw Error('SKILL_RUNTIME_UPGRADE_REQUIRED: 中央服务需更新后启用个人技能');
+    if(mutating){if(skillBusy.has(client.userId))throw Error('SKILL_BUSY: 另一个技能操作正在进行，请稍后重试');skillBusy.add(client.userId);admitted=true;}
+    audit(message.operation,'started',{userId:client.userId,deviceId:client.deviceId});
+    if(auditFailed)throw Error('AUDIT_STORAGE_UNAVAILABLE');
+    const p=message.payload??{};let data:unknown;
+    if(message.operation==='skill.list'){
+      skills.project(client.userId,skillDirectory(client.userId));
+      const native=await workers.forUser(client.userId).request('skills/list',{cwds:[],forceReload:true});
+      if(!isRecord(native)||!Array.isArray(native.data)||native.data.some(v=>!isRecord(v)||!Array.isArray(v.errors)||v.errors.length))throw Error('SKILL_NATIVE_DISCOVERY_FAILED: 原生技能列表不可用，请检查技能格式');
+      const expected=skills.list(client.userId).filter(s=>s.enabled).map(s=>s.name).sort();
+      const discovered=native.data.flatMap(v=>isRecord(v)&&Array.isArray(v.skills)?v.skills.map(s=>isRecord(s)?s.name:undefined):[]).sort();
+      if(JSON.stringify(expected)!==JSON.stringify(discovered))throw Error('SKILL_NATIVE_DISCOVERY_FAILED: 原生目录与个人技能库不一致，请刷新或联系管理员');
+      const key=agents.get(client.deviceId)?.hello?.agent.deviceKey;
+      data={skills:skills.list(client.userId),drafts:key?skills.draftList({userId:client.userId,deviceId:client.deviceId,deviceKey:key}):[]};
+    }else if(message.operation==='skill.read'){
+      const row=skills.get(client.userId,p.id);
+      data={skill:skills.list(client.userId).find(s=>s.id===row.id),files:row.files.map(f=>({path:f.path,bytes:f.bytes})),content:Buffer.from(row.files.find(f=>f.path===(p.file??'SKILL.md'))?.data??'','base64').toString('utf8').slice(0,65536)};
+    }else if(message.operation==='skill.update'||message.operation==='skill.remove')data=skills.update(client.userId,p,message.operation==='skill.remove');
+    else{
+      const {owner,call}=await skillAgent(client,undefined,()=>{if(Date.now()>deadline)throw Error('SKILL_OPERATION_TIMEOUT: 技能文件处理超时，请刷新后重试');if(client.socket.readyState!==WebSocket.OPEN)throw Error('SKILL_CONNECTION_CLOSED');});
+      if(message.operation==='skill.draft')data=await skills.createDraft(owner,p,call);
+      else if(message.operation==='skill.preview')data=await skills.preview(owner,p.id,call);
+      else if(message.operation==='skill.save')data={skill:skills.save(owner,p)};
+      else if(message.operation==='skill.discard')data=skills.discard(owner,p.id);
+      else throw Error('UNSUPPORTED_OPERATION');
+    }
+    if(mutating)skills.project(client.userId,skillDirectory(client.userId));
+    send(client.socket,{type:'response',requestId:message.requestId,ok:true,data});
+    if(mutating)for(const target of clients.values())if(target.userId===client.userId)send(target.socket,{type:'event',eventType:'skill.changed',name:'skill/changed',data:{},sequence:++sequence});
+    audit(message.operation,'succeeded',{userId:client.userId,deviceId:client.deviceId});
+  }catch(error){send(client.socket,{type:'response',requestId:message.requestId,ok:false,error:String(error)});audit(message.operation,'failed',{userId:client.userId,deviceId:client.deviceId,errorCode:String(error).split(':')[0]});}
+  finally{if(admitted)skillBusy.delete(client.userId);}
+}
+
 async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject, steering = false): Promise<unknown> {
   const bridge=workers.forUser(client.userId);
   const threadId = String(payload.threadId);
@@ -1374,7 +1486,11 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   if (existing && ((existing.kind ?? "start") !== (steering ? "steer" : "start") || (steering && existing.expectedTurnId !== payload.expectedTurnId))) throw new Error("消息 ID 已用于另一项提交");
   const refs = parseAttachments(payload.attachments);
   if (!Array.isArray(payload.input) || payload.input.some((v) => !isRecord(v) || v.type !== "text" || typeof v.text !== "string")) throw new Error("平台仅接受正文和附件引用");
+  const selectedSkills = payload.skills;
+  if (selectedSkills !== undefined && (!Array.isArray(selectedSkills) || selectedSkills.length > 4 || selectedSkills.some(v => !isRecord(v) || typeof v.id !== "string" || !Number.isSafeInteger(v.revision)))) throw Error("SKILL_SELECTION_INVALID");
+  if (steering && selectedSkills !== undefined) throw Error("SKILL_STEER_UNSUPPORTED: 请在下一轮选择技能");
   const content = payload.input.map((v: {text:string}) => v.text).join("");
+  if (existing && JSON.stringify((existing as unknown as JsonObject).skills ?? []) !== JSON.stringify(selectedSkills ?? [])) throw Error("SKILL_SUBMISSION_CONFLICT");
   if (existing && existing.content !== content) throw new Error("消息 ID 对应的正文不一致");
   if (steering && (refs.length || !content.trim())) throw new Error("运行中追加目前仅支持非空文字，请移除附件后重试");
   if (steering && (typeof payload.expectedTurnId !== "string" || !payload.expectedTurnId.trim())) throw new Error("缺少当前 Turn ID，请刷新对话后重试");
@@ -1394,6 +1510,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   const release = () => { if (!released) { released = true; activeAttachmentSubmissions -= 1; } };
   summary.deviceId = client.deviceId;
   const entry: AttachmentSubmission = {clientMessageId:id, kind:steering ? "steer" : "start", ...(steering ? {expectedTurnId:payload.expectedTurnId as string} : {}), content, attachments:[], status:"preparing"};
+  if (selectedSkills !== undefined) Object.assign(entry, {skills:selectedSkills});
   const cancelVersion = turnCancelVersions.get(threadId) ?? 0;
   if (existing) entries.splice(entries.indexOf(existing),1,entry); else entries.push(entry);
   persistState();
@@ -1401,13 +1518,28 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   try {
     const prepared = await prepareAttachments(refs, client.deviceId, (method, params) => sendAgentRequest(client.deviceId, method, params), () => client.socket.readyState === WebSocket.OPEN && entry.status === "preparing" && agents.get(client.deviceId)?.hello?.agent.deviceKey === deviceKey, progress);
     entry.attachments = prepared.attachments;
+    const skillInput:JsonObject[]=[];
+    const skillTurn:SkillTurn={catalog:new Map(),loads:new Map()};
+    if (!steering && skillUsers.has(client.userId)) {
+      skills.project(client.userId,skillDirectory(client.userId));
+      for(const row of skills.list(client.userId).filter(s=>s.enabled))skillTurn.catalog.set(row.name,skills.resolve(client.userId,row.id,row.revision));
+      const selected = Array.isArray(selectedSkills) ? selectedSkills.map(v => skills.resolve(client.userId,v.id,v.revision)) : [];
+      for (const match of content.matchAll(/(?:^|\s)\$([a-z][a-z0-9-]{0,63})(?=\s|$|[，。,:;!?])/g)) {
+        const known=skills.list(client.userId).find(s=>s.name===match[1]);
+        if(known){const row=skills.resolve(client.userId,known.id);if(!selected.some(s=>s.id===row.id))selected.push(row);}
+      }
+      if(selected.length>4)throw Error("SKILL_SELECTION_LIMIT");
+      const check=()=>{if(entry.status!=="preparing"||client.socket.readyState!==WebSocket.OPEN||(turnCancelVersions.get(threadId)??0)!==cancelVersion)throw Error("CANCELLED: 技能准备已取消");};
+      for(const row of selected){check();progress(`正在准备技能 ${row.name}`);const loaded=await prepareSkill(client,row,threadId,check);skillTurn.loads.set(row.name,Promise.resolve(loaded));const {instructions:_body,...resources}=loaded;skillInput.push({type:"skill",name:row.name,path:skills.nativePath(skillDirectory(client.userId),row)},{type:"text",text:`Selected skill resources: ${JSON.stringify(resources)}`});}
+    } else if(Array.isArray(selectedSkills)&&selectedSkills.length) throw Error("SKILL_RUNTIME_UPGRADE_REQUIRED");
     if (steering && (turnCancelVersions.get(threadId) ?? 0) !== cancelVersion) throw new Error("当前任务已请求停止，追加未发送");
     entry.status = "submitting";
     persistState();
     progress("正在提交中央模型");
     // Platform fields are consumed here. Client paths never become localImage.path.
-    const { attachments: _attachments, clientMessageId: _id, deviceKey: _deviceKey, ...upstream } = payload;
-    const input = [...payload.input, {type:"text",text:`[platform-message:${id}]`}, ...prepared.input];
+    const { attachments: _attachments, clientMessageId: _id, deviceKey: _deviceKey, skills:_skills, ...upstream } = payload;
+    const input = [...payload.input, ...skillInput, {type:"text",text:`[platform-message:${id}]`}, ...prepared.input];
+    if(!steering&&skillUsers.has(client.userId))pendingSkillTurns.set(threadId,skillTurn);
     const upstreamTask = steering
       ? steerOrStart((method, params) => bridge.request(method, params), {threadId, expectedTurnId:payload.expectedTurnId as string, input}, () => (turnCancelVersions.get(threadId) ?? 0) !== cancelVersion)
         .then(result => ({turn:{id:result.turnId}, turnId:result.turnId, started:result.started}))
@@ -1415,6 +1547,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
     const task = upstreamTask.then((result) => {
       const turn = isRecord(result) && isRecord(result.turn) ? result.turn : undefined;
       if (typeof turn?.id !== "string") throw new Error("App Server 未返回 turn.id，需核对历史");
+      if(!steering&&skillUsers.has(client.userId)&&!stoppedNativeTurns.has(`${threadId}:${turn.id}`))turnSkillLoads.set(`${threadId}:${turn.id}`,skillTurn);
       entry.status="sent"; entry.turnId=turn.id; delete entry.error; persistState();
       return {...(isRecord(result)?result:{}),submission:entry};
     }).catch((error: unknown) => {
@@ -1426,7 +1559,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
         persistState();
       }
       throw error;
-    }).finally(release);
+    }).finally(()=>{if(pendingSkillTurns.get(threadId)===skillTurn)pendingSkillTurns.delete(threadId);release();});
     let timer: NodeJS.Timeout | undefined;
     try {
       return await Promise.race([task,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error("Turn 提交超时，结果未知，请核对历史")),50_000);})]);

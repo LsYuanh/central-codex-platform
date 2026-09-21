@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
+import { useSkills, SkillsPanel, SkillPicker } from "./skills";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
 import { useSidebarOrganization, useThreadDrag, OrganizeThreadDialog } from "./SidebarOrganization";
@@ -32,7 +33,7 @@ import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
 type TestMode = "central-gateway" | "local-app-server" | "fake-central";
 type AppPage = "conversation" | "settings";
-type SettingsSection = "connection" | "conversations" | "workspace" | "diagnostics" | "updates";
+type SettingsSection = "skills" | "connection" | "conversations" | "workspace" | "diagnostics" | "updates";
 type EventFilter = "all" | "turn" | "tool" | "error";
 type WorkspaceResultStatus = "idle" | "loading" | "success" | "error";
 type ModelPickerSubmenu = "model" | "effort" | "speed";
@@ -181,6 +182,7 @@ export default function App() {
   threadIdRef.current = threadId;
   const [draftProject, setDraftProject] = useState<ClientProject>();
   const projectScope = JSON.stringify([mode, appUrl, runtimeConfig?.effective.userId, deviceId]);
+  const skillService = useSkills(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.skills === true);
   const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
   // The selector changes this draft's destination; sidebar navigation switches draft slots.
   const newDraftSlotRef = useRef("__new__:");
@@ -1567,6 +1569,7 @@ export default function App() {
                 <span className="connection-summary-lines"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "connecting" || deviceState === "reconnecting" ? "连接中" : "离线"}</span></span>
               </div>
               {clientUpdate.release.version && <button className="sidebar-settings-button" onClick={() => openSettings("updates")}><UiIcon name="activity" /><span>新版本 {clientUpdate.release.version}</span></button>}
+              <button className="sidebar-settings-button" onClick={() => openSettings("skills")}><UiIcon name="review" /><span>我的技能</span></button>
               <button className="sidebar-settings-button" onClick={() => openSettings()}><UiIcon name="settings" /><span>设置</span></button>
             </div>
           </>
@@ -1575,6 +1578,7 @@ export default function App() {
             <button className="back-to-app" onClick={() => navigatePage("conversation")}><UiIcon name="arrow" /> 返回应用</button>
             <div className="settings-nav-title">设置</div>
             <nav className="settings-nav" aria-label="设置分类">
+              <button className={settingsSection === "skills" ? "active" : ""} onClick={() => openSettings("skills")}><UiIcon name="review" /><strong>我的技能</strong></button>
               <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="settings" /><strong>常规与连接</strong></button>
               <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="review" /><strong>对话管理</strong></button>
               <button className={settingsSection === "workspace" ? "active" : ""} onClick={() => openSettings("workspace")}><UiIcon name="folder" /><strong>文件与工具</strong></button>
@@ -1670,6 +1674,7 @@ export default function App() {
                   </div>
                   <div className="composer-footer">
                     {mode === "central-gateway" && attachments.pickerButton}
+                    {mode === "central-gateway" && <SkillPicker service={skillService} disabled={sending || turnRunning || appState !== "online"} insert={text => {setComposer(current => current + (current && !/\s$/.test(current) ? " " : "") + text);composerInputRef.current?.focus();}} manage={() => openSettings("skills")} />}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
                       <summary aria-label="切换模型、推理强度和速度"><span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || "自动"}</span><span className="model-picker-chevron" aria-hidden="true" /></summary>
                       <div className="model-picker-popover">
@@ -1700,8 +1705,9 @@ export default function App() {
           </div>
         ) : (
           <div className="settings-page">
-            <header className="settings-header"><div><h1>{settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>
+            <header className="settings-header"><div><h1>{settingsSection === "skills" ? "我的技能" : settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "skills" ? "创建和管理个人技能，在不同设备上使用。" : settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>
             <div className="settings-scroll">
+              {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online"} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
                 <div className="settings-content">
                   <section className="settings-section">

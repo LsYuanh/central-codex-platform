@@ -38,7 +38,7 @@ const originalGitDir=process.env.GIT_DIR;
 try {
   // Reproduce both ordinary ancestor discovery and explicit inherited Git context.
   process.env.GIT_DIR=resolve(here,'../../../.git');
-  check('all pinned files actually patched inside parent repo',()=>assert.equal(preparePatch(source).verifiedFiles,25));
+  check('all pinned files actually patched inside parent repo',()=>assert.equal(preparePatch(source).verifiedFiles,JSON.parse(readFileSync(join(here,'source-files.json'),'utf8')).length+1));
 } finally { if(originalGitDir===undefined) delete process.env.GIT_DIR; else process.env.GIT_DIR=originalGitDir; }
 check('prepared source verifies',()=>assert.equal(preparePatch(source,true).commit,pin.commit));
 if(process.platform==='win32') {

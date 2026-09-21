@@ -28,6 +28,7 @@ mod command_output;
 mod outputs;
 mod process;
 mod runtime;
+mod skills;
 #[cfg(windows)]
 mod windows_job;
 mod workspace;
@@ -267,7 +268,7 @@ async fn run_connection(
                 "os": env::consts::OS,
                 "arch": env::consts::ARCH,
                 "workspaceRoot": outputs::display_path(&config.workspace_root),
-                "capabilities": ["client-paths/v1", "remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
+                "capabilities": ["skills/v1", "client-paths/v1", "remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
                 "absolutePaths": config.allow_absolute
             }
         }),
@@ -448,6 +449,7 @@ async fn handle_request(
     let result = match admission.as_ref() {
         Err(error) => Err(error.clone()),
         Ok(_) => match request.method.as_str() {
+            method if method.starts_with("skills/") => skills::call(method, &request.params),
             "workspace/list" => list_workspace(workspace_root, &request.params),
             "read_file" => read_file(workspace_root, &request.params),
             "workspace/git_status" | "workspace/git_diff" => {

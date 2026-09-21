@@ -1628,20 +1628,128 @@ index 112eeb0..87ce261 100644
              return PluginLoadOutcome::default();
          }
 diff --git a/codex-rs/ext/skills/src/host_service.rs b/codex-rs/ext/skills/src/host_service.rs
-index c13f9d0..aff8e8e 100644
+index c13f9d0..0a7700f 100644
 --- a/codex-rs/ext/skills/src/host_service.rs
 +++ b/codex-rs/ext/skills/src/host_service.rs
-@@ -171,6 +171,9 @@ impl HostSkillsService {
+@@ -110,6 +110,107 @@ impl HostSkillsRequest<'_> {
+ }
+ 
+ impl HostSkillsService {
++    // Platform-owned projections contain only SKILL.md and invocation metadata.
++    // They never contain executable scripts or business files. Read a fresh
++    // catalog for every turn: disabled/deleted skills cannot survive a cache hit.
++    async fn managed_snapshot(&self, input: &HostSkillsLoadInput) -> HostSkillsSnapshot {
++        let empty = || HostSkillsSnapshot::new(Arc::new(Default::default()));
++        let Ok(cwd) = std::env::current_dir() else {
++            return empty();
++        };
++        let root = cwd.join("managed-skills");
++        let Ok(canonical_root) = std::fs::canonicalize(&root) else {
++            return empty();
++        };
++        let Ok(canonical_cwd) = std::fs::canonicalize(&cwd) else {
++            return empty();
++        };
++        if canonical_root != canonical_cwd.join("managed-skills") {
++            return empty();
++        }
++        if std::fs::canonicalize(root.join("catalog.json")).ok()
++            != Some(canonical_root.join("catalog.json"))
++        {
++            return empty();
++        }
++        let Ok(bytes) = std::fs::read(root.join("catalog.json")) else {
++            return empty();
++        };
++        if bytes.len() > 32768 {
++            return empty();
++        }
++        let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else {
++            return empty();
++        };
++        if entries.len() > 100 {
++            return empty();
++        }
++        let mut roots = Vec::new();
++        for entry in entries {
++            let relative = std::path::Path::new(&entry);
++            if relative.components().count() != 2
++                || relative
++                    .components()
++                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
++            {
++                return empty();
++            }
++            let path = root.join(relative);
++            let Ok(canonical) = std::fs::canonicalize(&path) else {
++                return empty();
++            };
++            if canonical != canonical_root.join(relative) {
++                return empty();
++            }
++            // Reject links and unexpected files before the upstream recursive scanner.
++            let Ok(children) = std::fs::read_dir(&path) else {
++                return empty();
++            };
++            for child in children {
++                let Ok(child) = child else {
++                    return empty();
++                };
++                let Ok(kind) = child.file_type() else {
++                    return empty();
++                };
++                if kind.is_file() && child.file_name() == "SKILL.md" {
++                    if child.metadata().map(|m| m.len() > 65536).unwrap_or(true) {
++                        return empty();
++                    }
++                } else if kind.is_dir() && child.file_name() == "agents" {
++                    let Ok(metadata) = std::fs::read_dir(child.path()) else {
++                        return empty();
++                    };
++                    for item in metadata {
++                        let Ok(item) = item else {
++                            return empty();
++                        };
++                        if item.file_name() != "openai.yaml"
++                            || !item.file_type().map(|t| t.is_file()).unwrap_or(false)
++                            || item.metadata().map(|m| m.len() > 4096).unwrap_or(true)
++                        {
++                            return empty();
++                        }
++                    }
++                } else {
++                    return empty();
++                }
++            }
++            let Ok(path) = AbsolutePathBuf::try_from(path) else {
++                return empty();
++            };
++            roots.push(HostSkillRoot::host(
++                path,
++                SkillScope::User,
++                Arc::clone(&LOCAL_FS),
++            ));
++        }
++        let rules = skill_config_rules_from_stack(&input.config_layer_stack);
++        HostSkillsSnapshot::new(Arc::new(
++            self.build_skill_outcome(input, roots, &rules, None).await,
++        ))
++    }
++
+     pub fn new(codex_home: AbsolutePathBuf, bundled_skills_enabled: bool) -> Self {
+         Self::new_with_restriction_product(codex_home, bundled_skills_enabled, Some(Product::Codex))
+     }
+@@ -171,6 +272,9 @@ impl HostSkillsService {
          input: &HostSkillsLoadInput,
          fs: Option<Arc<dyn ExecutorFileSystem>>,
      ) -> HostSkillsSnapshot {
 +        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
-+            return HostSkillsSnapshot::new(Arc::new(Default::default()));
++            return self.managed_snapshot(input).await;
 +        }
          let roots = self.skill_roots_for_config(input, fs).await;
          let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
          let cache_key = config_skills_cache_key(
-@@ -202,6 +205,9 @@ impl HostSkillsService {
+@@ -202,6 +306,9 @@ impl HostSkillsService {
          input: &HostSkillsLoadInput,
          fs: Arc<dyn ExecutorFileSystem>,
      ) -> Vec<AbsolutePathBuf> {
@@ -1651,16 +1759,26 @@ index c13f9d0..aff8e8e 100644
          self.skill_roots_for_config(input, Some(fs))
              .await
              .into_iter()
-@@ -240,6 +246,9 @@ impl HostSkillsService {
+@@ -240,6 +347,9 @@ impl HostSkillsService {
          fs: Option<Arc<dyn ExecutorFileSystem>>,
          request_root_snapshots: Option<&RequestSkillRootSnapshots>,
      ) -> HostSkillsSnapshot {
 +        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
-+            return HostSkillsSnapshot::new(Arc::new(Default::default()));
++            return self.managed_snapshot(input).await;
 +        }
          let bundled_skills_enabled = bundled_skills_enabled_from_stack(&input.config_layer_stack);
          if bundled_skills_enabled {
              self.ensure_system_skills_installed();
+@@ -419,6 +529,9 @@ impl HostSkillsService {
+     }
+ 
+     fn ensure_system_skills_installed(&self) {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return;
++        }
+         if let Err(err) = install_system_skills(&self.codex_home) {
+             tracing::error!("failed to install system skills: {err}");
+         }
 diff --git a/codex-rs/exec-server/src/environment.rs b/codex-rs/exec-server/src/environment.rs
 index 953f8d4..68821a1 100644
 --- a/codex-rs/exec-server/src/environment.rs
@@ -1742,14 +1860,28 @@ index 3ce0431..4fd7089 100644
      #[cfg(unix)]
      command.process_group(0);
 diff --git a/codex-rs/app-server/src/extensions.rs b/codex-rs/app-server/src/extensions.rs
-index 929eab5..8051b5f 100644
+index 929eab5..8e57a91 100644
 --- a/codex-rs/app-server/src/extensions.rs
 +++ b/codex-rs/app-server/src/extensions.rs
-@@ -73,6 +73,9 @@ where
+@@ -73,6 +73,23 @@ where
          queue_service,
      } = dependencies;
      let mut builder = ExtensionRegistryBuilder::<Config>::with_event_sink(Arc::clone(&event_sink));
 +    if codex_core::remote_workspace::enabled() {
++        let providers = codex_skills_extension::SkillProviders::new()
++            .with_host_provider(Arc::new(codex_skills_extension::HostSkillProvider::new()));
++        codex_skills_extension::install_with_providers_and_metrics(
++            &mut builder,
++            providers,
++            codex_otel::global(),
++            |config: &Config| codex_skills_extension::SkillsExtensionConfig {
++                include_instructions: config.include_skill_instructions,
++                max_context_tokens: config.skill_max_context_tokens,
++                bundled_skills_enabled: false,
++                orchestrator_skills_enabled: false,
++                shadow_selection_enabled: false,
++            },
++        );
 +        return Arc::new(builder.build());
 +    }
      if let Some(queue_service) = queue_service {
@@ -1821,13 +1953,13 @@ diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_wo
 new file mode 100644
 --- /dev/null
 +++ b/codex-rs/core/src/remote_workspace.rs
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,242 @@
 +//! Yuan Zhou's process-wide, fail-closed workspace boundary.
 +//! This module is added to the pinned upstream codex-core by the patch generator.
 +use serde_json::Value;
 +use std::sync::OnceLock;
 +
-+pub const MARKER: &str = "yuan-zhou-remote-workspace/1";
++pub const MARKER: &str = "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1";
 +
 +pub fn enabled() -> bool {
 +    static ENABLED: OnceLock<bool> = OnceLock::new();
@@ -1852,6 +1984,7 @@ new file mode 100644
 +            | "device_workspace_git_status"
 +            | "device_workspace_git_diff"
 +            | "device_workspace_apply_patch"
++            | "device_skill_load"
 +    )
 +}
 +
@@ -1875,12 +2008,25 @@ new file mode 100644
 +            | "model/list"
 +            | "account/read"
 +            | "account/rateLimits/read"
++            | "skills/list"
 +    ) {
 +        return Err(format!("REMOTE_WORKSPACE_UNSUPPORTED: {method}"));
 +    }
 +    let Some(params) = request.get("params").and_then(Value::as_object) else {
 +        return Ok(());
 +    };
++    if method == "skills/list" {
++        // Discovery never accepts client-controlled host roots or cwd values.
++        if params
++            .keys()
++            .any(|key| key != "forceReload" && key != "cwds")
++            || params
++                .get("cwds")
++                .is_some_and(|v| v.as_array().is_none_or(|a| !a.is_empty()))
++        {
++            return Err("REMOTE_SKILL_SCOPE_DENIED".into());
++        }
++    }
 +    for key in [
 +        "config",
 +        "permissions",
@@ -1907,9 +2053,63 @@ new file mode 100644
 +        for item in input {
 +            if !matches!(
 +                item.get("type").and_then(Value::as_str),
-+                Some("text" | "image")
++                Some("text" | "image" | "skill")
 +            ) {
 +                return Err("REMOTE_WORKSPACE_UNSUPPORTED: local input or skill".into());
++            }
++            if item.get("type").and_then(Value::as_str) == Some("skill") {
++                let raw = item
++                    .get("path")
++                    .and_then(Value::as_str)
++                    .ok_or("REMOTE_SKILL_PATH_DENIED")?;
++                let root = std::env::current_dir()
++                    .map_err(|e| e.to_string())?
++                    .join("managed-skills");
++                let canonical_cwd =
++                    std::fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
++                        .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                let canonical_root =
++                    std::fs::canonicalize(&root).map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                if canonical_root != canonical_cwd.join("managed-skills")
++                    || std::fs::canonicalize(root.join("catalog.json")).ok()
++                        != Some(canonical_root.join("catalog.json"))
++                {
++                    return Err("REMOTE_SKILL_PATH_DENIED".into());
++                }
++                let path = std::path::Path::new(raw);
++                let canonical =
++                    std::fs::canonicalize(path).map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                let relative = path
++                    .strip_prefix(&root)
++                    .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                if relative.components().count() != 3
++                    || relative
++                        .components()
++                        .any(|c| !matches!(c, std::path::Component::Normal(_)))
++                    || path.file_name().and_then(|v| v.to_str()) != Some("SKILL.md")
++                    || canonical
++                        != std::fs::canonicalize(&root)
++                            .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?
++                            .join(relative)
++                {
++                    return Err("REMOTE_SKILL_PATH_DENIED".into());
++                }
++                let catalog: Value = serde_json::from_slice(
++                    &std::fs::read(root.join("catalog.json"))
++                        .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?,
++                )
++                .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                let key = relative
++                    .parent()
++                    .ok_or("REMOTE_SKILL_PATH_DENIED")?
++                    .to_string_lossy()
++                    .replace('\\', "/");
++                if !catalog
++                    .as_array()
++                    .is_some_and(|rows| rows.iter().any(|v| v.as_str() == Some(&key)))
++                {
++                    return Err("REMOTE_SKILL_PATH_DENIED".into());
++                }
 +            }
 +            if item.get("type").and_then(Value::as_str) == Some("image")
 +                && !item
@@ -1937,7 +2137,6 @@ new file mode 100644
 +            "fuzzyFileSearch",
 +            "review/start",
 +            "thread/fork",
-+            "skills/list",
 +            "mcpServer/reload",
 +        ] {
 +            assert!(validate_request(&json!({"method": method})).is_err());
@@ -1976,5 +2175,24 @@ new file mode 100644
 +        ] {
 +            assert!(!device_tool(name));
 +        }
++    }
++
++    #[test]
++    fn managed_skill_discovery_rejects_host_overrides() {
++        assert!(
++            validate_request(
++                &json!({"method":"skills/list","params":{"forceReload":true,"cwds":[]}})
++            )
++            .is_ok()
++        );
++        assert!(
++            validate_request(&json!({"method":"skills/list","params":{"cwds":["/private"]}}))
++                .is_err()
++        );
++        assert!(
++            validate_request(&json!({"method":"skills/list","params":{"perCwdExtraUserRoots":[]}}))
++                .is_err()
++        );
++        assert!(validate_request(&json!({"method":"turn/start","params":{"input":[{"type":"skill","name":"forged","path":"/private/SKILL.md"}]}})).is_err());
 +    }
 +}
