@@ -30,6 +30,7 @@
     "dev:agent": "cargo run -p local-agent -- --workspace-root ./fixtures/workspace --gateway-url ws://127.0.0.1:4310/ws/agent",
     "dev:desktop": "cargo build -p local-agent && npm run tauri:dev --workspace @central-codex-spike/desktop",
     "package:desktop": "node scripts/package-desktop.mjs",
+    "package:webview2": "node scripts/package-webview2.mjs",
     "setup:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-env.ps1",
     "db:init": "node scripts/init-sqlite.mjs",
     "check": "npm run check --workspaces --if-present && cargo check --workspace",

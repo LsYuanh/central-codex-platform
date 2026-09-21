@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { assertRuntimeSpec, assertX64Runtime, customizeTemplate, nsisPath, runtimeSpec } from "./desktop-webview2.mjs";
+import { assertRuntimeSpec, assertX64Runtime, customizeTemplate, nsisPath, runtimeSpec, prepareInstaller } from "./desktop-webview2.mjs";
+import { componentIdentity, componentScript } from "./package-webview2.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const windows = join(root, "apps/desktop/src-tauri/windows");
@@ -44,21 +45,45 @@ test("pinned upstream template applies all integration points and rejects drift"
   assert.match(result, /Section WebView2\n.*\n.*Goto yz_system_webview_done/);
   assert.match(result, /YZ_INSTALL_WEBVIEW/);
   assert.match(result, /YZ_UNINSTALL_WEBVIEW/);
+  assert.match(result, /YZ_PREVIOUS_UNINSTALL_ARGS/);
+  assert.match(result, /YZ_WEBVIEW_PAYLOAD 0/);
+  assert.doesNotMatch(result, /!define YZ_WEBVIEW_SOURCE/);
+  assert.match(customizeTemplate(template, { ...options, withWebView2: true }), /YZ_WEBVIEW_PAYLOAD 1/);
   assert.match(result, /NSIS_HOOK_PREINSTALL/);
   assert.throws(() => customizeTemplate(template.replace("Section WebView2", "Section Renamed"), options), /anchor changed/);
 });
 
 test("Windows release/RC plans keep optional behavior and existing RC hooks without downloading", { skip: process.platform !== "win32" }, () => {
-  for (const flags of [[], ["--rc"], ["--updater"]]) {
+  for (const flags of [[], ["--rc"], ["--updater"], ["--with-webview2"], ["--rc", "--with-webview2"]]) {
     const command = spawnSync(process.execPath, ["scripts/package-desktop.mjs", ...flags, "--plan"], { cwd: root, encoding: "utf8" });
     assert.equal(command.status, 0, command.stderr);
     const plan = JSON.parse(command.stdout);
     assert.equal(plan.optionalWebView2.defaultSelected, false);
     assert.equal(plan.optionalWebView2.preserveOnUpgrade, true);
+    assert.equal(plan.optionalWebView2.bundled, flags.includes("--with-webview2"));
     assert.equal(plan.config.bundle.windows.webviewInstallMode.type, "downloadBootstrapper");
     assert.match(plan.config.bundle.windows.nsis.template, /webview2-installer/);
     if (flags.includes("--rc")) assert.equal(plan.config.bundle.windows.nsis.installerHooks, "rc-installer-hooks.nsh");
   }
+});
+
+test("lean template preparation needs no runtime or CAB", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "yz-webview-lean-"));
+  const result = await prepareInstaller(directory);
+  assert.equal(result.runtime, undefined);
+  assert.doesNotMatch(readFileSync(result.template, "utf8"), /!define YZ_WEBVIEW_SOURCE/);
+});
+
+test("standalone component targets the existing formal/RC identity", () => {
+  assert.equal(componentIdentity().registryKey, "Software\\centralcodex\\远舟");
+  assert.equal(componentIdentity(true).registryKey, "Software\\Central Codex RC QA\\远舟 RC 20260909");
+  assert.equal(componentIdentity(true).mainBinaryName, "yuan-zhou-rc");
+  const script = componentScript({ identity: componentIdentity(), runtimeDirectory: tmpdir(), runtimeKiB: 100,
+    outfile: join(tmpdir(), "component-setup.exe") });
+  assert.match(script, /ReadRegStr \$INSTDIR HKCU/);
+  assert.doesNotMatch(script, /WriteUninstaller/);
+  assert.throws(() => componentScript({ identity: { ...componentIdentity(), productName: "$INSTDIR" },
+    runtimeDirectory: tmpdir(), runtimeKiB: 100, outfile: join(tmpdir(), "component.exe") }), /Unsafe NSIS/);
 });
 
 const makensis = process.env.YZ_NSIS_COMPILER ?? join(process.env.LOCALAPPDATA ?? "", "tauri/NSIS/makensis.exe");

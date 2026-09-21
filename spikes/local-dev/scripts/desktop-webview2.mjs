@@ -100,9 +100,10 @@ function replaceOnce(source, from, to) {
 }
 
 // Used with the pinned Handlebars template and, in tests, an existing rendered NSIS script.
-export function customizeTemplate(source, { include, runtimeDirectory, runtimeKiB }) {
+export function customizeTemplate(source, { include, runtimeDirectory, runtimeKiB = 0, withWebView2 = false }) {
   source = source.replaceAll("\r\n", "\n");
-  source = replaceOnce(source, "; Installer pages, must be ordered as they appear", `!define YZ_WEBVIEW_SOURCE "${nsisPath(runtimeDirectory)}"
+  source = replaceOnce(source, "; Installer pages, must be ordered as they appear", `${withWebView2 ? `!define YZ_WEBVIEW_SOURCE "${nsisPath(runtimeDirectory)}"` : ""}
+!define YZ_WEBVIEW_PAYLOAD ${withWebView2 ? 1 : 0}
 !define YZ_WEBVIEW_KIB ${runtimeKiB}
 !include "${nsisPath(include)}"
 
@@ -111,7 +112,11 @@ export function customizeTemplate(source, { include, runtimeDirectory, runtimeKi
   source = replaceOnce(source, "\n\nSection EarlyChecks", "\n\nSection EarlyChecks\n  Call YzEnsureSelection");
   source = replaceOnce(source, "Function .onInit\n", "!insertmacro YZ_LANGUAGE_STRINGS\n\nFunction .onInit\n");
   // Cache the choice before the reinstall page can invoke the previous uninstaller.
-  source = replaceOnce(source, '\nFunctionEnd\n\n\nSection EarlyChecks', '\n  Call YzEnsureSelection\nFunctionEnd\n\n\nSection EarlyChecks');
+  source = replaceOnce(source, '\nFunctionEnd\n\n\nSection EarlyChecks', '\n  Call YzEnsureSelection\n!if ${YZ_WEBVIEW_PAYLOAD} == 0\n  Call YzValidateRetainedRuntime\n!endif\nFunctionEnd\n\n\nSection EarlyChecks');
+  // 0.2.4's old uninstaller removes the private runtime unless /UPDATE is passed.
+  // This also covers interactive upgrades that elect to remove the old app first.
+  source = replaceOnce(source, '      ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE',
+    '      !insertmacro YZ_PREVIOUS_UNINSTALL_ARGS');
   source = replaceOnce(source, "Section WebView2\n", "Section WebView2\n  ${If} $YzWebViewSelected == 1\n    Goto yz_system_webview_done\n  ${EndIf}\n");
   source = replaceOnce(source, "SectionEnd\n\nSection Install", "yz_system_webview_done:\nSectionEnd\n\nSection Install");
   source = replaceOnce(source, "Section Install\n", "Section Install YZ_MAIN_SECTION\n");
@@ -121,15 +126,17 @@ export function customizeTemplate(source, { include, runtimeDirectory, runtimeKi
   return source + "\n!insertmacro YZ_SIZE_FUNCTIONS\n";
 }
 
-export async function prepareInstaller(targetDir) {
+export async function prepareInstaller(targetDir, { withWebView2 = false } = {}) {
   const installed = JSON.parse(readFileSync(join(root, "node_modules/@tauri-apps/cli/package.json"), "utf8")).version;
   if (installed !== cliVersion) throw Error("Review the WebView2 NSIS template when upgrading Tauri CLI");
-  const runtime = await prepareRuntime();
+  // A normal client update must not download, extract, or package the runtime.
+  const runtime = withWebView2 ? await prepareRuntime() : undefined;
   const directory = join(targetDir, "webview2-installer");
   mkdirSync(directory, { recursive: true });
   const template = join(directory, "installer.nsi");
   writeFileSync(template, customizeTemplate(readFileSync(join(windows, "nsis/upstream-installer.nsi"), "utf8"), {
-    include: join(windows, "nsis/webview2-component.nsh"), runtimeDirectory: runtime.directory, runtimeKiB: runtime.sizeKiB,
+    include: join(windows, "nsis/webview2-component.nsh"), withWebView2,
+    runtimeDirectory: runtime?.directory, runtimeKiB: runtime?.sizeKiB,
   }));
   return { template, runtime };
 }

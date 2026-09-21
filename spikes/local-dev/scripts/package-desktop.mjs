@@ -9,19 +9,21 @@ import { prepareInstaller, runtimeSpec } from "./desktop-webview2.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktop = join(root, "apps", "desktop");
 const args = process.argv.slice(2);
-const usage = "Usage: node scripts/package-desktop.mjs [--debug] [--rc [--rc-version 0.2.0-rc.N]] [--updater [--release-version X.Y.Z]] [--plan]";
+const usage = "Usage: node scripts/package-desktop.mjs [--debug] [--rc [--rc-version 0.2.0-rc.N]] [--updater [--release-version X.Y.Z]] [--with-webview2] [--plan]";
 const flags = new Set();
 let rcVersion;
 let releaseVersion;
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
-  if (flags.has(arg) || !["--debug", "--rc", "--rc-version", "--plan", "--updater", "--release-version"].includes(arg)) throw new Error(usage);
+  if (flags.has(arg) || !["--debug", "--rc", "--rc-version", "--plan", "--updater", "--release-version", "--with-webview2"].includes(arg)) throw new Error(usage);
   flags.add(arg);
   if (arg === "--rc-version") rcVersion = args[++i];
   if (arg === "--release-version") releaseVersion = args[++i];
 }
 const rc = flags.has("--rc");
 const updater = flags.has("--updater");
+const withWebView2 = flags.has("--with-webview2");
+if (withWebView2 && process.platform !== "win32") throw Error("--with-webview2 is Windows-only");
 if (updater && (rc || flags.has("--debug"))) throw Error("Signed updates require a formal release build");
 if (flags.has("--release-version") && (!updater || !/^\d+\.\d+\.\d+$/.test(releaseVersion ?? ""))) throw Error(usage);
 if (flags.has("--rc-version") && (!rc || !/^0\.2\.0-rc\.[1-9]\d{0,3}$/.test(rcVersion ?? ""))) throw new Error(usage);
@@ -90,12 +92,12 @@ if (process.platform === "win32") {
 if (flags.has("--plan")) {
   console.log(JSON.stringify({ rc, host, profile: debug ? "debug" : "release", targetDir,
     config: config.startsWith("{") ? JSON.parse(config) : config,
-    ...(process.platform === "win32" ? { optionalWebView2: { ...runtimeSpec, defaultSelected: false, preserveOnUpgrade: true } } : {}),
+    ...(process.platform === "win32" ? { optionalWebView2: { ...runtimeSpec, bundled: withWebView2, defaultSelected: false, preserveOnUpgrade: true } } : {}),
     bundles: process.platform === "win32" ? ["nsis"] : ["app", "dmg"],
   }, null, 2));
   process.exit(0);
 }
-if (process.platform === "win32") await prepareInstaller(targetDir);
+if (process.platform === "win32") await prepareInstaller(targetDir, { withWebView2 });
 // Tauri sets static CRT flags for its own build; our separate Cargo sidecar build
 // must do the same so fresh Windows machines do not need vc_redist installed.
 const agentEnv = { ...env };

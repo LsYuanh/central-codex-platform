@@ -133,7 +133,7 @@ pub fn report_failure(identifier: &str, error: &str) {
         .set_title("远舟启动失败")
         .set_level(rfd::MessageLevel::Error)
         .set_description(format!(
-            "无法启动远舟窗口。\n\n{error}\n\n请重新运行安装器，勾选“安装独立 WebView2 运行环境”进行安装或修复。若仍失败，请提供诊断日志。{location}"
+            "无法启动远舟窗口。\n\n{error}\n\n请运行远舟独立 WebView2 组件安装包进行安装或修复。客户端小包会保留已有组件，不包含运行时文件。若仍失败，请提供诊断日志。{location}"
         ))
         .show();
 }
