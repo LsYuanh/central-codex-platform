@@ -322,8 +322,7 @@ a {
 .project-dialog label select { display: block; width: 100%; margin-top: 8px; }
 .project-list-section { padding-bottom: 0; }
 .project-row { position: relative; display: flex; align-items: center; min-height: 32px; border-radius: 8px; }
-.project-row:hover,.project-row:focus-within { background: var(--rail-hover); }
-.project-row.active { background: var(--selected); }
+.project-row:hover { background: var(--rail-hover); }
 .project-select { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 6px 12px; min-height: 32px; background: transparent; color: var(--ink); text-align: left; }
 .project-select span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-select:hover:not(:disabled) { background: transparent; }
