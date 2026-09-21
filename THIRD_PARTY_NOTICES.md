@@ -12,4 +12,4 @@ Before importing code, record the project, repository URL, exact commit or versi
 
 ## Local development technical Spike
 
-The isolated `spikes/local-dev` prototype uses registry-distributed npm and crates.io packages without copying Codexia or Soromi source code. Its direct dependency versions, sources, licenses, and purposes are recorded in `spikes/local-dev/THIRD_PARTY.md`; exact transitive resolutions are captured by its lockfiles after installation. These temporary dependencies are not an approved production baseline.
+The isolated `.` prototype uses registry-distributed npm and crates.io packages without copying Codexia or Soromi source code. Its direct dependency versions, sources, licenses, and purposes are recorded in `THIRD_PARTY.md`; exact transitive resolutions are captured by its lockfiles after installation. These temporary dependencies are not an approved production baseline.

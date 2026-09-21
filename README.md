@@ -6,32 +6,33 @@
 
 ## 当前维护基线
 
-截至 2026-09-20 的仓库及部署记录：工作客户端 0.2.2，中央管理 App 0.1.1；中央 Mac 已使用 WSS、一次性配对码、设备令牌、按用户 Worker 和共享模型登录续期。Windows 中央实现及独立安装 QA 已具备，完整发布资格和跨平台验收仍有缺口，见[验证与已知限制](docs/验证与已知限制.md)。
+中央 Mac 已使用 WSS、一次性配对码、设备令牌、按用户 Worker 和共享模型登录续期。源码版本、已发布版本和中央部署记录统一见[项目上下文](docs/项目上下文.md)。Windows 中央实现及独立安装 QA 已具备，完整发布资格和跨平台验收仍有缺口，见[验证与已知限制](docs/验证与已知限制.md)。
 
 正式局域网入口为 `wss://192.0.2.10:4510/ws`，禁止暴露到互联网。部署版本、备份及回退见[发布手册](docs/发布与回退手册.md)；文档中的在线数量是历史观测，不代表实时状态。
 
 ## 开发入口
 
-实现集中在 [spikes/local-dev](spikes/local-dev/README.md)，继续在现有工程开发。
+仓库根目录是唯一的 npm/Cargo 工作区。以下命令在仓库根目录运行：
 
 ```powershell
-cd spikes/local-dev
 npm ci
-npm run dev:desktop
+npm run dev
 ```
 
-`dev:desktop` 自动构建和管理 Local Agent，首次启动按客户端设置完成配对与默认目录配置。中央管理开发入口为 `npm run dev:central-app`。环境要求和检查命令见[开发说明](spikes/local-dev/README.md)。
+`dev` 等同于 `dev:desktop`，自动构建和管理 Local Agent，首次启动按客户端设置完成配对与默认目录配置。中央管理开发入口为 `npm run dev:central-app`。环境要求、旧目录迁移注意事项和检查命令见[开发指南](docs/开发指南.md)。
 
 | 目录 | 内容 |
 | --- | --- |
-| `spikes/local-dev/apps/desktop` | Tauri + React 工作客户端 |
-| `spikes/local-dev/apps/central` | 中央管理 App |
-| `spikes/local-dev/services/test-gateway` | 中央网关、Worker 管理和设备路由 |
-| `spikes/local-dev/crates` | Local Agent、原生安全和运行支撑 |
-| `spikes/local-dev/packages` | AgentRPC 类型等共享模块 |
-| `spikes/local-dev/harness` | 固定上游、补丁、隔离和验收摘要 |
+| `apps/desktop` | Tauri + React 工作客户端 |
+| `apps/central` | 中央管理 App |
+| `services/central-gateway` | 中央网关、Worker 管理和设备路由 |
+| `crates` | Local Agent、原生安全和运行支撑 |
+| `packages` | AgentRPC 类型等共享模块 |
+| `harness` | 固定上游、补丁、隔离和验收摘要 |
 | `docs` | 维护手册与设计参考 |
-| `database` | 早期数据库 PoC；不是正式中央数据迁移入口 |
+| `scripts/build`、`scripts/release`、`scripts/maintenance` | 构建资源、打包发布和运维工具 |
+| `tests/smoke`、`tests/fixtures`、`tests/support` | 回归脚本、夹具与开发探针 |
+| `legacy` | 早期数据库 PoC 和阶段参考；不进入正常启动链路 |
 
 ## 文档与许可
 

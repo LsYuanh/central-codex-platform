@@ -17,7 +17,7 @@
 | tag | `rust-v0.153.4` |
 | annotated tag object | `042fb41b7c813ac7999105e886b2b7aa715b5081` |
 | commit | `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a` |
-| 归档指纹 | `spikes/local-dev/harness/upstream.json` 的 archive/patch/schema SHA-256 |
+| 归档指纹 | `harness/upstream.json` 的 archive/patch/schema SHA-256 |
 | 原始文件校验 | `harness/source-files.json`，应用源码变更前逐文件核对 SHA-256 |
 | 原始许可 | `harness/upstream/LICENSE`（Apache-2.0）与 `NOTICE` 原样归档 |
 | 第三方依赖清单 | `harness/upstream/Cargo.lock` 原样保留；源码 tar 含第三方目录及原始 license，发布 SBOM 尚需补齐 |
@@ -185,7 +185,7 @@ fork 实测。旧安装版、旧 rollout、图片生成和正式模型连接不�
   `HARNESS_AUTH_REFRESH_OK`：复现无保护共享假链接先刷新后保存被拒；独立可写假认证
   刷新并持久化后重启正确读取且不重复刷新；保护后的过期共享假认证零刷新请求、
   文件不变、2 次模型 401 请求后 119ms 进入 failed Turn。未触发任何真实共享凭据刷新。
-  详见 `spikes/local-dev/harness/auth-lifecycle.md` 与 `verification/long-running-qa.json`。
+  详见 `harness/auth-lifecycle.md` 与 `verification/long-running-qa.json`。
 - 后续旧会话/故障轮次使用新版 QA 包
   `71fcb83ba2df5a9907e914a1e93b871c65dbbc235a5e5b35437a67a965c8ede4`，依赖锁未变，
   仅覆盖 QA/gateway 的打包清单。受控 `qa-control.mjs start` 于 05:30:23 UTC 启动
@@ -195,7 +195,7 @@ fork 实测。旧安装版、旧 rollout、图片生成和正式模型连接不�
 - 原生执行中关闭测试完成后，受控 stop 验证上述 QA PID 均退出、4529 关闭，再覆盖包
   `f6e468648f8af6d9c1ceee4c8c6456d34c70bf699ab4dd8650d3e6cc4d7a593f` 并于
   05:43:41 UTC 启动 gateway PID 75844 / fork PID 75851；依赖锁、state/auth 保留。
-  包内 `scripts/harness-state-smoke.mjs` 在中央 macOS 实际文件系统 exit 0，15 项通过：
+  包内 `tests/smoke/harness-state-smoke.mjs` 在中央 macOS 实际文件系统 exit 0，15 项通过：
   包括 fsync/atomic rename、错误保留已提交字节、v1 未知扩展字段往返，以及 11368 次并发
   读取只看到完整 JSON（generation 0..80，最终 80）。正式 4510 基线仍完全一致。
 

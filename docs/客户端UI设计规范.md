@@ -2,7 +2,7 @@
 
 日期：2026-09-21。状态：**已实施并随客户端 0.2.3 发布**。用户已确定「精致极简的工作工具」，要求浅色、深色同时设计；已依次交付规范、[视觉设计图](design/client-v0.3/README.md)，再进入现有客户端重构。V0.3 是设计规范版本，客户端源码及已发布版本为 0.2.3；下方早期未发布描述为历史记录。
 
-本文件作为新规范的固定维护入口；[旧版规范](客户端UI设计规范-V0.1-2026-09-07.md)保留历史设计，行为以[客户端维护手册](客户端维护手册.md)为准。实现位于现有 `spikes/local-dev/apps/desktop/`，不新增产品入口。
+本文件作为新规范的固定维护入口；[旧版规范](客户端UI设计规范-V0.1-2026-09-07.md)保留历史设计，行为以[客户端维护手册](客户端维护手册.md)为准。实现位于现有 `apps/desktop/`，不新增产品入口。
 
 ## 2026-09-21 新对话项目选择
 
@@ -242,7 +242,7 @@ UI 字体：`"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
 3. `outputs.tsx`、`attachments.tsx`、`MarkdownMessage.tsx`：文件结果、附件、代码和长内容。
 4. `runtime-settings.tsx`、`platform-account-settings.tsx`、`ThemePicker.tsx`、`WorkspacePanel.tsx`、`client-updates.tsx`：设置层级、连接详情、外观和反馈。
 
-路径相对于 `spikes/local-dev/apps/desktop/src/`。不修改网关和 Agent 协议，不改变中央推理、客户端执行、配对、生命周期和更新签名边界。日常重构只本地提交，不更新版本或打包发布。
+路径相对于 `apps/desktop/src/`。不修改网关和 Agent 协议，不改变中央推理、客户端执行、配对、生命周期和更新签名边界。日常重构只本地提交，不更新版本或打包发布。
 
 | 验收组 | 深浅主题均需检查 |
 | --- | --- |

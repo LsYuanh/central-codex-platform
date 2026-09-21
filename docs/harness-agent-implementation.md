@@ -1,12 +1,12 @@
 # Harness Local Agent implementation and verification — 2026-09-09
 
-> Historical implementation reference. For client-paths/v1 Agents, workspaceRoot is a default output directory, not an access boundary. Current path/patch negotiation is specified in [AgentRPC](../spikes/local-dev/AGENTRPC.md) and the [client manual](客户端维护手册.md).
+> Historical implementation reference. For client-paths/v1 Agents, workspaceRoot is a default output directory, not an access boundary. Current path/patch negotiation is specified in [AgentRPC](../AGENTRPC.md) and the [client manual](客户端维护手册.md).
 
-Implementation is integrated into the existing `spikes/local-dev/crates/local-agent`.
+Implementation is integrated into the existing `crates/local-agent`.
 The synchronized current product baseline remains intact, including attachment/output
 permissions and Tauri-managed lifecycle. New changes are `workspace.rs`, the main
 dispatcher/hello/strict binding additions, the vendored text patch core, its path
-dependency and lockfile entry, and `scripts/harness-workspace-smoke.mjs`.
+dependency and lockfile entry, and `tests/smoke/harness-workspace-smoke.mjs`.
 
 ## Capability and RPC contract
 
@@ -117,14 +117,14 @@ replay; read versions/Git first. No durable idempotency claim is made for patche
 
 ## Verification and rollback
 
-Commands executed in the existing `spikes/local-dev` directory:
+Commands executed in the existing `.` directory:
 
 ```powershell
 cargo fmt -p local-agent -p codex-patch-core --check
 cargo test --offline -p local-agent -p codex-patch-core --target-dir target/harness-agent
 cargo check --offline -p local-agent --target-dir target/harness-agent
 cargo build --offline -p local-agent --target-dir target/harness-agent
-node scripts/harness-workspace-smoke.mjs
+node tests/smoke/harness-workspace-smoke.mjs
 ```
 
 20 upstream text component tests and 19 Agent tests passed, including existing
@@ -185,7 +185,7 @@ concurrent directory replacement/OS isolation, macOS-specific paths/processes, a
 installation lifecycle regression. Formal 4510 service and installed desktop were
 not replaced. Main task's integration record owns additional central/UI evidence.
 
-`scripts/harness-live-smoke.mjs` is prepared for that independent real-model chain.
+`tests/smoke/harness-live-smoke.mjs` is prepared for that independent real-model chain.
 It requires explicit `HARNESS_GATEWAY_URL`, refuses production port 4510, launches
 a new Windows test Agent and Git fixture, and only approves the exact fixture
 patch once. It asks the central model to read client rules/search/read, patch,

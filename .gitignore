@@ -25,9 +25,9 @@ dist/
 
 # Tauri and installers
 src-tauri/target/
-/spikes/local-dev/apps/desktop/src-tauri/binaries/
+/apps/desktop/src-tauri/binaries/
 artifacts/
-release/
+/release/
 
 # Logs, databases and runtime data
 *.log

@@ -8,15 +8,15 @@
 
 | 目的 | 文档 |
 | --- | --- |
-| 开发环境、目录和常用检查 | [开发入口](../spikes/local-dev/README.md)、[代理工作约定](../AGENTS.md) |
+| 开发环境、目录和常用检查 | [开发入口](开发指南.md)、[代理工作约定](../AGENTS.md) |
 | 客户端配置、文件、对话和故障恢复 | [客户端维护手册](客户端维护手册.md) |
 | 中央配置、服务、用户、设备和诊断 | [中央管理维护手册](中央管理维护手册.md) |
 | 模型登录、续期和凭据过期处理 | [模型认证维护手册](模型认证维护手册.md) |
 | 安装包、更新、部署备份与回退 | [发布与回退手册](发布与回退手册.md) |
 | 检查入口、已验证范围及剩余缺口 | [验证与已知限制](验证与已知限制.md) |
 | 旧共享历史的离线迁移预检 | [历史迁移工具](历史迁移工具.md) |
-| 设备消息和能力协商 | [AgentRPC](../spikes/local-dev/AGENTRPC.md) |
-| 固定上游、补丁、构建和隔离探针 | [Harness](../spikes/local-dev/harness/README.md)、[Windows Worker Host](../spikes/local-dev/services/windows-worker-host/README.md) |
+| 设备消息和能力协商 | [AgentRPC](../AGENTRPC.md) |
+| 固定上游、补丁、构建和隔离探针 | [Harness](../harness/README.md)、[Windows Worker Host](../services/windows-worker-host/README.md) |
 
 ## 保留的设计和专项参考
 

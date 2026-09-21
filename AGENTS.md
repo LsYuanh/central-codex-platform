@@ -23,13 +23,13 @@
 每个新对话在实施前先读 `docs/项目上下文.md`，快速了解当前架构、已完成能力、版本、代码入口和交接事项。随后按任务范围读取：
 
 1. `docs/README.md` 中对应的维护手册
-2. `spikes/local-dev/README.md`（开发运行与检查）
-3. `spikes/local-dev/AGENTRPC.md`（涉及设备工具或协议时）
+2. `docs/开发指南.md`（开发运行与检查）
+3. `AGENTRPC.md`（涉及设备工具或协议时）
 4. `docs/中央化Codex多用户远程工作平台-需求与架构设计-V0.2.md`（仅在需要追溯历史需求时；以维护手册说明的后续变更为准）
 
 `docs/项目上下文.md` 是唯一的新对话上下文摘要，固定路径持续更新，不为每次交接复制一份。任务改变架构、关键决定、能力、代码入口、版本、部署、验收结论或接续事项时，在同一提交中更新相关摘要、日期及对应维护手册；未完成工作写明做到哪里、下一步与阻塞。没有变化的事实无需改写。代码已实现、本地已验证与实际已发布必须分开记录，不能保存秘密或将历史授权视为当前部署授权。
 
-当前主要开发目录是 `spikes/local-dev/`。不要为了实现同一功能另建平行代码库、复制一套 UI，或在临时目录中形成第二个产品入口；修改应整合到现有目录。
+当前主要开发目录是仓库根目录，使用根目录的 npm/Cargo workspace。应用在 `apps/`，中央服务在 `services/`，共享原生模块在 `crates/`，测试在 `tests/`。不要为了实现同一功能另建平行代码库、复制一套 UI，或在临时目录中形成第二个产品入口；修改应整合到现有目录。
 
 ## 当前运行架构
 
@@ -37,7 +37,7 @@
 Tauri + React 客户端
         │ wss://<central>:4510/ws
         ▼
-Central Test Gateway
+Central Gateway
         │ stdio
         ▼
 Codex App Server（中央机）
@@ -70,8 +70,8 @@ Device Broker / dynamic tools
 
 相关实现：
 
-- `spikes/local-dev/apps/desktop/src-tauri/src/main.rs`
-- `spikes/local-dev/package.json`
+- `apps/desktop/src-tauri/src/main.rs`
+- `package.json`
 
 支持的开发覆盖变量：
 
@@ -128,7 +128,7 @@ powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem"
 
 ## 常用命令
 
-在 `spikes/local-dev/` 中运行：
+在仓库根目录运行：
 
 ```powershell
 npm install
@@ -150,7 +150,7 @@ npm run build --workspace @central-codex-spike/desktop
 网关检查：
 
 ```powershell
-npm run build --workspace @central-codex-spike/test-gateway
+npm run build --workspace @central-codex-spike/central-gateway
 curl.exe --fail --cacert 'C:\path\to\existing-public-ca.pem' https://192.0.2.10:4510/healthz
 ```
 

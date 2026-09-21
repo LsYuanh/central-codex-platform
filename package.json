@@ -1,0 +1,72 @@
+{
+  "name": "@central-codex-platform/workspace",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only OR LicenseRef-Commercial",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "workspaces": [
+    "apps/desktop",
+    "apps/central",
+    "tests/support/fake-central",
+    "tests/support/app-server-proxy",
+    "services/central-gateway",
+    "packages/agentrpc-types"
+  ],
+  "scripts": {
+    "dev:central-app": "npm run tauri:dev --workspace @central-codex-spike/central",
+    "dev:central-ui": "npm run web:dev --workspace @central-codex-spike/central",
+    "dev": "npm run dev:desktop",
+    "dev:gateway": "npm run dev --workspace @central-codex-spike/central-gateway",
+    "dev:desktop": "cargo build -p local-agent && npm run tauri:dev --workspace @central-codex-spike/desktop",
+    "package:desktop": "node scripts/release/package-desktop.mjs",
+    "package:webview2": "node scripts/release/package-webview2.mjs",
+    "check": "npm run check --workspaces --if-present && cargo check --workspace",
+    "smoke": "node tests/smoke/integration-smoke.mjs",
+    "device:smoke": "node tests/smoke/device-broker-smoke.mjs",
+    "encoding:smoke": "node tests/smoke/command-encoding-smoke.mjs",
+    "stream:smoke": "node tests/smoke/command-stream-smoke.mjs",
+    "history:smoke": "node --no-warnings --experimental-strip-types tests/smoke/thread-history-smoke.ts",
+    "multi-session:smoke": "node --no-warnings --experimental-strip-types tests/smoke/multi-session-smoke.ts",
+    "steering:smoke": "node --no-warnings --experimental-strip-types tests/smoke/steering-smoke.ts",
+    "steering:gateway-smoke": "node tests/smoke/steering-gateway-smoke.mjs",
+    "attachment:smoke": "node tests/smoke/attachment-smoke.mjs",
+    "output:smoke": "node tests/smoke/output-smoke.mjs",
+    "day5:acceptance": "node tests/smoke/day5-acceptance.mjs",
+    "protocol:test": "npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/fake-central && npm run test:protocol --workspace @central-codex-spike/fake-central",
+    "test": "npm run protocol:test && cargo test --workspace",
+    "build": "npm run build --workspaces --if-present && cargo build --workspace",
+    "harness:gateway-smoke": "node tests/smoke/harness-gateway-smoke.mjs",
+    "harness:workspace-smoke": "node tests/smoke/harness-workspace-smoke.mjs",
+    "workers:smoke": "node tests/smoke/worker-manager-smoke.mjs",
+    "workers:drain-smoke": "node tests/smoke/worker-manager-drain-smoke.mjs",
+    "workers:transport-smoke": "node tests/smoke/windows-worker-transport-smoke.mjs",
+    "workers:native-smoke": "node tests/smoke/windows-worker-host-smoke.mjs",
+    "gateway:shutdown-smoke": "node tests/smoke/gateway-shutdown-smoke.mjs",
+    "harness:ui-smoke": "node --no-warnings --experimental-strip-types tests/smoke/harness-ui-smoke.ts",
+    "device-token:smoke": "node tests/smoke/device-token-smoke.mjs",
+    "device-token:native-smoke": "node tests/smoke/device-token-native-smoke.mjs",
+    "device-token:ui-smoke": "node --no-warnings --experimental-strip-types tests/smoke/platform-pairing-ui-smoke.ts",
+    "harness:check": "npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/central-gateway && npm run check --workspace @central-codex-spike/desktop && npm run build --workspace @central-codex-spike/desktop && npm run harness:gateway-smoke && npm run harness:ui-smoke",
+    "probe:app-server-desktop": "concurrently -k -n app-proxy,desktop -c cyan,magenta \"npm run probe:app-proxy\" \"npm run dev:desktop\"",
+    "probe:app-server-browser": "concurrently -k -n app-proxy,web -c cyan,green \"npm run probe:app-proxy\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "probe:fake-desktop": "concurrently -k -n gateway,agent,desktop -c cyan,yellow,magenta \"npm run probe:fake-central\" \"npm run probe:agent\" \"npm run dev:desktop\"",
+    "probe:fake-browser": "concurrently -k -n gateway,agent,web -c cyan,yellow,green \"npm run probe:fake-central\" \"npm run probe:agent\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "probe:fake-central": "npm run dev --workspace @central-codex-spike/fake-central",
+    "probe:app-proxy": "npm run dev --workspace @central-codex-spike/app-server-proxy",
+    "probe:agent": "cargo run -p local-agent -- --workspace-root ./tests/fixtures/workspace --gateway-url ws://127.0.0.1:4310/ws/agent",
+    "dev:central-browser": "concurrently -k -n central-gateway,web -c cyan,green \"npm run dev:gateway\" \"npm run web:dev --workspace @central-codex-spike/desktop\"",
+    "legacy:setup-env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/maintenance/setup-env.ps1",
+    "legacy:db-init": "node scripts/maintenance/init-sqlite.mjs",
+    "layout:check": "node tests/smoke/repository-layout-smoke.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
