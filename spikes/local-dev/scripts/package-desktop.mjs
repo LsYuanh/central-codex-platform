@@ -120,10 +120,12 @@ run(process.execPath, [join(root, "node_modules", "@tauri-apps", "cli", "tauri.j
   "--ci", "--config", config, "--target", host,
   "--bundles", process.platform === "win32" ? "nsis" : "app,dmg", ...(debug ? ["--debug"] : []), "--", "--locked"], { cwd: desktop });
 if (process.platform === "win32") {
-  assertPortableWindowsRuntime(join(targetDir, host, debug ? "debug" : "release", "desktop-spike.exe"));
+  const binaryName = config.startsWith("{") ? JSON.parse(config).mainBinaryName ?? "desktop-spike" : "desktop-spike";
+  const desktopBinary = join(targetDir, host, debug ? "debug" : "release", `${binaryName}.exe`);
+  assertPortableWindowsRuntime(desktopBinary);
   // Debug installers must be GUI applications too; a console-subsystem binary
   // opens an unwanted terminal when launched from the installed shortcut.
-  const appBinary = readFileSync(join(targetDir, host, debug ? "debug" : "release", "desktop-spike.exe"));
+  const appBinary = readFileSync(desktopBinary);
   const pe = appBinary.readUInt32LE(0x3c);
   if (appBinary.readUInt32LE(pe) !== 0x00004550 || appBinary.readUInt16LE(pe + 24 + 68) !== 2) {
     throw new Error("DESKTOP_PACKAGE_REJECTED: Windows desktop executable must use the GUI subsystem");
