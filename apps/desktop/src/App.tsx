@@ -212,6 +212,7 @@ export default function App() {
   const conversationSurfaceRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const restoreComposerFocusRef = useRef<HTMLTextAreaElement | null>(null);
   const followMessagesRef = useRef(true);
   const scrollThreadRef = useRef<string | undefined>(undefined);
   const [showLatest, setShowLatest] = useState(false);
@@ -383,6 +384,37 @@ export default function App() {
     input.style.height = "auto";
     input.style.height = `${Math.min(180, Math.max(34, input.scrollHeight))}px`;
   }, [composer, activePage]);
+
+  useEffect(() => {
+    const cancel = () => { restoreComposerFocusRef.current = null; };
+    const onFocus = (event: FocusEvent) => {
+      if (event.target !== document.body && event.target !== restoreComposerFocusRef.current) cancel();
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Tab") cancel(); };
+    // A send temporarily disables the textarea. Restore only if the user has
+    // not since clicked elsewhere, moved keyboard focus, or left the window.
+    document.addEventListener("pointerdown", cancel, true);
+    document.addEventListener("focusin", onFocus, true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("blur", cancel);
+    return () => {
+      document.removeEventListener("pointerdown", cancel, true);
+      document.removeEventListener("focusin", onFocus, true);
+      document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("blur", cancel);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (activePage !== "conversation") restoreComposerFocusRef.current = null;
+    if (sending) return;
+    const input = restoreComposerFocusRef.current;
+    restoreComposerFocusRef.current = null;
+    // Run after React has removed disabled, without moving the message scroller.
+    if (input && input === composerInputRef.current && !input.disabled && document.hasFocus()) {
+      input.focus({ preventScroll: true });
+    }
+  }, [sending, activePage]);
 
   useEffect(() => {
     try {
@@ -1157,6 +1189,7 @@ export default function App() {
     const target = threadId;
     const text = composer;
     const clientMessageId = crypto.randomUUID();
+    restoreComposerFocusRef.current = composerInputRef.current;
     sendGuard.current = true; steeringRequestRef.current = true; setSending(true); setSendStage("正在追加要求…"); setAppError("");
     const delivery = (state: ChatMessage["delivery"]) => updateThreadMessages(target, rows => rows.map(row => row.id === clientMessageId ? {...row,delivery:state} : row));
     updateThreadMessages(target, rows => [...rows,{id:clientMessageId,role:"user",content:text,delivery:"sending",turnId}]);
@@ -1194,6 +1227,7 @@ export default function App() {
     if (engineState === "unavailable" || (!text.trim() && !attachments.drafts.length) || !codexia || appState !== "online" || turnRunning || threadBusy || sendGuard.current || attachments.adding || uncertainSubmission) return;
     if (attachments.drafts.length && deviceState !== "online") { setAppError("Local Agent 离线，请等待设备上线后重试"); return; }
     sendGuard.current = true; cancelSendRef.current = false;
+    restoreComposerFocusRef.current = composerInputRef.current;
     setSending(true); setSendStage("正在客户端校验附件"); setAppError("");
     const clientMessageId = crypto.randomUUID();
     let submitted = false;
@@ -1665,7 +1699,12 @@ export default function App() {
                   unavailable={appState !== "online" ? "连接后选择项目" : !platformCapabilities.projects ? "中央服务需更新后启用项目" : ""}
                   refresh={projectService.refresh} save={projectService.save} remove={projectService.remove}
                   choose={project => { if (threadIdRef.current || sendGuard.current || configApplyingRef.current || threadBusy) return; setDraftProject(project); }} />}
-                <div className="composer-shell">
+                <div className="composer-shell" onClick={(event) => {
+                  const target = event.target;
+                  if (!(target instanceof Element) || target.closest("button, a, input, textarea, select, label, summary, [role='button'], [role='menu'], [role='dialog'], [contenteditable='true'], .model-picker-popover")) return;
+                  const input = composerInputRef.current;
+                  if (input && !input.disabled && !window.getSelection()?.toString()) input.focus({ preventScroll: true });
+                }}>
                   <div className="composer-body">
                     {mode === "central-gateway" && attachments.controls}
                     {sending && <p className="attachment-notice" role="status">{sendStage || "正在核对提交结果…"}{sendStage && sendStage !== "正在追加要求…" && sendStage !== "正在提交中央模型" && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(String(e)));}}>取消准备</button>}</p>}
