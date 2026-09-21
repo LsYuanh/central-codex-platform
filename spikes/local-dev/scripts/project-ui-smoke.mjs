@@ -25,7 +25,7 @@ export async function runProjectUi({port,paths}) {
     assert.equal(await page.locator('.project-folder-copy').first().innerText().then(t=>t.includes('notes')),true);
     await page.getByRole('button',{name:'创建',exact:true}).click();
     await page.locator('.project-dialog').waitFor({state:'detached'});
-    await page.locator('.conversation-project-context').getByText('界面测试',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'选择项目：界面测试',exact:true}).waitFor();
     const composer=page.locator('.composer textarea');
     // Independent unsent project drafts must survive switching projects and recent.
     await composer.fill('项目一草稿');

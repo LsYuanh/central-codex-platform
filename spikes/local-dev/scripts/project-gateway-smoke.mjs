@@ -113,6 +113,7 @@ try {
  await assert.rejects(reconnected('conversation.turn.create',{threadId:ta.id,input:[]}),/PROJECT_DIRECTORY_UNAVAILABLE/);
  if(process.argv.includes('--ui')) await (await import('./project-ui-smoke.mjs')).runProjectUi({port,paths});
  if(process.argv.includes('--sidebar-ui')) await (await import('./sidebar-drag-ui-smoke.mjs')).runSidebarUi({port,paths,request:reconnected});
+ if(process.argv.includes('--composer-ui')) await (await import('./composer-project-ui-smoke.mjs')).runComposerProjectUi({port,paths,request:reconnected});
  if(process.argv.includes('--native-ui')) await (await import('./project-native-ui-smoke.mjs')).runNativeProjectUi({port,paths,root,client});
  console.log('PROJECT_GATEWAY_SMOKE_OK: catalog isolation, directory validation, creation replay, revisions, restart, immutable thread snapshots, concurrent client paths, actual client cwd and approved patch, removed directory fails closed');
 } finally {clearTimeout(timer);for(const s of sockets)s.close();for(const p of processes)if(p.exitCode===null)p.kill();}

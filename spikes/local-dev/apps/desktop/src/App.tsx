@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 import { ProjectSidebar } from "./ProjectSidebar";
+import { ComposerProjectPicker } from "./ComposerProjectPicker";
 import { useSidebarOrganization, useThreadDrag, OrganizeThreadDialog } from "./SidebarOrganization";
 import { useProjects, readProject, type ClientProject } from "./projects";
 import { joinClientPath, parentClientPath } from "./client-paths";
@@ -179,12 +180,12 @@ export default function App() {
   const threadIdRef = useRef<string | undefined>(undefined);
   threadIdRef.current = threadId;
   const [draftProject, setDraftProject] = useState<ClientProject>();
-  const draftProjectRef = useRef<ClientProject | undefined>(undefined);
-  draftProjectRef.current = draftProject;
   const projectScope = JSON.stringify([mode, appUrl, runtimeConfig?.effective.userId, deviceId]);
   const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
-  useEffect(() => { setDraftProject(undefined); draftProjectRef.current = undefined; }, [projectScope]);
-  const newDraftKey = () => `__new__:${draftProjectRef.current?.id ?? ""}`;
+  // The selector changes this draft's destination; sidebar navigation switches draft slots.
+  const newDraftSlotRef = useRef("__new__:");
+  useEffect(() => { setDraftProject(undefined); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
+  const newDraftKey = () => newDraftSlotRef.current;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const sidebarOrder = useSidebarOrganization(projectScope, threads, projectService.projects);
   const threadDrag = useThreadDrag(projectScope, sidebarOrder.move);
@@ -1292,7 +1293,8 @@ export default function App() {
     setAppError("");
     setThreadId(undefined);
     threadIdRef.current = undefined;
-    setDraftProject(project); draftProjectRef.current = project;
+    setDraftProject(project);
+    newDraftSlotRef.current = `__new__:${project?.id ?? ""}`;
     restoreThreadDraft(undefined);
     setMessages([]);
     setEvents([]);
@@ -1593,7 +1595,7 @@ export default function App() {
                 <UiIcon name="folder" />
                 <div><strong>{threadId ? threadDisplayTitle(threads.find((thread) => thread.id === threadId)) : "新对话"}</strong></div>
               </div>
-              {currentProject && <details className="conversation-project-context"><summary>{projectService.projects.find(p => p.id === currentProject.id)?.name ?? currentProject.name}</summary><div>{currentProject.folders.map((path,i) => <p key={path}><span>{i === 0 ? "工作目录" : "关联目录"}</span><code>{path}</code></p>)}</div></details>}
+              {threadId && currentProject && <details className="conversation-project-context"><summary>{projectService.projects.find(p => p.id === currentProject.id)?.name ?? currentProject.name}</summary><div>{currentProject.folders.map((path,i) => <p key={path}><span>{i === 0 ? "工作目录" : "关联目录"}</span><code>{path}</code></p>)}</div></details>}
             </header>
 
             {appError && (
@@ -1653,6 +1655,12 @@ export default function App() {
               )}
 
               <form ref={composerRef} className={`composer ${turnRunning ? "composer-running" : ""}`} onSubmit={(event) => { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); }}>
+                {!threadId && mode === "central-gateway" && <ComposerProjectPicker key={projectScope}
+                  selected={projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject} projects={projectService.projects}
+                  disabled={sending || Boolean(threadBusy) || configApplying} loading={projectService.loading} error={projectService.error}
+                  unavailable={appState !== "online" ? "连接后选择项目" : !platformCapabilities.projects ? "中央服务需更新后启用项目" : ""}
+                  refresh={projectService.refresh} save={projectService.save} remove={projectService.remove}
+                  choose={project => { if (threadIdRef.current || sendGuard.current || configApplyingRef.current || threadBusy) return; setDraftProject(project); }} />}
                 <div className="composer-shell">
                   <div className="composer-body">
                     {mode === "central-gateway" && attachments.controls}

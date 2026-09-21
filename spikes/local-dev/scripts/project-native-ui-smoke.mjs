@@ -60,6 +60,7 @@ export async function runNativeProjectUi({port,paths,root,client}) {
       await page.screenshot({path:join(output,'native-drag-result.png')});
       console.log('SIDEBAR_NATIVE_DRAG_OK: actual Windows WebView pointer reorder and move to recent');
     }
+    if(process.argv.includes('--composer-native')) await (await import('./composer-project-ui-smoke.mjs')).exerciseComposerProjectPicker({page,paths,request,native:true});
     console.log('PROJECT_NATIVE_UI_OK: actual Tauri WebView, managed real Agent, edit/save, light/dark, native picker entry');
   } catch(error){if(page&&!page.isClosed()){await page.screenshot({path:join(output,'native-failure.png')}).catch(()=>{});console.error((await page.locator('body').innerText()).slice(0,2000));}throw error;}
   finally {

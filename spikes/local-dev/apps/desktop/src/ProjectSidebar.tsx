@@ -88,7 +88,7 @@ function ProjectRow({project:p,expanded,active,count,pinned,disabled,toggle,pin,
   </div>;
 }
 
-function ProjectDialog({initial,save,remove,close,saved}:{initial?:ClientProject;save:(p:ProjectDraft)=>Promise<ClientProject>;remove:(p:ClientProject)=>Promise<void>;close:()=>void;saved:(p:ClientProject)=>void}) {
+export function ProjectDialog({initial,save,remove,close,saved}:{initial?:ClientProject;save:(p:ProjectDraft)=>Promise<ClientProject>;remove:(p:ClientProject)=>Promise<void>;close:()=>void;saved:(p:ClientProject)=>void}) {
   const [draft,setDraft]=useState<ProjectDraft>(()=>initial?{...initial,folders:[...initial.folders]}:{name:"",folders:[],creationKey:crypto.randomUUID()});
   const [busy,setBusy]=useState(false),[picking,setPicking]=useState(false),[error,setError]=useState(""),[removing,setRemoving]=useState(false);
   const [manual,setManual]=useState("");
@@ -100,7 +100,7 @@ function ProjectDialog({initial,save,remove,close,saved}:{initial?:ClientProject
   const submit=async()=>{if(busy)return;setBusy(true);setError("");try{const p=await save(draft);if(live.current)saved(p);}catch(e){if(live.current)setError(`${String(e)}。未确认的结果请先刷新列表核对。`);}finally{if(live.current)setBusy(false);}};
   const confirmRemove=async()=>{if(!initial||busy)return;setBusy(true);setError("");try{await remove(initial);if(live.current)close();}catch(e){if(live.current)setError(String(e));}finally{if(live.current)setBusy(false);}};
   return createPortal(<dialog ref={dialog} className="project-dialog" aria-labelledby="project-dialog-title" onCancel={e=>{e.preventDefault();if(!busy&&!picking)close();}}>
-    <form onSubmit={e=>{e.preventDefault();void submit();}}>
+    <form onSubmit={e=>{e.preventDefault();e.stopPropagation();void submit();}}>
       <header><h2 id="project-dialog-title">{removing?"移除本地项目":initial?"编辑项目":"添加项目"}</h2><button type="button" className="text-icon-button" aria-label="关闭项目编辑" disabled={busy||picking} onClick={close}><UiIcon name="close"/></button></header>
       {removing?<p>将“{initial?.name}”从项目列表移除。对话会保留在“最近”，原工作目录和本机文件不会删除。</p>:<>
         <label className="project-name"><UiIcon name="folder"/><input autoFocus aria-label="项目名称" maxLength={80} placeholder="项目名称" value={draft.name} disabled={busy} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
