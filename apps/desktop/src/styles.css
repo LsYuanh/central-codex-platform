@@ -32,7 +32,7 @@
 .skill-picker-menu > strong { display:block; padding:4px 8px 12px; }
 .skill-picker-menu p { color:var(--ink-muted); padding:0 8px; overflow-wrap:anywhere; }
 .skill-picker-menu button { width:100%; display:flex; flex-direction:column; gap:4px; text-align:left; background:transparent; color:var(--ink); padding:10px 8px; border:0; }
-.skill-picker-menu button:hover { background:var(--hover); }
+.skill-picker-menu button:hover:where(:not(:disabled)) { background:var(--hover); }
 .skill-picker-menu small { color:var(--ink-muted); overflow-wrap:anywhere; }
 @media(max-width:600px) { .skills-toolbar { align-items:flex-start; flex-direction:column; } .skill-row-actions { width:100%; } .skill-picker > summary span { display:none; } .skill-dialog { padding:16px; } }
 
@@ -159,11 +159,13 @@ button {
   transition: background 140ms,color 140ms;
 }
 
-button:hover:not(:disabled) {
+/* Defaults must stay below component classes, regardless of source order.
+   :where keeps interaction states from adding specificity to the element rule. */
+button:where(:hover:not(:disabled)) {
   background: var(--primary-hover);
 }
 
-button:active:not(:disabled) {
+button:where(:active:not(:disabled)) {
   filter: brightness(.95);
 }
 
@@ -1019,7 +1021,7 @@ a {
 .skill-suggestion small { color:var(--ink-muted); flex-shrink:0; font-size:11px; }
 .skill-suggestions p { margin:8px; color:var(--ink-muted); font-size:13px; }
 .skill-suggestions button { background:transparent; color:var(--ink); font-size:12px; padding:6px 8px; }
-.skill-suggestions button:hover { background:var(--hover); }
+.skill-suggestions button:hover:where(:not(:disabled)) { background:var(--hover); }
 @media (max-width:600px) { .skill-suggestion small { display:none; } .skill-suggestion { min-height:40px; } }
 
 .composer-shell:has(textarea:focus), .composer-shell:has(.composer-editor:focus) {
@@ -1197,7 +1199,7 @@ a {
   background: transparent;
 }
 
-.model-picker-submenu-panel button:hover,.model-picker-submenu-panel button.selected {
+.model-picker-submenu-panel button:hover:where(:not(:disabled)),.model-picker-submenu-panel button.selected {
   background: var(--hover);
 }
 
@@ -1250,7 +1252,7 @@ a {
 .theme-picker input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .thread-actions-menu { position: fixed; z-index: 100; width: 168px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); box-shadow: var(--popover-shadow); }
 .thread-actions-menu button { display: flex; gap: 10px; align-items: center; width: 100%; min-height: 36px; padding: 8px; color: var(--ink); background: transparent; text-align: left; font-size: 14px; }
-.thread-actions-menu button:hover { background: var(--hover); }
+.thread-actions-menu button:hover:where(:not(:disabled)) { background: var(--hover); }
 .conversation-item.active .conversation-copy strong,.settings-nav button.active strong { font-weight: 500; }
 .conversation-item:has([aria-expanded="true"]) .conversation-actions { opacity: 1; pointer-events: auto; }
 .conversation-item:has([aria-expanded="true"]) .conversation-select { padding-right: 40px; }
@@ -1334,7 +1336,7 @@ a {
   font-weight: 400;
 }
 
-.settings-nav button:hover {
+.settings-nav button:hover:where(:not(:disabled)) {
   background: var(--rail-hover);
 }
 
