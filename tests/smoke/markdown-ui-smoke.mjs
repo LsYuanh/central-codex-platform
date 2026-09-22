@@ -140,6 +140,50 @@ try {
   await page.screenshot({ path: join(output, 'narrow.png'), fullPage: true });
 
   const render = async (content, rest = {}) => { await page.evaluate(args => window.renderMarkdown(args), { content, ...rest }); await delay(120); };
+  const htmlExample = `## HTML 展示扩展\n\n*中文斜体* 与 ***中文粗斜体***。\n\n<details><summary>点击展开</summary>\n\n这里是折叠起来的内容，支持 **Markdown**。\n\n<details><summary>嵌套折叠</summary>第二层内容</details>\n</details>\n\n<p style="color: red;">这是一段红色文字</p>\n\n<kbd>Ctrl</kbd> + <kbd>C</kbd>\n\nH<sub>2</sub>O，x<sup>2</sup>，<mark>重点内容</mark>。<br>换行后的文字。\n\n<span style="color:#24803d">指定颜色</span>\n\n\`\`\`html\n<details><summary>仅展示源码</summary></details>\n\`\`\``;
+  await render(htmlExample);
+  const htmlDetails = primary.locator('details').first();
+  assert.equal(await htmlDetails.getAttribute('open'), null);
+  await primary.getByText('点击展开', { exact: true }).click();
+  assert(await htmlDetails.evaluate(el => el.open));
+  assert(await primary.getByText('Markdown', { exact: true }).isVisible());
+  await primary.getByText('嵌套折叠', { exact: true }).focus(); await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector('#primary details details')?.open);
+  assert((await htmlDetails.innerText()).includes('第二层内容'));
+  assert.equal(await primary.locator('kbd').count(), 2);
+  assert.equal(await primary.locator('kbd').first().evaluate(el => getComputedStyle(el).borderBottomWidth), '2px');
+  assert.equal(await primary.locator('em').first().evaluate(el => getComputedStyle(el).fontSynthesis), 'style');
+  assert.equal(await primary.locator('sub').innerText(), '2');
+  assert.equal(await primary.locator('mark').innerText(), '重点内容');
+  assert((await primary.locator('pre').innerText()).includes('<details>'), 'fenced HTML remains source code');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    assert(await primary.getByText('这是一段红色文字', { exact: true }).evaluate(el => {
+      const sample = document.createElement('span'); sample.style.color = 'var(--danger)'; el.appendChild(sample);
+      const match = getComputedStyle(el).color === getComputedStyle(sample).color; sample.remove(); return match;
+    }), 'named colors follow theme');
+    await page.screenshot({ path: join(output, `html-${theme}.png`), fullPage: true });
+  }
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await render('<details><summary>流式折叠</summary>尚未结束', { streaming: true });
+  if (!await primary.locator('details').evaluate(el => el.open)) await primary.locator('summary').click();
+  await page.waitForFunction(() => document.querySelector('#primary details')?.open);
+  assert((await primary.innerText()).includes('尚未结束'));
+  await render('<details><summary>流式折叠</summary>已经完成</details>');
+  await primary.locator('summary').click();
+  assert((await page.locator('#second').innerText()).includes('重复注释'), 'unclosed HTML cannot consume adjacent messages');
+  await render('<p id="same">第一处</p><p id="same">第二处</p><a href="#same">内部跳转</a>');
+  const scopedIds = await primary.locator('[id]').evaluateAll(nodes => nodes.map(el => el.id));
+  assert.equal(new Set(scopedIds).size, scopedIds.length);
+  assert(scopedIds.every(id => id.startsWith('md-')));
+  await primary.getByText('内部跳转', { exact: true }).click();
+  assert.equal(await page.evaluate(() => document.activeElement.textContent), '第一处');
+  await render('<script>window.markdownExecuted=true</script><style>body{display:none}</style><iframe src="https://example.invalid/embed"></iframe><svg onload="window.markdownExecuted=true"></svg><form><input autofocus></form>\n\n<p style="color:red;position:fixed" onclick="window.markdownExecuted=true">过滤样式</p><span style="color:var(--danger)">过滤变量</span><span class="output-image-overlay" style="background:url(https://example.invalid/leak)">过滤背景</span><a href="javascript:alert(1)">危险链接</a><img src="javascript:alert(1)" onerror="window.markdownExecuted=true">');
+  assert.equal(await primary.locator('script,style,iframe,svg,form,[onclick],[onerror],[autofocus],.output-image-overlay').count(), 0);
+  assert.equal(await primary.locator('a[href^="javascript:"]').count(), 0);
+  assert.equal(await primary.getByText('过滤样式', { exact: true }).evaluate(el => el.style.color || el.style.position), '');
+  assert.equal(await primary.getByText('过滤变量', { exact: true }).evaluate(el => el.style.color), '');
+  assert.equal(await page.evaluate(() => window.markdownExecuted), undefined);
   await render('```mermaid\nflowchart LR\nA -->', { streaming: true });
   assert((await primary.innerText()).includes('图表生成中'));
   assert.equal(await primary.locator('.markdown-diagram img').count(), 0);
@@ -157,6 +201,7 @@ try {
   await render('![失效图片](https://example.invalid/missing.png)');
   await page.route('https://example.invalid/missing.png', route => route.abort());
   await primary.getByRole('button', { name: '重试' }).waitFor();
+  assert.equal(await primary.getByRole('button', { name: '重试' }).evaluate(el => el.getBoundingClientRect().height), 28);
   await page.route('https://example.invalid/slow.png', () => {});
   await render('![超时图片](https://example.invalid/slow.png)');
   await page.clock.fastForward(16_000);
@@ -203,6 +248,6 @@ try {
     await page.evaluate(() => { delete window.isTauri; delete window.__TAURI_INTERNALS__; });
   }
   assert.deepEqual(errors, []);
-  await writeFile(join(output, 'result.json'), JSON.stringify({ native, passed: true, localAgentImages: !native, scenarios: ['GFM','nested content','scoped footnotes','math','highlight','Mermaid','streaming','invalid syntax','images','timeouts','copy success/failure (mock clipboard)','raw HTML','themes','400px'] }, null, 2));
+  await writeFile(join(output, 'result.json'), JSON.stringify({ native, passed: true, localAgentImages: !native, scenarios: ['GFM','nested content','scoped footnotes','math','highlight','Mermaid','streaming','invalid syntax','images','timeouts','copy success/failure (mock clipboard)','sanitized HTML','HTML keyboard and anchors','CJK italics','28px retry','themes','400px'] }, null, 2));
   console.log(`MARKDOWN_UI_OK ${native ? 'TAURI' : 'BROWSER'} ${output}`);
 } finally { await browser?.close(); if (child) child.kill(); agent?.kill(); await server.close(); }

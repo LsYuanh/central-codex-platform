@@ -10,6 +10,8 @@
 | Tauri JavaScript API | 2.11.1 | npm `@tauri-apps/api` | Apache-2.0 OR MIT | 桌面运行时信息 |
 | React / React DOM | 19.2.8 | npm | MIT | Spike UI |
 | react-markdown | 10.1.0 | npm | MIT | CommonMark 消息与技能预览 |
+| rehype-raw / rehype-sanitize | 7.0.0 / 6.0.0 | npm | MIT | Markdown 内 HTML 解析与允许列表过滤 |
+| @types/hast | 3.0.5 | npm | MIT | HTML 语法树 TypeScript 类型 |
 | remark-gfm / remark-breaks / remark-math | 4.0.1 / 4.0.0 / 6.0.0 | npm | MIT | 表格、脚注、清单、聊天换行与公式语法 |
 | KaTeX | 0.18.7 | npm | MIT | 按需公式展示及随包字体 |
 | Mermaid | 11.17.2 | npm | MIT | 按需图表展示，严格模式 |

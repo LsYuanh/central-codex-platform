@@ -1781,11 +1781,22 @@ a {
 /* Markdown and device files */
 
 .markdown-message {
+  --markdown-purple: #7b3795;
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+.markdown-message :is(em,i) { font-style: italic; font-synthesis: style; }
+.markdown-message kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); color: var(--ink); font-family: inherit; font-size: .9em; line-height: 1.5; vertical-align: baseline; }
+.markdown-message mark { background: #fff0b3; color: #4d3b00; border-radius: 2px; padding: 0 2px; }
+.markdown-message > details { margin: 10px 0; }
+.markdown-message details:not(.markdown-diagram details) { border-left: 2px solid var(--line); padding-left: 12px; }
+.markdown-message details:not(.markdown-diagram details) > summary { cursor: pointer; color: var(--ink); padding: 4px 0; }
+.markdown-message details[open]:not(.markdown-diagram details) > summary { margin-bottom: 6px; }
+:root[data-theme="dark"] .markdown-message { --markdown-purple: #d1a2e3; }
+:root[data-theme="dark"] .markdown-message mark { background: #584923; color: #ffedaa; }
 
 .markdown-message blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--line); color: var(--ink-muted); }
 .markdown-message blockquote > :last-child { margin-bottom: 0; }
@@ -1814,7 +1825,8 @@ a {
 .markdown-image { display: block; max-width: 100%; margin: 10px 0; }
 .markdown-image img { display: block; max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 6px; }
 .markdown-image-caption,.markdown-image-status { display: block; margin-top: 6px; color: var(--ink-muted); font-size: 12px; }
-.markdown-image-status button { margin-left: 8px; }
+.markdown-image-status button { min-height: var(--control-compact); height: var(--control-compact); padding: 3px 8px; margin-left: 8px; border-radius: var(--control-radius); background: var(--surface); color: var(--ink); border: 1px solid var(--line); font-size: 12px; line-height: 20px; }
+@media (pointer: coarse) { .markdown-image-status button { min-width: 44px; min-height: 44px; height: auto; } }
 .markdown-code-block .hljs-keyword,.markdown-code-block .hljs-selector-tag,.markdown-code-block .hljs-literal { color: #8b368e; }
 .markdown-code-block .hljs-string,.markdown-code-block .hljs-regexp,.markdown-code-block .hljs-addition { color: #286542; }
 .markdown-code-block .hljs-number,.markdown-code-block .hljs-attr,.markdown-code-block .hljs-built_in { color: #88520f; }
