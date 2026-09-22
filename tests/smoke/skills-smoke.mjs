@@ -90,7 +90,7 @@ try{
  let tool;await until(async()=>{tool=(await a2.request('conversation.read',{threadId:t2.id})).thread.lastTool;return tool;},'dynamic skill load');assert(tool.success,JSON.stringify(tool));const loaded=JSON.parse(tool.contentItems[0].text);assert.equal(loaded.revision,1);assert.match(loaded.instructions,/Use scripts/);
  pass('dynamic discovery loads the package onto a second authenticated client');
  const creator=(await req('skill.list')).skills.find(s=>s.id===CREATOR_ID);
- assert.equal(creator.source,'builtin');assert.equal(creator.displayName,'创建技能');
+ assert.equal(creator.source,'builtin');assert.equal(creator.displayName,CREATOR_ID);
  assert.equal((await req('skill.read',{id:CREATOR_ID})).content,CREATOR_MAIN);
  for(const operation of ['skill.remove','skill.draft'])await assert.rejects(req(operation,{id:CREATOR_ID,revision:creator.revision,skillId:CREATOR_ID,creationKey:randomUUID()}),/BUILTIN_READONLY/);
  await assert.rejects(req('skill.update',{id:CREATOR_ID,revision:creator.revision,enabled:false,automatic:true}),/BUILTIN_READONLY/);

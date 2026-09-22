@@ -82,7 +82,7 @@ export class SkillStore {
     // Preference changes and content releases both get immutable projection paths.
     const pref=this.builtinPreferences[skillScope(userId)]??{automatic:true,revision:0};
     const bytes=Buffer.from(CREATOR_MAIN);
-    return {id:CREATOR_ID,name:CREATOR_ID,displayName:'创建技能',source:'builtin',description:CREATOR_DESCRIPTION,userId,
+    return {id:CREATOR_ID,name:CREATOR_ID,displayName:CREATOR_ID,source:'builtin',description:CREATOR_DESCRIPTION,userId,
       revision:CREATOR_VERSION*1_000_000+pref.revision,enabled:true,automatic:pref.automatic,updatedAt:'',platforms:[],programs:[],
       files:[{path:'SKILL.md',bytes:bytes.length,sha256:hash(bytes),data:bytes.toString('base64')}]};
   }

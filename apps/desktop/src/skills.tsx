@@ -5,7 +5,8 @@ import { MarkdownMessage } from "./MarkdownMessage";
 import { SkillFilePicker } from "./SkillFilePicker";
 import { UiIcon } from "./UiIcon";
 export interface Skill { id:string; name:string; displayName?:string; source?:'builtin'|'personal'; nameConflict?:boolean; description:string; revision:number; enabled:boolean; automatic:boolean; platforms:string[]; programs:string[] }
-export const skillLabel=(skill:Skill)=>skill.displayName||skill.name;
+// Keep the built-in name consistent with older gateways and persisted mentions.
+export const skillLabel=(skill:Pick<Skill,'id'|'name'|'displayName'>)=>skill.id==='yuan-zhou-skill-creator'?skill.name:skill.displayName||skill.name;
 interface Draft { id:string; path:string; skillId?:string; revision?:number }
 interface Preview { previewId:string; name:string; displayName?:string; source?:'builtin'|'personal'; nameConflict?:boolean; description:string; platforms:string[]; programs:string[]; files:{path:string;bytes:number;content?:string}[] }
 export function useSkills(scope:string,client:RpcClient|undefined,available:boolean){

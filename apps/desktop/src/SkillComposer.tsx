@@ -60,7 +60,7 @@ function chip(mention:Pick<SkillMention,'id'|'revision'|'name'|'displayName'>){
   const el=document.createElement('span');el.className='composer-skill-mention';el.contentEditable='false';
   el.dataset.skillId=mention.id;el.dataset.skillRevision=String(mention.revision);el.dataset.skillName=mention.name;
   if(mention.displayName)el.dataset.skillDisplayName=mention.displayName;
-  el.textContent=mention.displayName||mention.name;el.title=`${mention.name} · v${mention.revision}`;el.setAttribute('aria-label',`技能 ${mention.name}`);
+  el.textContent=skillLabel(mention);el.title=`${mention.name} · v${mention.revision}`;el.setAttribute('aria-label',`技能 ${mention.name}`);
   return el;
 }
 function renderDocument(root:HTMLElement,value:ComposerDocument){
