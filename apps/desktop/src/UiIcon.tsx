@@ -9,7 +9,7 @@ const paths = {
   folder: "M3 6h7l2 3h9v11H3zM3 6V4h6l2 2h9v3",
   folderOpen: "M3 19V5h6l2 3h8v3M3 19l3-8h16l-3 8z",
   folderPlus: "M3 6h7l2 3h9v5M3 6V4h6l2 2h9v3M3 6v14h9M18 16v6M15 19h6",
-  refresh: "M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1",
+  refresh: "M19.52 14.74A8 8 0 1 1 18.93 8M18.93 3.5V8h-4.5",
   chat: "M6 4h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H9l-6 3V7a3 3 0 0 1 3-3ZM7 9h10M7 13h7",
   plus: "M12 5v14M5 12h14",
   pin: "m9 3 12 12-3 1-3-3-5 5-4-4 5-5-3-3zM8 16l-5 5",

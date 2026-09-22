@@ -1528,7 +1528,7 @@ export default function App() {
             <section data-thread-group="" className={`conversation-list-section${threadDrag.drag?.target?.group === null && !threadDrag.drag.target.anchor ? " thread-drop-group" : ""}`}>
               <div className="conversation-list-heading">
                 <div><span>最近</span>{runningThreadIds.size > 0 && <small>{runningThreadIds.size} 个进行中</small>}</div>
-                <button className="text-icon-button" title="刷新" aria-label="刷新对话" disabled={appState !== "online" || threadsLoading} onClick={() => void refreshThreads()}>{threadsLoading ? <span className="icon-loading">…</span> : <RefreshIcon />}</button>
+                <button className="text-icon-button" title="刷新" aria-label="刷新对话" disabled={appState !== "online" || threadsLoading} onClick={() => void refreshThreads()}>{threadsLoading ? <span className="icon-loading">…</span> : <UiIcon name="refresh" />}</button>
               </div>
               <div className="conversation-list">
                 {recentThreads.length === 0 ? (
@@ -1792,10 +1792,6 @@ export default function App() {
       )}
     </main>
   );
-}
-
-function RefreshIcon() {
-  return <svg className="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 5.8A5.2 5.2 0 1 0 13 9.4" /><path d="M13.2 2.8v3h-3" /></svg>;
 }
 
 function SendIcon() {
