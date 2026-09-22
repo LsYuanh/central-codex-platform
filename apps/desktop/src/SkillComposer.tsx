@@ -73,10 +73,10 @@ function renderDocument(root:HTMLElement,value:ComposerDocument){
 
 interface Props {
   value:ComposerDocument; onChange:(value:ComposerDocument)=>void; editorRef:RefObject<HTMLDivElement|null>;
-  insertSkillRef:RefObject<((skill:Skill)=>void)|null>; service:SkillService; disabled:boolean; skillsDisabled:boolean;
+  service:SkillService; disabled:boolean; skillsDisabled:boolean;
   placeholder:string; scope:string; onSend:()=>void; onPaste:(event:ClipboardEvent)=>void; manage:()=>void;
 }
-export function SkillComposer({value,onChange,editorRef,insertSkillRef,service,disabled,skillsDisabled,placeholder,scope,onSend,onPaste,manage}:Props){
+export function SkillComposer({value,onChange,editorRef,service,disabled,skillsDisabled,placeholder,scope,onSend,onPaste,manage}:Props){
   const [trigger,setTrigger]=useState<{start:number;end:number;query:string}|null>(null);
   const [active,setActive]=useState(0),[focused,setFocused]=useState(false);
   const composing=useRef(false),savedSelection=useRef<{start:number;end:number}|null>(null),dismissed=useRef<string|null>(null);
@@ -114,7 +114,6 @@ export function SkillComposer({value,onChange,editorRef,insertSkillRef,service,d
       setTrigger(null);
     }
   },[value,editorRef]);
-  useLayoutEffect(()=>{insertSkillRef.current=choose;return()=>{insertSkillRef.current=null;};});
   useEffect(()=>{setTrigger(null);dismissed.current=null;savedSelection.current=null;},[scope]);
   useEffect(()=>{const changed=()=>{if(document.activeElement===editorRef.current)detect();};document.addEventListener('selectionchange',changed);return()=>document.removeEventListener('selectionchange',changed);});
   useEffect(()=>{if(open)popupRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'});},[open,selected]);

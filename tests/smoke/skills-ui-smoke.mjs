@@ -35,7 +35,7 @@ export async function runSkillsUi({root,client,bundle}){
   await page.screenshot({path:join(output,'preview.png')});await page.getByRole('button',{name:'确认保存',exact:true}).click();await page.getByText('ui-proof',{exact:true}).waitFor();
   const row=page.locator('.skill-row').filter({hasText:'ui-proof'});await row.getByRole('button',{name:'删除',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click();assert.equal(await row.count(),1);
   await page.screenshot({path:join(output,'skills-list.png')});
-  await page.getByRole('button',{name:'返回应用',exact:true}).click();await page.locator('summary[aria-label="选择技能"]').click();await page.getByRole('button',{name:/^ui-proof/}).click();assert.equal(await page.locator('.composer-skill-mention[data-skill-name="ui-proof"]').count(),1);
+  await page.getByRole('button',{name:'返回应用',exact:true}).click();await page.getByRole('textbox',{name:'发送消息'}).fill('$ui-proof');await page.getByRole('option',{name:/ui-proof/}).click();assert.equal(await page.locator('.composer-skill-mention[data-skill-name="ui-proof"]').count(),1);
   await page.screenshot({path:join(output,'composer.png')});
   console.log('SKILLS_NATIVE_UI_OK: actual Tauri, pairing, list, resource preview, create draft, save, delete cancellation, composer selection, light/dark');
  }catch(error){if(page&&!page.isClosed()){await page.screenshot({path:join(output,'failure.png')}).catch(()=>{});console.error((await page.locator('body').innerText()).slice(-2200));}throw error;}

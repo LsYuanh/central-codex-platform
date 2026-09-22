@@ -8,7 +8,6 @@ const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/U
 const css=await readFile('apps/desktop/src/styles.css','utf8');
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/button-states-'));
 const cases=[
- {id:'skill',label:'技能菜单',parent:'skill-picker-menu',html:'<span>windows-system-drive-cleaner</span><small>扫描磁盘并评估清理风险</small>',hover:'--hover',color:'--ink'},
  {id:'suggestion',label:'技能候选操作',parent:'skill-suggestions',hover:'--hover',color:'--ink'},
  {id:'model',label:'模型菜单',parent:'model-picker-submenu-panel',hover:'--hover',color:'--ink'},
  {id:'thread',label:'对话菜单',parent:'thread-actions-menu',hover:'--hover',color:'--ink'},
@@ -33,7 +32,7 @@ try{
    assert.equal(state.background,c.hover?state.tokens[c.hover]:'rgba(0, 0, 0, 0)',theme+' '+c.id+' hover background');
    assert.equal(state.color,state.tokens[c.color],theme+' '+c.id+' text');
    const background=c.hover?state.background:state.tokens['--surface-raised'];assert(contrast(state.color,background)>=4.5,theme+' '+c.id+' text contrast');
-   if(c.id==='skill'){const small=await button.locator('small').evaluate(el=>getComputedStyle(el).color);assert(contrast(small,background)>=4.5);await page.screenshot({path:join(output,theme+'-skill-hover.png')});}
+   if(c.id==='suggestion')await page.screenshot({path:join(output,theme+'-suggestion-hover.png')});
    await page.mouse.down();assert.equal((await styles(button)).filter,c.filter??'brightness(0.95)',theme+' '+c.id+' pressed');await page.mouse.up();
    await button.evaluate(el=>el.disabled=true);await page.mouse.move(0,0);const idle=await styles(button);await button.hover();const disabled=await styles(button);assert.equal(disabled.background,idle.background,theme+' '+c.id+' disabled hover');assert.equal(disabled.color,idle.color);assert.equal(disabled.filter,'none');assert.equal(disabled.cursor,c.id==='process'?'default':'not-allowed',theme+' '+c.id+' disabled cursor');
    await button.evaluate(el=>el.disabled=false);results.push({theme,component:c.id,passed:true});

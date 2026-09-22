@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
-import { useSkills, SkillsPanel, SkillPicker, type Skill } from "./skills";
+import { useSkills, SkillsPanel } from "./skills";
 import { SkillComposer, type ComposerDocument, type SkillMention } from "./SkillComposer";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
@@ -212,7 +212,6 @@ export default function App() {
     const text=typeof next === "function" ? next(current.text) : next;
     return {text,mentions:current.mentions.filter(m=>text.slice(m.start,m.end)==="$"+m.name)};
   }), []);
-  const insertSkillRef = useRef<((skill:Skill)=>void)|null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const threadMessageCacheRef = useRef(new Map<string, ChatMessage[]>());
   const threadDraftsRef = useRef(new Map<string, ThreadDraft>());
@@ -1727,14 +1726,13 @@ export default function App() {
                     {mode === "central-gateway" && attachments.controls}
                     {sending && <p className="attachment-notice" role="status">{sendStage || "正在核对提交结果…"}{sendStage && sendStage !== "正在追加要求…" && sendStage !== "正在提交中央模型" && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(String(e)));}}>取消准备</button>}</p>}
                     {uncertainSubmission && <div className="attachment-error-text">提交结果未知，草稿已保留。<button type="button" disabled={sending||appState!=="online"} onClick={()=>void reconcileSubmission()}>核对历史</button></div>}
-                  <div className="composer-input-wrap"><SkillComposer key={`${projectScope}:${threadId ?? newDraftKey()}`} editorRef={composerInputRef} insertSkillRef={insertSkillRef} value={composerDoc} onChange={setComposerDoc}
+                  <div className="composer-input-wrap"><SkillComposer key={`${projectScope}:${threadId ?? newDraftKey()}`} editorRef={composerInputRef} value={composerDoc} onChange={setComposerDoc}
                     scope={`${projectScope}:${threadId ?? newDraftKey()}`} service={skillService} skillsDisabled={turnRunning || mode !== "central-gateway"}
                     onPaste={attachments.paste} onSend={() => { if (mode !== "fake-central") void sendTurn(); }} manage={() => openSettings("skills")}
                     disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? "中央引擎不可用，请重新连接并核对任务状态" : mode === "fake-central" ? "Fake Central 仅用于设置页的工具验证" : appState !== "online" ? "请先在设置中连接中央网关" : "描述任务，按 Enter 发送"} /></div>
                   </div>
                   <div className="composer-footer">
                     {mode === "central-gateway" && attachments.pickerButton}
-                    {mode === "central-gateway" && <SkillPicker service={skillService} disabled={sending || turnRunning || appState !== "online"} insert={skill => insertSkillRef.current?.(skill)} manage={() => openSettings("skills")} />}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
                       <summary aria-label="切换模型、推理强度和速度"><span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || "自动"}</span><span className="model-picker-chevron" aria-hidden="true" /></summary>
                       <div className="model-picker-popover">
