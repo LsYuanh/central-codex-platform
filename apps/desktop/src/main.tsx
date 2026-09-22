@@ -6,10 +6,15 @@ import App from "./App";
 import "./styles.css";
 import { initializeTheme } from "./theme";
 import { initializeInputFocus } from "./input-focus";
+import { initializeContextMenu } from "./context-menu";
 
 initializeTheme();
 const disposeInputFocus = initializeInputFocus();
-if (import.meta.hot) import.meta.hot.dispose(disposeInputFocus);
+const disposeContextMenu = initializeContextMenu();
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  disposeInputFocus();
+  disposeContextMenu();
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
