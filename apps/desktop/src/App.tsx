@@ -676,6 +676,7 @@ export default function App() {
       if (event.kind === "execution-start" || event.kind === "execution-end") {
         const execution = event.kind === "execution-start" ? event.execution : event;
         const target = execution.threadId ?? timingThreadId;
+        if(event.kind==='execution-end'&&target===threadIdRef.current&&event.error?.includes('SKILL_CREATOR_NEW_THREAD_REQUIRED'))setAppError(event.error);
         if (target) updateThreadMessages(target, rows => rows.some(row => row.executionId === execution.requestId) ? rows : [...rows, {
           id: `execution-${execution.requestId}`, role: "assistant", content: "", kind: "execution", executionId: execution.requestId, turnId: execution.turnId ?? eventTurnId,
         }]);
@@ -1341,7 +1342,7 @@ export default function App() {
     } catch(e) {setAppError(String(e));} finally {setSending(false);}
   };
 
-  const startNewConversation = useCallback((project?: ClientProject, initialSkill?: Skill) => {
+  const startNewConversation = useCallback((project?: ClientProject, initialSkill?: Skill, initialPrompt = "") => {
     if (appState !== "online" || threadBusy || sendGuard.current) return;
     persistCurrentDraft();
     setAppError("");
@@ -1352,7 +1353,7 @@ export default function App() {
     newDraftSlotRef.current = initialSkill ? `__skill__:${crypto.randomUUID()}` : `__new__:${project?.id ?? ""}`;
     if (initialSkill) {
       const text = '$' + initialSkill.name;
-      setComposerDoc({text:text+' ',mentions:[{id:initialSkill.id,revision:initialSkill.revision,name:initialSkill.name,start:0,end:text.length}]});
+      setComposerDoc({text:text+' '+initialPrompt,mentions:[{id:initialSkill.id,revision:initialSkill.revision,name:initialSkill.name,...(initialSkill.displayName?{displayName:initialSkill.displayName}:{}),start:0,end:text.length}]});
       attachments.setDrafts([]);
     } else restoreThreadDraft(undefined);
     setMessages([]);
@@ -1678,6 +1679,7 @@ export default function App() {
                 <div className="error-banner" role="alert" aria-live="assertive">
                   <span className="error-banner-icon" aria-hidden="true">!</span>
                   <span className="error-banner-copy"><strong>发生错误</strong><span>{appError}</span></span>
+                  {appError.includes('SKILL_CREATOR_NEW_THREAD_REQUIRED')&&<button type="button" className="button-secondary" disabled={!canStartConversation||!!threadBusy||sending} onClick={()=>{const creator=skillService.rows.find(s=>s.source==='builtin'&&s.name==='yuan-zhou-skill-creator');if(creator){const pendingDoc=composerDoc,pendingAttachments=attachments.drafts;startNewConversation(undefined,creator);if(pendingDoc.text.trim()){setComposerDoc(pendingDoc);attachments.setDrafts(pendingAttachments);}requestAnimationFrame(()=>composerInputRef.current?.focus());}}}>新对话创建技能</button>}
                   <button type="button" aria-label="关闭错误" title="关闭" onClick={() => setAppError("")}>×</button>
                 </div>
               </div>
@@ -1785,7 +1787,7 @@ export default function App() {
           <div className="settings-page">
             {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
             <div className="settings-scroll">
-              {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={skill => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
+              {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
                 <div className="settings-content">
                   <section className="settings-section">

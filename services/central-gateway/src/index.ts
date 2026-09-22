@@ -171,7 +171,8 @@ const MAX_COMMAND_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 // them through its Local Agent instead of touching the Mac worker filesystem.
 const CLIENT_DEVICE_TOOLS = [
   ...WORKSPACE_TOOLS,
-  {type:"function",name:"device_skill_load",description:"Load an enabled personal skill by name. Prepare its versioned files on the bound CLIENT and return instructions, dependency status and client resource directory. Always call before following a skill from the native catalog; never pass host catalog paths to client file tools.",inputSchema:{type:"object",properties:{name:{type:"string"}},required:["name"]}},
+  {type:"function",name:"device_skill_draft",description:"Create a registered personal-skill draft on the bound CLIENT after the user has confirmed the skill plan. Use a stable requestKey (8-80 letters/digits/hyphens) for retries of the same task. Optional skillId edits an existing personal skill. Returns draft.id/path; does not generate, run or save the package. Never provide ownership or filesystem paths.",inputSchema:{type:"object",properties:{requestKey:{type:"string",pattern:"^[a-zA-Z0-9-]{8,80}$"},skillId:{type:"string"}},required:["requestKey"],additionalProperties:false}},
+  {type:"function",name:"device_skill_load",description:"Load an enabled personal or Yuan Zhou built-in skill by name. Prepare its versioned files on the bound CLIENT and return instructions, dependency status and client resource directory. Always call before following a skill from the native catalog; never pass host catalog paths to client file tools.",inputSchema:{type:"object",properties:{name:{type:"string"}},required:["name"]}},
   {
     type:"function", name:"device_write_file",
     description:"Write UTF-8 text to the client and return verified saved-file metadata. path is a client absolute path (or workspace-relative); omit path and set name to save in the client configured default output directory. Existing files require overwrite=true and expectedVersion from device_read_text. Content <=256 KiB. Never use a central path.",
@@ -734,7 +735,7 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
       streaming: agentMethod === "exec" && agents.get(client.deviceId)?.hello?.agent.capabilities.includes("exec-stream/v1") === true,
     });
     void (async () => {
-      if (!agentMethod && !listOutputs && toolName !== "device_skill_load") {
+      if (!agentMethod && !listOutputs && toolName !== "device_skill_load" && toolName !== "device_skill_draft") {
         bridge.respond(message.id!, { success: false, contentItems: [{ type: "inputText", text: `Unsupported client device tool: ${toolName}` }] });
         audit("device.tool.response", "failed", { userId: client.userId, deviceId: client.deviceId, requestId, errorCode: "UNSUPPORTED_DEVICE_TOOL" });
         emitTool("completed", { status: "failed", durationMs: Date.now() - startedAt, error: `Unsupported client device tool: ${toolName}` });
@@ -744,6 +745,24 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
       try {
         if (!threadId) throw new Error("REMOTE_BINDING_REQUIRED: tool has no owning thread");
         const binding = await ensureRemoteBinding(client, threadId);
+        if (toolName === "device_skill_draft") {
+          assertNotStopped();
+          if (!skillUsers.has(client.userId)) throw Error('SKILL_RUNTIME_UPGRADE_REQUIRED');
+          if(auditFailed)throw Error('AUDIT_STORAGE_UNAVAILABLE');
+          if (!threadSummaryById.get(threadId)?.skillCreator) throw Error('SKILL_CREATOR_NEW_THREAD_REQUIRED: 旧对话缺少创建技能工具，请在新对话选择「创建技能」继续');
+          if (typeof toolArgs.requestKey !== 'string' || !/^[a-zA-Z0-9-]{8,80}$/.test(toolArgs.requestKey) || (toolArgs.skillId!==undefined&&typeof toolArgs.skillId!=='string') || Object.keys(toolArgs).some(k=>!['requestKey','skillId'].includes(k))) throw Error('SKILL_DRAFT_ARGUMENTS_INVALID');
+          if(skillBusy.has(client.userId))throw Error('SKILL_BUSY: 另一个技能操作正在进行，请使用同一 requestKey 重试');
+          skillBusy.add(client.userId);
+          try {
+            const check=()=>{assertNotStopped();if(Date.now()-startedAt>35_000)throw Error('SKILL_OPERATION_TIMEOUT');if(client.socket.readyState!==WebSocket.OPEN)throw Error('SKILL_CONNECTION_CLOSED');};
+            const {owner,call}=await skillAgent(client,threadId,check);
+            const creationKey=createHash('sha256').update(JSON.stringify([client.userId,binding.deviceKey,threadId,toolArgs.requestKey])).digest('hex');
+            const result=await skills.createDraft(owner,{creationKey,skillId:toolArgs.skillId},call);
+            check();notifySkillsChanged(client.userId);
+            bridge.respond(message.id!, {success:true,contentItems:[{type:"inputText",text:JSON.stringify({draft:result.draft,next:'Generate files at draft.path through client device tools. Then open 我的技能 → 本机草稿 → 预览并保存. This is not a saved skill.'})}]});
+            emitTool('completed',{status:'succeeded',durationMs:Date.now()-startedAt});return;
+          } finally {skillBusy.delete(client.userId);}
+        }
         if (toolName === "device_skill_load") {
           assertNotStopped();
           if (!skillUsers.has(client.userId)) throw Error("SKILL_RUNTIME_UPGRADE_REQUIRED");
@@ -1309,7 +1328,7 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
         threadOwnerById.set(createdId, client.userId);
         const createdRecord = isRecord(result) && isRecord(result.thread) ? sanitizeThreadMetadata(result.thread) as JsonObject : undefined;
         const binding = await ensureRemoteBinding(client);
-        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId, deviceKey: binding.deviceKey, remoteWorkspace: binding, ...(threadProject ? {clientProject:threadProject} : {}) });
+        threadSummaryById.set(createdId, { ...(createdRecord ?? { id: createdId }), deviceId: client.deviceId, deviceKey: binding.deviceKey, remoteWorkspace: binding, skillCreator:true, ...(threadProject ? {clientProject:threadProject} : {}) });
         if (isRecord(visibleResult) && isRecord(visibleResult.thread) && threadProject) visibleResult.thread = {...visibleResult.thread,clientProject:threadProject};
         persistState();
       }
@@ -1420,6 +1439,7 @@ async function skillAgent(client:ConnectedClient,threadId?:string,check=()=>{}):
   }};
 }
 async function prepareSkill(client:ConnectedClient,row:ReturnType<SkillStore['resolve']>,threadId?:string,check=()=>{}) {
+  if(row.source==='builtin'&&threadId&&!threadSummaryById.get(threadId)?.skillCreator)throw Error('SKILL_CREATOR_NEW_THREAD_REQUIRED: 旧对话缺少创建技能工具，请在新对话选择「创建技能」继续');
   const {owner,call}=await skillAgent(client,threadId,check);
   const cacheId=randomUUID(),scope=skillScope(owner.userId);
   const made=await call('skills/create',{scope,id:cacheId});
@@ -1433,6 +1453,9 @@ async function prepareSkill(client:ConnectedClient,row:ReturnType<SkillStore['re
   const actual=Array.isArray(verified.files)?verified.files as {path:string;bytes:number;sha256:string}[]:[];
   if(actual.length!==expected.length||expected.some(f=>!actual.some(v=>v.path===f.path&&v.bytes===f.bytes&&v.sha256===f.sha256)))throw Error('SKILL_CLIENT_CHECKSUM_MISMATCH');
   return {id:row.id,name:row.name,revision:row.revision,source:'client',directory:made.path,files:expected,programs:row.programs,instructions:Buffer.from(row.files.find(f=>f.path==='SKILL.md')!.data,'base64').toString('utf8')};
+}
+function notifySkillsChanged(userId:string){
+  for(const target of clients.values())if(target.userId===userId)send(target.socket,{type:'event',eventType:'skill.changed',name:'skill/changed',data:{},sequence:++sequence});
 }
 const skillBusy=new Set<string>();
 async function handleSkillRequest(client:ConnectedClient,message:GatewayRequest){
@@ -1468,7 +1491,7 @@ async function handleSkillRequest(client:ConnectedClient,message:GatewayRequest)
     }
     if(mutating)skills.project(client.userId,skillDirectory(client.userId));
     send(client.socket,{type:'response',requestId:message.requestId,ok:true,data});
-    if(mutating)for(const target of clients.values())if(target.userId===client.userId)send(target.socket,{type:'event',eventType:'skill.changed',name:'skill/changed',data:{},sequence:++sequence});
+    if(mutating)notifySkillsChanged(client.userId);
     audit(message.operation,'succeeded',{userId:client.userId,deviceId:client.deviceId});
   }catch(error){send(client.socket,{type:'response',requestId:message.requestId,ok:false,error:String(error)});audit(message.operation,'failed',{userId:client.userId,deviceId:client.deviceId,errorCode:String(error).split(':')[0]});}
   finally{if(admitted)skillBusy.delete(client.userId);}
@@ -1525,7 +1548,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
       for(const row of skills.list(client.userId).filter(s=>s.enabled))skillTurn.catalog.set(row.name,skills.resolve(client.userId,row.id,row.revision));
       const selected = Array.isArray(selectedSkills) ? selectedSkills.map(v => skills.resolve(client.userId,v.id,v.revision)) : [];
       for (const match of content.matchAll(/(?:^|\s)\$([a-z][a-z0-9-]{0,63})(?=\s|$|[，。,:;!?])/g)) {
-        const known=skills.list(client.userId).find(s=>s.name===match[1]);
+        const known=skills.list(client.userId).find(s=>s.name===match[1]&&!s.nameConflict);
         if(known){const row=skills.resolve(client.userId,known.id);if(!selected.some(s=>s.id===row.id))selected.push(row);}
       }
       if(selected.length>4)throw Error("SKILL_SELECTION_LIMIT");

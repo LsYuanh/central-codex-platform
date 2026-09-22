@@ -82,7 +82,7 @@
   {
     "path": "codex-rs/ext/skills/src/host_service.rs",
     "upstreamSha256": "4e73a4d6b97c85e8d9b564411c020f1c3f0ac860fee4da9eaa65a2c39c4eadd6",
-    "patchedSha256": "89959d32351ffa9a2ac8379526886363efadb3381665ed64509fec32a718fb9b"
+    "patchedSha256": "e91726d817549b6ab0bae9e8bd29c984b3419978e29a4fffdcf33ba59f29054f"
   },
   {
     "path": "codex-rs/exec-server/src/environment.rs",

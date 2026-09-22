@@ -1628,7 +1628,7 @@ index 112eeb0..87ce261 100644
              return PluginLoadOutcome::default();
          }
 diff --git a/codex-rs/ext/skills/src/host_service.rs b/codex-rs/ext/skills/src/host_service.rs
-index c13f9d0..0a7700f 100644
+index c13f9d0..291b0a9 100644
 --- a/codex-rs/ext/skills/src/host_service.rs
 +++ b/codex-rs/ext/skills/src/host_service.rs
 @@ -110,6 +110,107 @@ impl HostSkillsRequest<'_> {
@@ -1667,7 +1667,7 @@ index c13f9d0..0a7700f 100644
 +        let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else {
 +            return empty();
 +        };
-+        if entries.len() > 100 {
++        if entries.len() > 101 {
 +            return empty();
 +        }
 +        let mut roots = Vec::new();

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import type { Skill, SkillService } from "./skills";
+import { skillLabel, type Skill, type SkillService } from "./skills";
 import { UiIcon } from "./UiIcon";
 
-export interface SkillMention { id:string; revision:number; name:string; start:number; end:number }
+export interface SkillMention { id:string; revision:number; name:string; displayName?:string; start:number; end:number }
 export interface ComposerDocument { text:string; mentions:SkillMention[] }
 
 function sibling(node:Node,direction:'nextSibling'|'previousSibling') {
@@ -18,7 +18,7 @@ function readDocument(root:Node):ComposerDocument {
   function visit(node:Node){
     if(node instanceof HTMLElement && node.dataset.skillId){
       const name=node.dataset.skillName!,start=text.length;text+="$"+name;
-      mentions.push({id:node.dataset.skillId,revision:Number(node.dataset.skillRevision),name,start,end:text.length});return;
+      mentions.push({id:node.dataset.skillId,revision:Number(node.dataset.skillRevision),name,...(node.dataset.skillDisplayName?{displayName:node.dataset.skillDisplayName}:{}),start,end:text.length});return;
     }
     if(node.nodeType===Node.TEXT_NODE){text+=node.textContent;return;}
     // Chromium leaves a final BR as a caret placeholder, not an extra line.
@@ -56,10 +56,11 @@ function setSelection(root:HTMLElement,start:number,end=start){
   const range=document.createRange();range.setStart(...point(start));range.setEnd(...point(end));
   const sel=window.getSelection();sel?.removeAllRanges();sel?.addRange(range);
 }
-function chip(mention:Pick<SkillMention,'id'|'revision'|'name'>){
+function chip(mention:Pick<SkillMention,'id'|'revision'|'name'|'displayName'>){
   const el=document.createElement('span');el.className='composer-skill-mention';el.contentEditable='false';
   el.dataset.skillId=mention.id;el.dataset.skillRevision=String(mention.revision);el.dataset.skillName=mention.name;
-  el.textContent=mention.name;el.title=`${mention.name} · v${mention.revision}`;el.setAttribute('aria-label',`技能 ${mention.name}`);
+  if(mention.displayName)el.dataset.skillDisplayName=mention.displayName;
+  el.textContent=mention.displayName||mention.name;el.title=`${mention.name} · v${mention.revision}`;el.setAttribute('aria-label',`技能 ${mention.name}`);
   return el;
 }
 function renderDocument(root:HTMLElement,value:ComposerDocument){
@@ -81,7 +82,7 @@ export function SkillComposer({value,onChange,editorRef,service,disabled,skillsD
   const [active,setActive]=useState(0),[focused,setFocused]=useState(false);
   const composing=useRef(false),savedSelection=useRef<{start:number;end:number}|null>(null),dismissed=useRef<string|null>(null);
   const listId=useId(),popupRef=useRef<HTMLDivElement>(null);
-  const rows=service.rows.filter(s=>s.enabled&&(!trigger?.query||`${s.name} ${s.description}`.toLocaleLowerCase().includes(trigger.query.toLocaleLowerCase())));
+  const rows=service.rows.filter(s=>s.enabled&&(!trigger?.query||`${s.name} ${s.displayName??''} ${s.description}`.toLocaleLowerCase().includes(trigger.query.toLocaleLowerCase())));
   const selectable=service.available&&!service.loading&&!service.error&&!skillsDisabled;
   const open=!!trigger&&focused&&!disabled&&!composing.current;
   const selected=Math.min(active,Math.max(0,rows.length-1));
@@ -145,9 +146,9 @@ export function SkillComposer({value,onChange,editorRef,service,disabled,skillsD
       }
     }} />
     {open&&host&&createPortal(<div ref={popupRef} className="skill-suggestions" onMouseDown={e=>e.preventDefault()}>
-      <div id={listId} role="listbox" aria-label="个人技能" className="skill-suggestion-list">
+      <div id={listId} role="listbox" aria-label="可用技能" className="skill-suggestion-list">
         {selectable&&rows.map((s,i)=><div key={s.id} id={`${listId}-${i}`} role="option" aria-selected={selected===i} className="skill-suggestion" onMouseMove={()=>setActive(i)} onClick={()=>choose(s)} title={s.description}>
-          <UiIcon name="skill"/><span className="skill-suggestion-name">{s.name}</span><span className="skill-suggestion-description">{s.description}</span><small>个人技能</small>
+          <UiIcon name="skill"/><span className="skill-suggestion-name">{skillLabel(s)}</span><span className="skill-suggestion-description">{s.description}</span><small>{s.source==='builtin'?'远舟内置':'个人技能'}</small>
         </div>)}
       </div>
       {skillsDisabled?<p role="status">当前轮次结束后可选择技能</p>:!service.available?<p role="status">连接支持技能的中央服务后可用</p>:service.loading?<p role="status">正在加载技能…</p>:service.error?<div role="alert"><p>技能加载失败</p><button type="button" onClick={()=>void service.refresh()}>重试</button></div>:!rows.length?<p role="status">{service.rows.some(s=>s.enabled)?'没有匹配的技能':'还没有启用的技能'}</p>:null}

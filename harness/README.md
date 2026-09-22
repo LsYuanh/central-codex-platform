@@ -259,3 +259,7 @@ The next authorized fault/compatibility round uses `qa-control.mjs start|status|
 The script fixes the QA paths/port, revalidates PID identity and cwd before signals,
 preserves evidence, and enables the QA-only controls/history fixture flags. See
 `auth-lifecycle.md` for its scope and `verification/long-running-qa.json` for results.
+
+### Built-in creator catalog capacity (2026-09-22, not deployed)
+
+The managed host catalog limit is now 101: the existing 100 personal skills plus the single platform-owned `yuan-zhou-skill-creator`. The insertion source, pinned patch and source/patch hashes were updated together. The upstream version and the managed-only scan boundary are unchanged; central native `skill-creator` remains excluded. Deploy with the matching newly built Harness, not only a gateway update. Patch preparation and tamper checks pass locally; this change has not yet had binary/model QA or been deployed to the LAN central host.

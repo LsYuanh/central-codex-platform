@@ -10,12 +10,13 @@ const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/U
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/skills-panel-'));
 const source=resolve('apps/desktop/src').replaceAll('\\','/');
 const description='扫描 Windows 系统盘常见垃圾，评估清理风险，生成待确认计划，并在明确授权后执行。';
+const builtinContent=(await import('../../services/central-gateway/dist/builtin-creator.js')).CREATOR_MAIN;
 const content='---\nname: disk-cleanup\ndescription: "example"\n---\n# 磁盘清理\n\n先扫描，再确认。\n\n## 使用步骤\n\n- 检查空间\n- 评估清理风险\n- 等待用户确认\n\n```powershell\nGet-PSDrive -PSProvider FileSystem\n```\n\n<script>window.unsafe=true</script>\n';
 await writeFile(join(output,'index.html'),'<html><meta charset="utf-8"><style>.settings-page{background:var(--canvas)}</style><div id="root"></div><script type="module" src="./fixture.tsx"></script></html>');
 await writeFile(join(output,'fixture.tsx'),`
 import React,{useState,useRef} from 'react';import {createRoot} from 'react-dom/client';
 import {SkillsPanel} from '/@fs/${source}/skills.tsx';import '/@fs/${source}/styles.css';
-const body=${JSON.stringify(content)};
+const body=${JSON.stringify(content)};const builtinBody=${JSON.stringify(builtinContent)};
 const files=[{path:'SKILL.md',bytes:350,content:body},{path:'scripts/proof.ps1',bytes:21,content:'Write-Output "proof"'},{path:'assets/template.bin',bytes:8}];
 function Fixture(){
  const [rows,setRows]=useState(Array.from({length:6},(_,i)=>({id:'id-'+i,name:['disk-cleanup','document-report','code-review','meeting-notes','spreadsheet-helper','weekly-report'][i],description:i===0?${JSON.stringify(description)}:'整理参考资料与模板，帮助完成日常工作。',enabled:i!==5,automatic:true,revision:3,platforms:['windows'],programs:['powershell']})));
@@ -24,6 +25,7 @@ function Fixture(){
  const state=useRef({calls:[],used:[],created:[],fail:false});
  const service={rows,drafts,loading,error,available,refresh:async()=>{},request:async(method,params)=>{
   state.current.calls.push({method,params});if(state.current.fail)throw Error('测试：读取失败，请重试');
+  if(method==='skill/read'&&params.id==='yuan-zhou-skill-creator')return {files:[{path:'SKILL.md',bytes:new TextEncoder().encode(builtinBody).length}],content:builtinBody};
   if(method==='skill/read')return {files,content:files.find(f=>f.path===(params.file??'SKILL.md')).content??'二进制文件'};
   if(method==='skill/update'){setRows(rs=>rs.map(s=>s.id===params.id?{...s,...params,revision:s.revision+1}:s));return {};}
   if(method==='skill/remove'){setRows(rs=>rs.filter(s=>s.id!==params.id));return {};}
@@ -87,6 +89,13 @@ try{
  await open('document-report');await page.locator('.skill-more summary').click();await page.getByRole('button',{name:'对话修改',exact:true}).click();await check(()=>window.qa.state.created.length===2);await close();
  await page.evaluate(()=>window.qa.setDisabled(true));await open('document-report');assert(await page.getByRole('button',{name:'立即使用',exact:true}).isDisabled());await close();await page.evaluate(()=>window.qa.setDisabled(false));
  await page.setViewportSize({width:760,height:600});await page.emulateMedia({reducedMotion:'reduce'});await open('document-report');const box=await page.locator('.skill-dialog').boundingBox();assert(box.x>=0&&box.y>=0&&box.x+box.width<=760&&box.y+box.height<=600);await page.screenshot({path:join(output,'narrow-detail.png')});await close();await page.evaluate(()=>window.qa.setRows(rs=>rs.map(s=>({...s,description:'长说明'.repeat(300),programs:Array.from({length:30},(_,i)=>'program-'+i)}))));await open('document-report');const footer=await page.locator('.skill-dialog-actions').first().boundingBox();assert(footer.y+footer.height<=600);await close();await page.evaluate(()=>{window.qa.files.push(...Array.from({length:30},(_,i)=>({path:'references/long-file-name-for-overflow-'+i+'.md',bytes:200,content:'# reference'})));window.qa.setRows([...window.qa.rows]);});await open('document-report');await filePicker.press('ArrowDown');await filePicker.press('End');await page.waitForFunction(()=>document.querySelector('.skill-file-menu').scrollTop>0);const popup=await page.getByRole('listbox').boundingBox();assert(popup.y>=box.y&&popup.y+popup.height<=box.y+box.height);await page.keyboard.press('Escape');await close();
+ const builtin={id:'yuan-zhou-skill-creator',name:'yuan-zhou-skill-creator',displayName:'创建技能',source:'builtin',description:'将对话流程创建为个人技能包',enabled:true,automatic:true,revision:1000000,platforms:[],programs:[]};
+ await page.evaluate(s=>window.qa.setRows([...window.qa.rows,s]),builtin);await open('创建技能');
+ assert.equal(await page.getByRole('switch').count(),0);assert.equal(await page.getByRole('button',{name:'删除技能',exact:true}).count(),0);
+ await page.locator('.skill-more summary').click();assert.equal(await page.getByRole('button',{name:'对话修改',exact:true}).count(),0);await page.getByRole('button',{name:/自动匹配/}).click();await check(()=>window.qa.rows.find(s=>s.source==='builtin').automatic===false);await page.keyboard.press('Escape');
+ for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await page.screenshot({path:join(output,'builtin-'+theme+'.png')});}
+ await close();const prior=await page.evaluate(()=>window.qa.state.calls.length);await page.getByRole('button',{name:'创建技能',exact:true}).click();await check(()=>window.qa.state.used.length===2);assert.equal(await page.evaluate(()=>window.qa.state.calls.length),prior);
+ await open('document-report');await page.locator('.skill-more summary').click();await page.getByRole('button',{name:'对话修改',exact:true}).click();await check(()=>window.qa.state.used.length===3);assert.equal(await page.locator('dialog[open]').count(),0);
  await page.evaluate(()=>window.qa.setAvailable(false));await page.getByText('连接支持个人技能的中央服务后可用。').waitFor();assert(await page.getByRole('button',{name:'创建技能',exact:true}).isDisabled());
  await page.evaluate(()=>{window.qa.setAvailable(true);window.qa.setRows([]);});await page.getByRole('heading',{name:'把常用流程变成技能'}).waitFor();
  assert.deepEqual(errors,[]);console.log('SKILLS_PANEL_OK '+output);

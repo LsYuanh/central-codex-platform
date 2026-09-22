@@ -10,6 +10,7 @@ import {createInterface} from 'node:readline';
 import https from 'node:https';
 import net from 'node:net';
 import {PlatformAuth} from '../../services/central-gateway/dist/platform-auth.js';
+import {CREATOR_ID,CREATOR_MAIN} from '../../services/central-gateway/dist/builtin-creator.js';
 import {SkillStore,validateSkillFiles} from '../../services/central-gateway/dist/skills.js';
 
 await mkdir(resolve('target'),{recursive:true});
@@ -31,7 +32,7 @@ openssl(['x509','-req','-in',join(root,'leaf.csr'),'-CA',caPath,'-CAkey',key,'-s
 const ca=await readFile(caPath),password=randomBytes(32).toString('hex'),authFile=join(root,'auth.json');
 const auth=new PlatformAuth(authFile,undefined,undefined,'device-token-v1');
 const admin=await auth.createUser('skilladmin',password,'admin'),alice=await auth.createUser('skillalice',password),bob=await auth.createUser('skillbob',password);auth.close();
-const fixture=`const fs=require('fs'),path=require('path'),rl=require('readline');let n=0;const threads=new Map(),pending=new Map();const emit=(method,params)=>process.stdout.write(JSON.stringify({method,params})+'\\n');
+const fixture=`const fs=require('fs'),path=require('path'),rl=require('readline');let n=0;const threads=new Map([['legacy-skill-thread',{id:'legacy-skill-thread',turns:[]}]]),pending=new Map();const emit=(method,params)=>process.stdout.write(JSON.stringify({method,params})+'\\n');
 rl.createInterface({input:process.stdin}).on('line',line=>{const q=JSON.parse(line);if(!q.method){const spec=pending.get(q.id);if(spec){threads.get(spec.threadId).lastTool=q.result;emit('turn/completed',{threadId:spec.threadId,turn:{id:spec.turnId,status:'completed'}});}return;}
 let result={};if(q.method==='initialize')result={userAgent:'protocol-fixture yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1'};
 if(q.method==='skills/list'){const root=path.join(process.cwd(),'managed-skills');const rows=JSON.parse(fs.readFileSync(path.join(root,'catalog.json')));result={data:[{skills:rows.map(v=>({name:/^name: (.+)$/m.exec(fs.readFileSync(path.join(root,v,'SKILL.md'),'utf8'))[1]})),errors:[]}]};}
@@ -40,7 +41,7 @@ if(q.method==='thread/list')result={data:[...threads.values()]};
 if(q.method==='thread/read'||q.method==='thread/resume')result={thread:threads.get(q.params.threadId)};
 if(q.method==='turn/start'){const t=threads.get(q.params.threadId);t.input=q.params.input;t.lastTool=null;result={turn:{id:'turn-'+ ++n}};}
 process.stdout.write(JSON.stringify({id:q.id,result})+'\\n');
-if(q.method==='turn/start'){const text=q.params.input[0]?.text;let tool;try{tool=JSON.parse(text);}catch{};if(tool?.skill){const id='tool-'+ ++n;pending.set(id,{threadId:q.params.threadId,turnId:result.turn.id});process.stdout.write(JSON.stringify({id,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:'device_skill_load',arguments:{name:tool.skill}}})+'\\n');}else emit('turn/completed',{threadId:q.params.threadId,turn:{...result.turn,status:'completed'}});}
+if(q.method==='turn/start'){const text=q.params.input[0]?.text;let tool;try{tool=JSON.parse(text);}catch{};if(tool?.skill||tool?.tool){const id='tool-'+ ++n;pending.set(id,{threadId:q.params.threadId,turnId:result.turn.id});process.stdout.write(JSON.stringify({id,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:tool.tool??'device_skill_load',arguments:tool.arguments??{name:tool.skill}}})+'\\n');}else emit('turn/completed',{threadId:q.params.threadId,turn:{...result.turn,status:'completed'}});}
 });`;
 for(const user of [admin,alice,bob]){const dir=join(root,'workers',hash(user.id),'runtime');await mkdir(dir,{recursive:true});await writeFile(join(dir,'app-server'),fixture);}
 const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -60,6 +61,7 @@ async function connect(user,login,withAgent=true){
  const client={request,events,helper,agent,env,workspace,deviceId};clients.push(client);return client;
 }
 const fixtureFile=(path,text)=>{const bytes=Buffer.from(text);return {path,bytes:bytes.length,sha256:hash(bytes),data:bytes.toString('base64')};};
+await writeFile(join(root,'state.json'),JSON.stringify({version:1,workerLayout:'per-user/v1',users:{[alice.id]:[{id:'legacy-skill-thread',summary:{id:'legacy-skill-thread'}}]}}));
 try{
  const server=start(process.execPath,[resolve('services/central-gateway/dist/index.js')],{CODEX_BIN:process.execPath,PLATFORM_WORKER_ISOLATION:'protocol-fixture',TEST_GATEWAY_HOST:'127.0.0.1',TEST_GATEWAY_PORT:String(port),TEST_GATEWAY_STATE_FILE:join(root,'state.json'),PLATFORM_AUTH_FILE:authFile,PLATFORM_TLS_CERT:cert,PLATFORM_TLS_KEY:leafKey});server.stdout.on('data',d=>logs=(logs+d).slice(-6000));
  await until(()=>logs.includes('listening'),'gateway ready');const login=await post('/auth/login',{username:'skilladmin',password});
@@ -71,7 +73,7 @@ try{
  const preview=await req('skill.preview',{id:draft.draft.id});assert.equal(preview.files.length,2);
  await writeFile(join(draft.draft.path,'scripts/proof.ps1'),'throw "CHANGED_AFTER_PREVIEW"');
  const saved=(await req('skill.save',{previewId:preview.previewId})).skill;assert.equal((await req('skill.save',{previewId:preview.previewId})).skill.id,saved.id);
- assert.equal((await a2.request('skill.list')).skills[0].id,saved.id);assert.deepEqual((await b.request('skill.list')).skills,[]);
+ assert.equal((await a2.request('skill.list')).skills[0].id,saved.id);assert.deepEqual((await b.request('skill.list')).skills.map(s=>s.id),[CREATOR_ID]);
  for(const operation of ['skill.read','skill.update','skill.remove'])await assert.rejects(b.request(operation,{id:saved.id,revision:1,enabled:false}),/NOT_FOUND/);
  pass('preview is immutable; save is idempotent; same account shares skills but not device drafts; foreign account cannot read or mutate');
  const thread=(await req('conversation.create')).thread;
@@ -87,6 +89,47 @@ try{
  await a2.request('conversation.turn.create',{threadId:t2.id,clientMessageId:randomUUID(),input:[{type:'text',text:JSON.stringify({skill:'skill-proof'})}]});
  let tool;await until(async()=>{tool=(await a2.request('conversation.read',{threadId:t2.id})).thread.lastTool;return tool;},'dynamic skill load');assert(tool.success,JSON.stringify(tool));const loaded=JSON.parse(tool.contentItems[0].text);assert.equal(loaded.revision,1);assert.match(loaded.instructions,/Use scripts/);
  pass('dynamic discovery loads the package onto a second authenticated client');
+ const creator=(await req('skill.list')).skills.find(s=>s.id===CREATOR_ID);
+ assert.equal(creator.source,'builtin');assert.equal(creator.displayName,'创建技能');
+ assert.equal((await req('skill.read',{id:CREATOR_ID})).content,CREATOR_MAIN);
+ for(const operation of ['skill.remove','skill.draft'])await assert.rejects(req(operation,{id:CREATOR_ID,revision:creator.revision,skillId:CREATOR_ID,creationKey:randomUUID()}),/BUILTIN_READONLY/);
+ await assert.rejects(req('skill.update',{id:CREATOR_ID,revision:creator.revision,enabled:false,automatic:true}),/BUILTIN_READONLY/);
+ const creatorOff=(await req('skill.update',{id:CREATOR_ID,revision:creator.revision,enabled:true,automatic:false})).skill;
+ assert.equal((await a2.request('skill.list')).skills.find(s=>s.id===CREATOR_ID).automatic,false);
+ assert.equal((await b.request('skill.list')).skills.find(s=>s.id===CREATOR_ID).automatic,true);
+ assert.equal(new SkillStore(join(root,'personal-skills.json')).get(alice.id,CREATOR_ID).automatic,false);
+ const creatorProjection=join(root,'workers',hash(alice.id),'runtime','managed-skills',CREATOR_ID,String(creatorOff.revision),'agents/openai.yaml');
+ assert.match(await readFile(creatorProjection,'utf8'),/false/);
+ await req('conversation.turn.create',{threadId:thread.id,clientMessageId:randomUUID(),input:[{type:'text',text:'$'+CREATOR_ID}]});
+ const builtinInput=(await req('conversation.read',{threadId:thread.id})).thread.input;
+ assert(builtinInput.some(i=>i.type==='skill'&&i.name===CREATOR_ID));
+ const builtinResource=JSON.parse(builtinInput.find(i=>i.text?.startsWith('Selected skill resources: ')).text.slice(26));
+ assert.equal(await readFile(join(builtinResource.directory,'SKILL.md'),'utf8'),CREATOR_MAIN);
+ pass('built-in is readonly, namespaced and loaded onto client; automatic preference is persistent and user-scoped; explicit invocation still works');
+ async function draftTool(client,tid,args){
+   await client.request('conversation.turn.create',{threadId:tid,clientMessageId:randomUUID(),input:[{type:'text',text:JSON.stringify({tool:'device_skill_draft',arguments:args})}]});
+   let reply;await until(async()=>{reply=(await client.request('conversation.read',{threadId:tid})).thread.lastTool;return reply;},'draft tool');return reply;
+ }
+ await assert.rejects(req('conversation.turn.create',{threadId:'legacy-skill-thread',clientMessageId:randomUUID(),input:[{type:'text',text:'$'+CREATOR_ID}]}),/SKILL_CREATOR_NEW_THREAD_REQUIRED/);
+ const oldDraft=await draftTool(a,'legacy-skill-thread',{requestKey:'old-thread-proof'});assert.equal(oldDraft.success,false);assert.match(oldDraft.contentItems[0].text,/SKILL_CREATOR_NEW_THREAD_REQUIRED/);
+ pass('old tool snapshots receive an explicit new-conversation recovery error');
+ const draftArgs={requestKey:'create-proof-skill-1'};
+ const modelDraftReply=await draftTool(a,thread.id,draftArgs);assert(modelDraftReply.success,JSON.stringify(modelDraftReply));
+ const modelDraft=JSON.parse(modelDraftReply.contentItems[0].text).draft;
+ assert.equal(JSON.parse((await draftTool(a,thread.id,draftArgs)).contentItems[0].text).draft.id,modelDraft.id);
+ assert((await req('skill.list')).drafts.some(d=>d.id===modelDraft.id));assert(!(await a2.request('skill.list')).drafts.some(d=>d.id===modelDraft.id));
+ assert(a.events.some(e=>e.name==='skill/changed'));
+ const otherDraft=JSON.parse((await draftTool(a2,t2.id,draftArgs)).contentItems[0].text).draft;assert.notEqual(otherDraft.id,modelDraft.id);
+ const invalid=await draftTool(a,thread.id,{...draftArgs,path:'C:/untrusted'});assert.equal(invalid.success,false);
+ const foreign=await draftTool(b,(await b.request('conversation.create')).thread.id,{...draftArgs,skillId:saved.id});assert.equal(foreign.success,false);
+ await writeFile(join(modelDraft.path,'SKILL.md'),'---\nname: created-through-dialog\ndescription: "Dialog skill"\n---\nUse the current client.\n');
+ const modelPreview=await req('skill.preview',{id:modelDraft.id});const modelSaved=(await req('skill.save',{previewId:modelPreview.previewId})).skill;
+ assert((await a2.request('skill.list')).skills.some(s=>s.id===modelSaved.id));
+ const savedRetry=await draftTool(a,thread.id,draftArgs);assert.equal(savedRetry.success,false);assert.match(savedRetry.contentItems[0].text,/ALREADY_SAVED/);
+ await assert.rejects(req('skill.draft',{creationKey:CREATOR_ID}),/ID_RESERVED/);
+ const reserved=await req('skill.draft',{creationKey:randomUUID()});await writeFile(join(reserved.draft.path,'SKILL.md'),CREATOR_MAIN);
+ const reservedPreview=await req('skill.preview',{id:reserved.draft.id});await assert.rejects(req('skill.save',{previewId:reservedPreview.previewId}),/NAME_RESERVED/);
+ pass('model-created draft is registered on the real client; stable retries reuse it; thread/device/user separation and reserved names hold; preview/save shares the package');
  const edit1=await req('skill.draft',{creationKey:randomUUID(),skillId:saved.id}),edit2=await a2.request('skill.draft',{creationKey:randomUUID(),skillId:saved.id});
  const p1=await req('skill.preview',{id:edit1.draft.id}),p2=await a2.request('skill.preview',{id:edit2.draft.id});
  const updated=(await req('skill.save',{previewId:p1.previewId})).skill;await assert.rejects(a2.request('skill.save',{previewId:p2.previewId}),/VERSION_CONFLICT/);
@@ -95,9 +138,18 @@ try{
  const enabled=(await req('skill.update',{id:saved.id,revision:disabled.revision,enabled:true,automatic:false})).skill;
  const projection=join(root,'workers',hash(alice.id),'runtime','managed-skills',saved.id,String(enabled.revision));assert.match(await readFile(join(projection,'agents/openai.yaml'),'utf8'),/false/);assert.deepEqual((await readdir(projection)).sort(),['SKILL.md','agents']);
  pass('editing conflicts are rejected; disabled skills cannot start; automatic matching policy reaches minimal native projection');
- const store=new SkillStore(join(root,'personal-skills.json'));assert.equal(store.list(alice.id)[0].revision,enabled.revision);assert.throws(()=>store.resolve(alice.id,saved.id,1),/VERSION_CONFLICT/);
+ const store=new SkillStore(join(root,'personal-skills.json'));assert.equal(store.list(alice.id).find(s=>s.id===saved.id).revision,enabled.revision);assert.throws(()=>store.resolve(alice.id,saved.id,1),/VERSION_CONFLICT/);
  for(const path of ['../secret','assets/CON','a\\b','x:y'])assert.throws(()=>validateSkillFiles([fixtureFile(path,'x')]),/PATH/);
  assert.throws(()=>validateSkillFiles([fixtureFile('SKILL.md','---\nname: proof\ndescription: "x"\n---'),fixtureFile('skill.md','duplicate')]),/DUPLICATE/);
+ const collisionState=JSON.parse(await readFile(join(root,'personal-skills.json'),'utf8'));const collisionRow=collisionState.skills.find(s=>s.id===saved.id);
+ Object.assign(collisionRow,{name:CREATOR_ID,description:creator.description,platforms:[],programs:[],files:[fixtureFile('SKILL.md',CREATOR_MAIN)]});
+ const collisionFile=join(root,'collision-skills.json');await writeFile(collisionFile,JSON.stringify(collisionState));const collisionStore=new SkillStore(collisionFile);
+ assert.equal(collisionStore.list(alice.id).find(s=>s.id===saved.id).nameConflict,true);assert.equal(collisionStore.list(alice.id).find(s=>s.id===saved.id).enabled,false);
+ assert.throws(()=>collisionStore.resolve(alice.id,saved.id),/NAME_RESERVED/);assert.equal(collisionStore.byName(alice.id,CREATOR_ID).source,'builtin');assert.equal(collisionStore.get(alice.id,saved.id).files[0].data,collisionRow.files[0].data);
+ collisionStore.project(alice.id,join(root,'collision-worker'));const collisionCatalog=JSON.parse(await readFile(join(root,'collision-worker/managed-skills/catalog.json'),'utf8'));assert(!collisionCatalog.some(v=>v.startsWith(saved.id+'/')));
+ const fullFile=join(root,'full-skills.json');const fullSkills=Array.from({length:100},(_,i)=>({...collisionRow,id:'full-skill-'+i,name:'full-skill-'+i,files:[fixtureFile('SKILL.md','---\nname: full-skill-'+i+'\ndescription: "'+creator.description+'"\n---\nUse client tools.\n')]}));
+ await writeFile(fullFile,JSON.stringify({version:1,skills:fullSkills,drafts:[]}));const fullStore=new SkillStore(fullFile);fullStore.project(alice.id,join(root,'full-worker'));
+ assert.equal(fullStore.list(alice.id).filter(s=>s.source==='personal').length,100);assert.equal(JSON.parse(await readFile(join(root,'full-worker/managed-skills/catalog.json'),'utf8')).length,101);
  pass('restart preserves package and revision; traversal, Windows reserved names and case collisions are rejected');
  if(process.argv.includes('--native-ui')){const code=(await post('/auth/admin/pair-code',{userId:alice.id},login.accessToken)).code;const bundle='yzpair1.'+Buffer.from(JSON.stringify({version:1,gateway,token:code,caPem:ca.toString(),expiresAt:Date.now()+240000})).toString('base64url');await (await import('./skills-ui-smoke.mjs')).runSkillsUi({root,client:a,bundle});}
  const cancelled=await req('skill.draft',{creationKey:randomUUID(),skillId:saved.id});const cancelledPreview=await req('skill.preview',{id:cancelled.draft.id});await req('skill.discard',{id:cancelled.draft.id});await assert.rejects(req('skill.save',{previewId:cancelledPreview.previewId}),/EXPIRED|NOT_FOUND/);
