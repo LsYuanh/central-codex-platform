@@ -15,7 +15,7 @@
 .skill-create-button { background:var(--surface); color:var(--ink); border-color:var(--line); }
 .skill-create-button:hover:not(:disabled) { background:var(--hover); }
 .skills-search { display:flex; align-items:center; gap:8px; padding:0 12px; border:1px solid var(--line); border-radius:24px; color:var(--ink-muted); }
-.skills-search:focus-within { border-color:var(--focus); outline:1px solid var(--focus); }
+.skills-search:focus-within { border-color:var(--input-focus-soft); }
 .skills-search input { border:0; padding:6px 0; background:transparent; font-size:13px; line-height:18px; }
 .skills-search input:focus { border:0; outline:0; }
 .skills-feedback { color:var(--ink-muted); font-size:13px; line-height:20px; }
@@ -141,6 +141,9 @@
   --accent: #245dc1;
   --accent-strong: #245dc1;
   --focus: #245dc1;
+  --input-focus-border: #707070;
+  --input-focus-soft: #b8b8b8;
+  --input-focus-ring: #737373;
   --success: #267044;
   --warning: #805c16;
   --danger: #b4343f;
@@ -196,6 +199,9 @@
   --accent: #8ab4f8;
   --accent-strong: #8ab4f8;
   --focus: #8ab4f8;
+  --input-focus-border: #a3a3a3;
+  --input-focus-soft: #565656;
+  --input-focus-ring: #a3a3a3;
   --success: #8dcaa4;
   --warning: #e4bd72;
   --danger: #f2a0a7;
@@ -256,9 +262,19 @@ button:disabled {
   outline-offset: 2px;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):focus,textarea:focus {
+:where(input:not([type="checkbox"]):not([type="radio"]),textarea):focus {
   outline: none;
-  border-color: var(--focus);
+  border-color: var(--input-focus-border);
+}
+
+/* The outer container owns focus for compound inputs; never draw two rings. */
+:root[data-input-focus="keyboard"] :where(input:not([type="checkbox"]):not([type="radio"]):not(.skills-search input,.project-name input,.composer-project-search input,.composer-shell input),textarea:not(.composer-shell textarea)):focus-visible {
+  outline: 2px solid var(--input-focus-ring);
+  outline-offset: 2px;
+}
+:root[data-input-focus="keyboard"] :where(.skills-search,.project-name,.composer-project-search,.composer-shell):has(:focus-visible:is(input,textarea,.composer-editor)) {
+  outline: 2px solid var(--input-focus-ring);
+  outline-offset: 2px;
 }
 
 input,textarea,select {
@@ -466,9 +482,10 @@ a {
 .project-dialog h2 { font-size: 20px; font-weight: 600; margin: 0; }
 .project-dialog h3 { font-size: 13px; margin: 14px 0 8px; }
 .project-name { display: flex; align-items: center; padding-left: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
-.project-name:focus-within { border-color: var(--send-accent); box-shadow: 0 0 0 1px var(--send-accent); }
+.project-name:focus-within { border-color: var(--input-focus-soft); }
 .project-name .ui-icon { margin-right: 10px; }
 .project-name input { border: 0; border-left: 1px solid var(--line); border-radius: 0 12px 12px 0; min-height: 38px; background: transparent; }
+.project-name input:focus { border-left-color:var(--line); }
 .project-folder-list { border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); overflow: hidden; }
 .project-folder-entry { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .project-folder-copy { flex: 1; min-width: 0; display: grid; gap: 3px; font-size: 13px; }
@@ -1039,6 +1056,7 @@ a {
 .composer-project-chip:is(:hover,:focus-within) .composer-project-clear { opacity: 1; pointer-events: auto; }
 .composer-project-popover { position: fixed; z-index: 120; display: flex; flex-direction: column; width: min(320px,calc(100vw - 16px)); padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-raised); color: var(--ink); box-shadow: var(--popover-shadow); overflow-y: auto; }
 .composer-project-search { display: flex; flex: none; align-items: center; gap: 8px; padding: 4px 8px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--line); color: var(--ink-muted); }
+.composer-project-search:focus-within { border-bottom-color:var(--input-focus-soft); }
 .composer-project-search input { min-width: 0; width: 100%; padding: 5px 0; border: 0; background: transparent; font-size: 13px; }
 .composer-project-options { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
 .composer-project-option { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 30px; padding: 6px 8px; text-align: left; font-size: 13px; font-weight: 400; background: transparent; color: var(--ink); border-radius: 9px; }
