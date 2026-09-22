@@ -71,7 +71,7 @@ export function SkillsPanel({service,disabled,startDraft,useSkill}:{service:Skil
   return <div className="settings-content skills-settings">
     <header className="skills-page-header"><div><h1>我的技能</h1><p>把常用工作方法变成技能，在不同设备上使用。</p></div><div className="skills-header-actions">
       <button type="button" className="text-icon-button" aria-label="刷新技能" title="刷新技能" disabled={!!busy||service.loading||!service.available} onClick={()=>void service.refresh()}><UiIcon name="refresh" /></button>
-      <button type="button" disabled={inactive} onClick={()=>void action('create',()=>create())}><UiIcon name="plus" />创建技能</button>
+      <button type="button" className="skill-create-button" disabled={inactive} onClick={()=>void action('create',()=>create())}><UiIcon name="plus" />创建技能</button>
     </div></header>
     <label className="skills-search"><UiIcon name="search"/><input type="search" aria-label="搜索技能" placeholder="搜索技能" value={query} onChange={e=>setQuery(e.target.value)}/></label>
     {!service.available&&<p className="notice">连接支持个人技能的中央服务后可用。</p>}
