@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { useEffect, useId, useRef, useState } from "react";
+import { JsonView } from "./JsonView";
+import { DiffView } from "./DiffView";
 
 export function MarkdownMath({ text, display = false, streaming = false }: { text: string; display?: boolean; streaming?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -20,6 +22,11 @@ export function MarkdownMath({ text, display = false, streaming = false }: { tex
 }
 
 export function MarkdownCode({ text, language, streaming }: { text: string; language: string; streaming: boolean }) {
+  if (language.toLowerCase() === "json") return <JsonView text={text} streaming={streaming} />;
+  if (["diff", "patch"].includes(language.toLowerCase()) && !streaming) return <DiffView text={text} />;
+  return <CodeBlock text={text} language={language} streaming={streaming} />;
+}
+function CodeBlock({ text, language, streaming }: { text: string; language: string; streaming: boolean }) {
   const ref = useRef<HTMLElement>(null);
   const [copyState, setCopyState] = useState("");
   const timer = useRef<number | undefined>(undefined);

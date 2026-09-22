@@ -3,6 +3,8 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { localAttachment } from "./attachments";
 import type { MessageAttachment, OutputArtifact } from "../../../packages/agentrpc-types/src/index";
+import { ImageViewer } from "./ImageViewer";
+import { useFullImage } from "./file-preview";
 export type MarkdownImageReference = MessageAttachment | OutputArtifact;
 
 function normalizePath(path: string): string {
@@ -23,6 +25,7 @@ export function MarkdownImage({ source, alt, title, references = [] }: { source:
   const [attempt, setAttempt] = useState(0);
   const deadline = useRef<number | undefined>(undefined);
   const ref = findReference(source, references);
+  const viewer = useFullImage(/^https:\/\//i.test(source) ? undefined : ref, source);
   useEffect(() => {
     let cancelled = false;
     setUrl(""); setError(""); setLoaded(false);
@@ -46,8 +49,10 @@ export function MarkdownImage({ source, alt, title, references = [] }: { source:
   // A successfully decoded image must not later become a timeout error.
   // Resolution and decoding share a finite deadline; the parent remounts only on source changes.
   return <span className="markdown-image" title={title}>
-    {url && !error && <img src={url} alt={alt} referrerPolicy="no-referrer" onLoad={() => { window.clearTimeout(deadline.current); setLoaded(true); }} onError={() => { window.clearTimeout(deadline.current); setError("图片无法加载，请检查地址或源文件"); }} />}
+    {url && !error && <button className="result-image-button" type="button" aria-label={`放大图片 ${alt}`} disabled={!loaded || viewer.busy} onClick={() => void viewer.open()}><img src={url} alt={alt} referrerPolicy="no-referrer" onLoad={() => { window.clearTimeout(deadline.current); setLoaded(true); }} onError={() => { window.clearTimeout(deadline.current); setError("图片无法加载，请检查地址或源文件"); }} /></button>}
     {(!loaded || error) && <span className="markdown-image-status" role="status">{alt} · {error || "正在加载图片…"}{error && <button type="button" onClick={() => setAttempt(value => value + 1)}>重试</button>}</span>}
     {loaded && !error && (title || alt) && <span className="markdown-image-caption">{title || alt}</span>}
+    {(viewer.busy || viewer.error) && <span className="markdown-image-status" role="status">{viewer.error || "正在读取大图…"}</span>}
+    {viewer.full && <ImageViewer url={viewer.full} name={alt} onClose={viewer.close} returnFocus={viewer.returnFocus} />}
   </span>;
 }

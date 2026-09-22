@@ -3,6 +3,9 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UiIcon } from "./UiIcon";
+import { CopyButton, fileDescription } from "./result-controls";
+import { checkLocalFile, revealLocalFile, useFullImage } from "./file-preview";
+import { ImageViewer } from "./ImageViewer";
 import type { AttachmentRef, MessageAttachment } from "../../../packages/agentrpc-types/src/index";
 export type { AttachmentRef, MessageAttachment };
 export type DraftAttachment = Partial<AttachmentRef> & {id:string; name:string; source:AttachmentRef["source"]; preview?:string; clipboard?:File; error?:string};
@@ -97,19 +100,25 @@ export function MessageAttachments({attachments}:{attachments:MessageAttachment[
 }
 function HistoryAttachment({attachment}:{attachment:MessageAttachment}){
   const [preview,setPreview]=useState<string>();const [error,setError]=useState("");const [busy,setBusy]=useState(false);
+  const generation = useRef(0);
+  const viewer = useFullImage(attachment);
   const reload=useCallback(async()=>{
+    const attempt = ++generation.current;
+    setPreview(undefined);
     if(!isTauri()){setError("请在来源桌面设备查看");return;}
     setBusy(true);setError("");
     try {
-      const id=await invoke<string>("attachment_device_id");
-      if(id!==attachment.deviceId)throw new Error("请在来源设备查看");
-      const result=await localAttachment<{url:string}>("attachment/preview",{path:attachment.path,version:attachment.version});setPreview(result.url);
-    }catch(e){setPreview(undefined);setError(`源文件不可用、已变化或附件已过期：${String(e)}`);}finally{setBusy(false);}
+      await checkLocalFile(attachment);
+      const result=await localAttachment<{url:string}>("attachment/preview",{path:attachment.path,version:attachment.version});
+      if (!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(result.url)) throw new Error("不支持的图片预览格式");
+      if (attempt === generation.current) setPreview(result.url);
+    }catch(e){if (attempt === generation.current) {setPreview(undefined);setError(`源文件不可用、已变化或附件已过期：${String(e)}`);}}finally{if (attempt === generation.current) setBusy(false);}
   },[attachment.deviceId,attachment.path,attachment.version]);
-  useEffect(()=>{if(attachment.kind==="image")void reload();},[attachment.kind,reload]);
-  return <div className="attachment-card" title={`${attachment.path}\n来源设备：${attachment.deviceId}`}>
-    {preview?<img src={preview} alt={attachment.name}/>:<span className="attachment-file-icon">{attachment.kind==="image"?"▧":"▤"}</span>}
-    <div><strong>{attachment.name}</strong><small>{sizeLabel(attachment.bytes)} · {attachment.kind} · {error||({referenced:"仅引用，尚未读取",read:"已读取",failed:"读取失败",unavailable:"源文件不可用"}[attachment.state])}</small>{attachment.kind==="image"&&error&&<button type="button" onClick={()=>void reload()} disabled={busy}>重新读取预览</button>}</div>
-  </div>;
+  useEffect(()=>{if(attachment.kind==="image")void reload();return()=>{generation.current++;};},[attachment.kind,reload]);
+  const reveal = async () => { setBusy(true); setError(""); try { await revealLocalFile(attachment); } catch (reason) { setError(String(reason)); } finally { setBusy(false); } };
+  return <><div className="attachment-card" title={`来源设备：${attachment.deviceId}`}>
+    {preview?<button className="result-image-button" type="button" disabled={viewer.busy} aria-label={`放大图片 ${attachment.name}`} onClick={()=>void viewer.open()}><img src={preview} alt={attachment.name}/></button>:<span className="attachment-file-icon"><UiIcon name="file" /></span>}
+    <div><strong title={attachment.name}>{attachment.name}</strong><small>{fileDescription(attachment)}</small><small role="status">{({referenced:"仅引用，尚未读取",read:"已读取",failed:"读取失败",unavailable:"源文件不可用"}[attachment.state])}</small><details className="attachment-location"><summary>文件位置</summary><p>{attachment.path}</p></details><div className="attachment-actions"><CopyButton text={attachment.path} label="复制路径"/><button className="result-control" type="button" disabled={busy} onClick={()=>void reveal()}>打开所在目录</button>{attachment.kind==="image"&&error&&<button className="result-control" type="button" onClick={()=>void reload()} disabled={busy}>重新读取预览</button>}</div>{(error||viewer.error)&&<p className="attachment-error-text" role="alert">{error||viewer.error}</p>}{(busy||viewer.busy)&&<small role="status">正在读取…</small>}</div>
+  </div>{viewer.full&&<ImageViewer url={viewer.full} name={attachment.name} onClose={viewer.close} returnFocus={viewer.returnFocus}/>}</>;
 }
 function sizeLabel(bytes?:number){return bytes===undefined?"大小待确认":bytes<1024?`${bytes} B`:bytes<1024*1024?`${(bytes/1024).toFixed(1)} KB`:`${(bytes/1024/1024).toFixed(1)} MB`;}

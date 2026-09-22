@@ -13,7 +13,7 @@ import { RuntimeSettings, type ConfigView, type DesktopConfig } from "./runtime-
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MarkdownImageReference } from "./markdown-images";
 import { AppServerClient, type AppServerMessage, threadIdFromResult } from "./app-server-client";
-import { reduceExecutions, type GatewayUiEvent, type ExecutionActivity, type ExecutionLogChunk, type ExecutionStatus, type ConnectionState, type DeviceState, type ChatMessage, type ThreadSummary, type ApprovalRequest, type PlatformCapabilities, type CentralEngineState } from "./gateway-ui-events";
+import { reduceExecutions, type GatewayUiEvent, type ExecutionActivity, type ExecutionStatus, type ConnectionState, type DeviceState, type ChatMessage, type ThreadSummary, type ApprovalRequest, type PlatformCapabilities, type CentralEngineState } from "./gateway-ui-events";
 import { CodexiaGatewayAdapter } from "./codexia-gateway-adapter";
 import { PlatformGatewayClient, type RpcClient } from "./platform-gateway-client";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -21,6 +21,8 @@ import { messagesFromThreadRead } from "./thread-history";
 import { recoverInitialThread, threadRecoveryError } from "./thread-recovery";
 import { useAttachments, MessageAttachments, localAttachment, type DraftAttachment } from "./attachments";
 import { OutputCard, type OutputArtifact } from "./outputs";
+import { ExecutionLog } from "./ExecutionLog";
+import { DiffView } from "./DiffView";
 import { withThreadRunning, withThreadTurn } from "./thread-session-state";
 import { appendStreamDelta } from "./chat-stream";
 import { UiIcon } from "./UiIcon";
@@ -1832,25 +1834,12 @@ function ExecutionPanel({ executions, now, continuing }: { executions: Execution
           {execution.truncated && <div className="execution-notice">输出过长，界面仅保留受限内容。</div>}
           {execution.error && <div className="execution-error">{execution.error}</div>}
           {execution.patch && <div className="workspace-file-view"><div className="workspace-file-heading"><span>{execution.patch.outcome === "partial" ? "补丁部分已应用" : execution.patch.outcome === "unknown" ? "补丁结果未知" : execution.patch.outcome === "completed" ? "补丁已应用" : "补丁失败"}</span></div><pre>{execution.patch.applied.length ? execution.patch.applied.map(file => `${file.path} · ${file.version}`).join("\n") : "未收到已应用文件的确认。"}</pre>{execution.patch.failedPath && <p>失败路径：{execution.patch.failedPath}</p>}{execution.patch.error && <p className="execution-error">{execution.patch.error}</p>}<p className="execution-notice">多文件修改不保证整体回滚；请核对本机实际 diff 与文件版本后继续，不会自动重试。</p></div>}
-          {execution.diff && <div className="workspace-file-view"><div className="workspace-file-heading"><span>本机实际 diff · {execution.diff.repositoryRoot} · {execution.diff.staged ? "已暂存" : "未暂存"}</span></div><pre>{execution.diff.stdout || "该范围没有已跟踪文件的变更。"}</pre>{execution.diff.truncated && <div className="execution-notice">diff 超出输出上限，当前展示不完整。</div>}</div>}
+          {execution.diff && <div className="workspace-file-view"><div className="workspace-file-heading"><span>本机实际 diff · {execution.diff.repositoryRoot} · {execution.diff.staged ? "已暂存" : "未暂存"}</span></div><DiffView text={execution.diff.stdout} truncated={execution.diff.truncated}/></div>}
         </div>
       </details>;
     })}
     {continuing && <div className="execution-followup" role="status"><span className="spinner" aria-hidden="true" />本机操作已结束，Codex 正在继续处理<span>等待下一步输出</span></div>}
   </aside>;
-}
-
-function ExecutionLog({ logs }: { logs: ExecutionLogChunk[] }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const pinned = useRef(true);
-  useEffect(() => {
-    const element = ref.current;
-    if (element && pinned.current) element.scrollTop = element.scrollHeight;
-  }, [logs]);
-  return <div ref={ref} className="execution-log" role="log" aria-label="实时命令输出" onScroll={(event) => {
-    const element = event.currentTarget;
-    pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 28;
-  }}>{logs.map((entry, index) => <span className={`execution-log-${entry.stream}`} key={`${entry.sequence}-${index}`}>{entry.chunk}</span>)}</div>;
 }
 
 function executionToolLabel(tool: string): string {
