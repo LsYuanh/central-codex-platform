@@ -22,7 +22,7 @@ export async function runSkillsUi({root,client,bundle}){
   await page.getByText('skill-proof',{exact:true}).waitFor();
   await page.getByRole('button',{name:'查看 skill-proof',exact:true}).click();await page.getByRole('dialog').waitFor();
   assert.match(await page.locator('.skill-file-content').innerText(),/Use scripts/);
-  await page.locator('.skill-file-select select').selectOption('scripts/proof.ps1');await page.getByText('Write-Output "CLIENT_SKILL_EXECUTION"',{exact:true}).waitFor();
+  await page.getByRole('combobox',{name:'技能文件'}).click();await page.getByRole('option',{name:'scripts/proof.ps1',exact:true}).click();await page.getByText('Write-Output "CLIENT_SKILL_EXECUTION"',{exact:true}).waitFor();
   for(const theme of ['light','dark']){await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await page.screenshot({path:join(output,'detail-'+theme+'.png')});}
   await page.keyboard.press('Escape');assert.equal(await page.locator('dialog[open]').count(),0);
   await page.getByRole('button',{name:'创建技能',exact:true}).click();

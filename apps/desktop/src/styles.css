@@ -68,8 +68,22 @@
 .skill-more-menu button:hover:not(:disabled) { background:var(--hover); }
 .skill-more-menu button:disabled { color:var(--disabled-ink); }
 .skill-file-toolbar { display:flex; align-items:center; gap:8px; flex:none; }
-.skill-file-select { flex:1; min-width:0; }
-.skill-file-select select { width:100%; border-color:var(--line); font-size:12px; padding:6px 8px; }
+.skill-file-select { position:relative; flex:1; min-width:0; }
+.skill-file-trigger { display:flex; align-items:center; gap:8px; width:100%; min-height:36px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--surface-raised); color:var(--ink); text-align:left; font-size:12px; }
+.skill-file-trigger > span,.skill-file-option > span:not(.skill-file-check) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.skill-file-trigger .ui-icon,.skill-file-option .ui-icon { flex:none; width:15px; height:15px; color:var(--ink-muted); }
+.skill-file-trigger small,.skill-file-option small { flex:none; color:var(--ink-muted); font-size:11px; }
+.skill-file-trigger:hover:not(:disabled),.skill-file-trigger[aria-expanded="true"] { background:var(--surface); }
+.skill-file-trigger:focus:not(:focus-visible) { outline:none; }
+.skill-file-trigger:focus-visible { outline:2px solid var(--line-strong); outline-offset:2px; }
+.skill-file-trigger:disabled { background:var(--surface); color:var(--disabled-ink); }
+.skill-file-menu { position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:3; overflow:auto; overscroll-behavior:contain; padding:5px; border:1px solid var(--line); border-radius:12px; background:var(--surface-raised); box-shadow:var(--popover-shadow); }
+.skill-file-menu.above { top:auto; bottom:calc(100% + 6px); }
+.skill-file-option { display:flex; align-items:center; gap:8px; width:100%; min-height:36px; padding:7px 8px; border:0; border-radius:7px; background:transparent; color:var(--ink); text-align:left; font-size:12px; }
+.skill-file-option.highlighted,.skill-file-option:hover:not(:disabled) { background:var(--hover); }
+.skill-file-option[aria-selected="true"] { font-weight:500; }
+.skill-file-check { flex:none; display:flex; width:15px; }
+.skill-file-option:focus-visible { outline:2px solid var(--line-strong); outline-offset:-2px; }
 .skill-file-toolbar > button { font-size:12px; flex:none; }
 .skill-file-content { flex:1; min-height:0; padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink); overflow:auto; font-size:13px; line-height:22px; overflow-wrap:anywhere; }
 .skill-file-content > pre { margin:0; white-space:pre-wrap; font:inherit; font-family:monospace; }

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "./platform-gateway-client";
 import { MarkdownMessage } from "./MarkdownMessage";
+import { SkillFilePicker } from "./SkillFilePicker";
 import { UiIcon } from "./UiIcon";
 export interface Skill { id:string; name:string; description:string; revision:number; enabled:boolean; automatic:boolean; platforms:string[]; programs:string[] }
 interface Draft { id:string; path:string; skillId?:string; revision?:number }
@@ -88,7 +89,7 @@ export function SkillsPanel({service,disabled,startDraft,useSkill}:{service:Skil
         <button type="button" autoFocus className="text-icon-button" aria-label="关闭技能详情" disabled={!!busy} onClick={close}><UiIcon name="close"/></button>
       </div></div>
       <div className="skill-dialog-heading"><h2 id="skill-preview-title">{preview?`预览 · ${preview.name}`:skill?.name??'技能已移除'}<span>技能</span></h2><p>{preview?.description??skill?.description}</p><div className="skill-metadata">{skill&&<span>v{skill.revision} · {skill.enabled?'已启用':'已停用'}</span>}<span>{(preview?.platforms??skill?.platforms??[]).join(' / ')||'不限系统'}</span>{(preview?.programs??skill?.programs??[]).length>0&&<span>需要 {(preview?.programs??skill?.programs)?.join('、')}</span>}</div></div>
-      <div className="skill-file-toolbar"><label className="skill-file-select"><select aria-label="技能文件" value={selectedFile} disabled={!!busy} onChange={e=>{const file=e.target.value;if(preview){setSelectedFile(file);return;}if(detail)void action('file',async()=>{const data=await service.request('skill/read',{id:detail.id,file});if(mounted.current){setSelectedFile(file);setDetail({...detail,content:String(data.content)});}});}}>{files.map(f=><option key={f.path} value={f.path}>{f.path} · {f.bytes} B</option>)}</select></label>{/\.md$/i.test(selectedFile)&&<button type="button" className="button-quiet" aria-pressed={source} onClick={()=>setSource(!source)}>{source?'阅读视图':'查看源码'}</button>}</div>
+      <div className="skill-file-toolbar"><SkillFilePicker key={preview?.previewId??detail?.id??'closed'} files={files} value={selectedFile} disabled={!!busy} onChange={file=>{if(preview){setSelectedFile(file);return;}if(detail)void action('file',async()=>{const data=await service.request('skill/read',{id:detail.id,file});if(mounted.current){setSelectedFile(file);setDetail({...detail,content:String(data.content)});}});}}/>{/\.md$/i.test(selectedFile)&&<button type="button" className="button-quiet" aria-pressed={source} onClick={()=>setSource(!source)}>{source?'阅读视图':'查看源码'}</button>}</div>
       <SkillContent file={selectedFile} content={content} source={source}/>
       <p className="skill-preview-note">{preview?'预览不会运行脚本；保存包含完整技能包。':'在对话中输入 $ 选择技能，也可以立即使用。'} 文件最多预览 64 KiB。</p>
       {(error||service.error)&&<p role="alert" className="error-text">{error||service.error}</p>}{busy&&<p role="status" className="skill-dialog-status">正在处理，请稍候…</p>}
