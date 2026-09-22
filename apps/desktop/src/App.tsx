@@ -1686,7 +1686,7 @@ export default function App() {
           </div>
         ) : (
           <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : ""}`}>
-            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div>{settingsSection === "conversations" && <button className="button-secondary settings-refresh-button" aria-label="刷新归档对话" disabled={appState !== "online" || archivedThreadsLoading} onClick={() => void refreshArchivedThreads()}><UiIcon name="refresh" />{archivedThreadsLoading ? "刷新中…" : "刷新"}</button>}</header>}
+            {settingsSection !== "skills" && settingsSection !== "updates" && <header className="settings-header"><div><h1>{ settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : "查看连接与运行信息，定位问题。"}</p></div>{settingsSection === "conversations" && <button className="button-secondary settings-refresh-button" aria-label="刷新归档对话" disabled={appState !== "online" || archivedThreadsLoading} onClick={() => void refreshArchivedThreads()}><UiIcon name="refresh" />{archivedThreadsLoading ? "刷新中…" : "刷新"}</button>}</header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
@@ -1733,7 +1733,7 @@ export default function App() {
                 </div>
               )}
 
-              {settingsSection === "updates" && <div className="settings-content"><ClientUpdatePanel update={clientUpdate} version={runtimeVersion} busy={updateBusy} enabled={updateEnabled} /></div>}
+              {settingsSection === "updates" && <ClientUpdatePanel update={clientUpdate} version={runtimeVersion} busy={updateBusy} enabled={updateEnabled} />}
               {settingsSection === "diagnostics" && (
                 <div className="settings-content">
                   <section className="settings-section">
