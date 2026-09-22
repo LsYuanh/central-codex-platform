@@ -1542,8 +1542,8 @@ export default function App() {
               <div className="connection-summary" role="status" aria-label="连接状态">
                 <span className="connection-summary-lines"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "connecting" || deviceState === "reconnecting" ? "连接中" : "离线"}</span></span>
               </div>
-              {clientUpdate.release.version && <button className="sidebar-settings-button" onClick={() => openSettings("updates")}><UiIcon name="activity" /><span>新版本 {clientUpdate.release.version}</span></button>}
-              <button className="sidebar-settings-button" onClick={() => openSettings("skills")}><UiIcon name="review" /><span>我的技能</span></button>
+              {clientUpdate.release.version && <button className="sidebar-settings-button" onClick={() => openSettings("updates")}><UiIcon name="update" /><span>新版本 {clientUpdate.release.version}</span></button>}
+              <button className="sidebar-settings-button" onClick={() => openSettings("skills")}><UiIcon name="skill" /><span>我的技能</span></button>
               <button className="sidebar-settings-button" onClick={() => openSettings()}><UiIcon name="settings" /><span>设置</span></button>
             </div>
           </>
@@ -1552,11 +1552,11 @@ export default function App() {
             <button className="back-to-app" onClick={() => navigatePage("conversation")}><UiIcon name="arrow" /> 返回应用</button>
             <div className="settings-nav-title">设置</div>
             <nav className="settings-nav" aria-label="设置分类">
-              <button className={settingsSection === "skills" ? "active" : ""} onClick={() => openSettings("skills")}><UiIcon name="review" /><strong>我的技能</strong></button>
-              <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="settings" /><strong>常规与连接</strong></button>
-              <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="review" /><strong>对话管理</strong></button>
+              <button className={settingsSection === "skills" ? "active" : ""} onClick={() => openSettings("skills")}><UiIcon name="skill" /><strong>我的技能</strong></button>
+              <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="sliders" /><strong>常规与连接</strong></button>
+              <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="chat" /><strong>对话管理</strong></button>
               <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => openSettings("diagnostics")}><UiIcon name="activity" /><strong>诊断</strong></button>
-              <button className={settingsSection === "updates" ? "active" : ""} onClick={() => openSettings("updates")}><UiIcon name="settings" /><strong>版本更新{clientUpdate.release.version ? " · 有更新" : ""}</strong></button>
+              <button className={settingsSection === "updates" ? "active" : ""} onClick={() => openSettings("updates")}><UiIcon name="update" /><strong>版本更新{clientUpdate.release.version ? " · 有更新" : ""}</strong></button>
             </nav>
             <div className="settings-connection-summary"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "offline" ? "离线" : "状态待核对"}</span></div>
           </>
