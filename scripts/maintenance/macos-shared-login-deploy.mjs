@@ -133,7 +133,7 @@ else if(action==='--prepare') {
   if(running.installed!==installed||!alive(running.pid))throw Error('FORMAL_APP_NOT_RUNNING');
   if(await exists(staged))throw Error('STAGING_EXISTS');
   command('/usr/bin/ditto',[built.app,staged]);command('/usr/bin/codesign',['--verify','--deep','--strict',staged]);
-  await mkdir(path.join(runDir,'tmp'),{mode:0o700});
+  await mkdir(path.join(runDir,'tmp'),{recursive:true,mode:0o700});
   const state={built,config,deployment,running};
   await nativeSwitch(state,true);
   await save(path.join(runDir,'state-before.json'),state,true);

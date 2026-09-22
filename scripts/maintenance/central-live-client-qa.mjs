@@ -62,9 +62,11 @@ function gatewayMessage(message){
   }
   if(message.eventType==='turn.completed')turnDone=data.turn;
   if(message.eventType==='device.tool.started'){
-    if(!['device_workspace_context','device_workspace_read_text','device_exec',...(config.skills?['device_skill_load']:[]),...(config.legacyWorkspace?['device_workspace_apply_patch']:[])].includes(data.tool)){fail('QA_UNEXPECTED_TOOL');return;}
+    emit({phase:'model-tool',tool:data.tool});
+    const allowedTools=config.creator?['device_skill_load','device_skill_draft','device_write_file','device_read_text','device_workspace_read_text']:['device_workspace_context','device_workspace_read_text','device_exec',...(config.skills?['device_skill_load']:[]),...(config.legacyWorkspace?['device_workspace_apply_patch']:[])];
+    if(!allowedTools.includes(data.tool)){fail('QA_UNEXPECTED_TOOL');return;}
     if(data.tool==='device_exec'&&(data.program!==config.powershell||data.cwd!==config.toolCwd))fail('QA_UNEXPECTED_COMMAND');
-    if(toolCalls.size>=12)fail('QA_TOO_MANY_TOOLS');
+    if(toolCalls.size>=(config.creator?20:12))fail('QA_TOO_MANY_TOOLS');
     toolCalls.set(data.requestId,{tool:data.tool,done:false});
   }
   if(message.eventType==='device.tool.completed'){
@@ -91,7 +93,8 @@ async function cleanup(){
 try{
   check(process.platform==='win32'&&(process.argv.length===2||formal4510),'QA_WINDOWS_STDIN_ONLY');
   await Promise.race([bootstrap,new Promise((_,reject)=>setTimeout(()=>reject(Error('QA_BOOTSTRAP_TIMEOUT')),15000).unref())]);
-  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills','creator'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config.creator===undefined||['explicit','implicit'].includes(config.creator)&&!config.skills&&!config.projects&&!config.legacyWorkspace,'QA_CREATOR_MODE_INVALID');
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname==='192.0.2.10'&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
   check(path.isAbsolute(config.workspace)&&path.isAbsolute(config.output)&&!existsSync(config.output),'QA_OUTPUT_INVALID');
@@ -155,6 +158,41 @@ try{
     check(denied?.ok===false&&/WORKSPACE_PATH_DENIED/.test(denied.errorCode??denied.error??''),'QA_LEGACY_BOUNDARY_NOT_ENFORCED');
   }
   emit({phase:'paired',deviceId});
+  let evidence,summary;
+  if(config.creator){
+    const catalog=await request('skill.list');
+    const creator=catalog.skills.find(s=>s.id==='yuan-zhou-skill-creator');
+    check(creator?.source==='builtin'&&creator.enabled&&creator.automatic,'QA_BUILTIN_CREATOR_MISSING');
+    check(!catalog.skills.some(s=>s.name==='skill-creator'&&s.source==='builtin'),'QA_CENTRAL_CREATOR_MIXED');
+    const before=new Set(catalog.drafts.map(d=>d.id));
+    const name='qa-created-'+randomUUID();
+    const thread=await request('conversation.create',{model:config.model});threadId=thread?.thread?.id;
+    check(typeof threadId==='string','QA_THREAD_MISSING');
+    const prompt=`${config.creator==='explicit'?'$yuan-zhou-skill-creator ':''}请创建一个远舟个人技能，名称 ${name}，用于用户明确要求生成 QA 问候语时输出一句问候。本次方案已经由我确认，不再追问或等待确认：生成 SKILL.md（合法 frontmatter、用途、输入输出、触发条件），references/guide.md（包含测试标记 ${inputMarker}），assets/template.txt（问候模板），scripts/greet.ps1（只输出 Hello QA，说明无参数、输出和失败处理），runtime.json（windows、powershell）。正文引用这些相对路径。必须通过创建技能流程申请已登记的客户端草稿，再用 device_write_file 写入该目录的这五个文件；只可读取创建技能说明和本次草稿，不可访问其他文件。仅生成，不执行任何脚本或命令。生成后提醒在我的技能预览并保存，不能声称已保存。`;
+    const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',clientMessageId:randomUUID(),...(config.creator==='explicit'?{skills:[{id:creator.id,revision:creator.revision}]}:{}),input:[{type:'text',text:prompt}]});turnId=turn?.turn?.id;
+    await until(()=>turnDone,180000,'QA_MODEL_TURN_TIMEOUT');
+    check(turnDone.status==='completed'&&!turnDone.error,'QA_MODEL_TURN_FAILED');
+    const calls=[...toolCalls.values()];
+    check(calls.some(c=>c.tool==='device_skill_load'&&c.succeeded)&&calls.filter(c=>c.tool==='device_skill_draft'&&c.succeeded).length===1&&calls.filter(c=>c.tool==='device_write_file'&&c.succeeded).length===5,'QA_CREATOR_TOOL_EVIDENCE_MISSING');
+    const after=await request('skill.list');
+    const drafts=after.drafts.filter(d=>!before.has(d.id));
+    check(drafts.length===1&&!after.skills.some(s=>s.name===name),'QA_CREATOR_DRAFT_REGISTRATION_FAILED');
+    const draft=drafts[0],localRoot=path.join(process.env.LOCALAPPDATA,'com.centralcodex.localspike','skills-v1');
+    check(typeof draft.path==='string'&&path.resolve(draft.path).startsWith(localRoot+path.sep),'QA_SKILL_DRAFT_PATH_INVALID');
+    for(const relative of ['SKILL.md','references/guide.md','assets/template.txt','scripts/greet.ps1','runtime.json']){
+      const stat=lstatSync(path.join(draft.path,relative));check(stat.isFile()&&!stat.isSymbolicLink()&&stat.size>0,'QA_CREATOR_CLIENT_FILE_MISSING');
+    }
+    check(readFileSync(path.join(draft.path,'references/guide.md'),'utf8').includes(inputMarker),'QA_CREATOR_MARKER_MISSING');
+    const preview=await request('skill.preview',{id:draft.id});
+    const saved=(await request('skill.save',{previewId:preview.previewId})).skill;
+    check(saved.name===name,'QA_CREATOR_SAVE_FAILED');
+    const history=await request('conversation.read',{threadId,includeTurns:true});
+    check(history.thread?.turns?.some(t=>t.id===turnId&&t.status==='completed'),'QA_RESUMED_HISTORY_MISSING');
+    await request('skill.remove',{id:saved.id,revision:saved.revision});
+    await request('conversation.archive',{threadId});
+    evidence={actualLocalAgent:true,builtinCreatorNativeDiscoveryVerified:true,creatorTrigger:config.creator,registeredClientDraftVerified:true,completePackageVerified:true,manualPreviewSaveVerified:true,noScriptExecution:true,turnCompleted:true,skillRemoved:true};
+    summary={inputSha256:hash(inputMarker),toolCount:calls.length,marker};
+  }else{
   let catalogProject,personalSkill;
   if(config.skills){
     check(!config.legacyWorkspace&&!config.projects&&initialized.platformCapabilities?.skills===true,'QA_SKILL_CAPABILITY_MISSING');
@@ -192,8 +230,8 @@ try{
   const proofPath=path.join(project,'proof.txt'),proofStat=lstatSync(proofPath);check(proofStat.isFile()&&!proofStat.isSymbolicLink()&&proofStat.nlink===1&&proofStat.size<=128,'QA_PROOF_FILE_UNSAFE');
   const proof=readFileSync(proofPath,'utf8');check(/^QA_EXEC_[a-f0-9]{32}$/.test(proof)&&assistant.includes(inputMarker)&&assistant.includes(proof),'QA_RANDOM_PROOF_NOT_REPRODUCED');
   check(readFileSync(path.join(project,'proof.ps1'),'utf8')===proofScript,'QA_PROOF_SCRIPT_CHANGED');
-  const evidence={actualLocalAgent:true,externalProjectVerified:!config.legacyWorkspace,legacyWorkspaceVerified:!!config.legacyWorkspace,defaultOutputDirectory:workspace,projectDirectory:project,workspaceReadVerified:true,modelToolReadVerified:true,modelToolExecVerified:true,randomProofVerified:true,turnCompleted:true,runtimeMarkerVerified:true};
-  const summary={inputSha256:hash(inputMarker),proofSha256:hash(proof),toolReadCount:reads.length,toolExecCount:execs.length,marker};
+  evidence={actualLocalAgent:true,externalProjectVerified:!config.legacyWorkspace,legacyWorkspaceVerified:!!config.legacyWorkspace,defaultOutputDirectory:workspace,projectDirectory:project,workspaceReadVerified:true,modelToolReadVerified:true,modelToolExecVerified:true,randomProofVerified:true,turnCompleted:true,runtimeMarkerVerified:true};
+  summary={inputSha256:hash(inputMarker),proofSha256:hash(proof),toolReadCount:reads.length,toolExecCount:execs.length,marker};
   if(config.legacyWorkspace){
     check(config.patchApproved===true&&readFileSync(path.join(project,'compatibility-proof.txt'),'utf8')==='legacy-patch-ok\n','QA_LEGACY_PATCH_FAILED');
     const patches=[...toolCalls.values()].filter(c=>c.tool==='device_workspace_apply_patch');
@@ -222,6 +260,7 @@ try{
     evidence.projectCatalogVerified=true;evidence.immutableProjectSnapshotVerified=true;evidence.relativeProjectExecutionVerified=true;
   }
   await request('conversation.archive',{threadId});
+  }
   completed=true;emit({phase:'completed',deviceId,evidence,summary});
   await until(()=>socketRevoked&&localRemoved,35000,'QA_REVOKE_NOT_OBSERVED');
   let exited=false,agentResult;agentExit.then(result=>{agentResult=result;exited=true;});await until(()=>exited,10000,'QA_AGENT_DID_NOT_EXIT');
@@ -230,5 +269,7 @@ try{
   writeFileSync(config.output,JSON.stringify({passed:true,evidence,summary,deviceId,agentExited:true,revoked:true,localTokenRemoved:true,postExecutionVerificationOnly:true,realRemoteDeviceVerified:formal4510,formal4510Modified:formal4510},null,2),{flag:'wx'});
   emit({phase:'revoked',deviceId,agentExited:true});
 }catch(error){
+  // Diagnostic persistence must not prevent the controller from revoking the test device.
+  try{if(config?.output&&!existsSync(config.output))writeFileSync(config.output,JSON.stringify({passed:false,assistant,turnDone,tools:[...toolCalls.values()]},null,2),{flag:'wx'});}catch{}
   const code=/^QA_[A-Z0-9_]+$/.test(error?.message??'')?error.message:'QA_LIVE_CLIENT_FAILED';emit({phase:'failed',code});process.exitCode=1;
 }finally{clearTimeout(watchdog);await cleanup();process.stdin.pause();}

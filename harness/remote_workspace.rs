@@ -29,6 +29,7 @@ pub fn device_tool(name: &str) -> bool {
             | "device_workspace_git_diff"
             | "device_workspace_apply_patch"
             | "device_skill_load"
+            | "device_skill_draft"
     )
 }
 
@@ -210,6 +211,7 @@ mod tests {
     #[test]
     fn allowlist_is_exact() {
         assert!(device_tool("device_exec"));
+        assert!(device_tool("device_skill_draft"));
         for name in [
             "exec_command",
             "apply_patch",

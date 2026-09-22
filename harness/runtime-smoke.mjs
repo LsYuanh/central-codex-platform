@@ -35,6 +35,7 @@ const mock = createServer(async (req, res) => {
     const index=requests.length;
     if(index===1) respondSse(res,index,{type:'function_call',call_id:'builtin-escape',name:'exec_command',arguments:JSON.stringify({cmd:`touch ${sideEffect}`})});
     else if(index===2) respondSse(res,index,{type:'function_call',call_id:'client-tool',name:'device_workspace_context',arguments:'{}'});
+    else if(index===3) respondSse(res,index,{type:'function_call',call_id:'draft-tool',name:'device_skill_draft',arguments:'{"requestKey":"boundary-probe"}'});
     else respondSse(res,index,{type:'message',id:'answer',role:'assistant',content:[{type:'output_text',text:'Boundary test completed.'}]});
   } catch(error) { fixtureError=error;res.writeHead(500);res.end('fixture failure'); }
 });
@@ -56,7 +57,7 @@ try {
     let message;try{message=JSON.parse(line);}catch{return;}
     if(message.method==='item/tool/call') {
       dynamicCalls++;
-      assert.equal(message.params.tool,'device_workspace_context');
+      assert.equal(message.params.tool,dynamicCalls===1?'device_workspace_context':'device_skill_draft');
       send({id:message.id,result:{success:true,contentItems:[{type:'inputText',text:'{"source":"simulated-client-fixture","os":"windows"}'}]}});
     } else if(message.id!==undefined && waiting.has(message.id)) {
       const pending=waiting.get(message.id);waiting.delete(message.id);pending.resolve(message);
@@ -73,12 +74,26 @@ try {
   writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify(['native-probe/1']));
   const discovered=await rpc('skills/list',{cwds:[],forceReload:true});
   assert.equal(discovered.result?.data?.[0]?.skills?.[0]?.name,'native-probe',JSON.stringify(discovered));
+  const fullCatalog=['native-probe/1'];
+  for(let i=0;i<100;i++){
+    const name=`capacity-probe-${i}`,relative=`${name}/1`,directory=join(worker,'managed-skills',relative);
+    mkdirSync(directory,{recursive:true});
+    writeFileSync(join(directory,'SKILL.md'),`---\nname: ${name}\ndescription: Capacity verification\n---\nFixture only.\n`);
+    fullCatalog.push(relative);
+  }
+  writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify(fullCatalog));
+  const full=await rpc('skills/list',{cwds:[],forceReload:true});
+  assert.equal(full.result?.data?.flatMap(row=>row.skills).length,101,JSON.stringify(full));
+  writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify([...fullCatalog,'native-probe/1']));
+  const overflow=await rpc('skills/list',{cwds:[],forceReload:true});
+  assert.equal(overflow.result?.data?.flatMap(row=>row.skills).length,0,JSON.stringify(overflow));
+  writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify(['native-probe/1']));
   assert.equal((await rpc('skills/list',{cwds:[run]})).error?.message,'REMOTE_SKILL_SCOPE_DENIED');
   const forged=await rpc('turn/start',{threadId:'fake',input:[{type:'skill',name:'forged',path:sentinel}]});
   assert.match(forged.error?.message??'',/REMOTE_SKILL_PATH_DENIED/);
   const overridden=await rpc('thread/start' ,{cwd:run});
   assert.match(overridden.error?.message??'',/REMOTE_WORKSPACE_OVERRIDE_DENIED/);
-  const thread=await rpc('thread/start',{ephemeral:true,dynamicTools:[{type:'function',name:'device_workspace_context',description:'Return the bound client workspace context.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{type:'function',name:'device_bad_plugin',description:'Must be filtered.',inputSchema:{type:'object',properties:{}}}]});
+  const thread=await rpc('thread/start',{ephemeral:true,dynamicTools:[{type:'function',name:'device_workspace_context',description:'Return the bound client workspace context.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{type:'function',name:'device_skill_draft',description:'Register a client draft.',inputSchema:{type:'object',properties:{requestKey:{type:'string'}},required:['requestKey'],additionalProperties:false}},{type:'function',name:'device_bad_plugin',description:'Must be filtered.',inputSchema:{type:'object',properties:{}}}]});
   assert(thread.result?.thread?.id,JSON.stringify(thread));
   const turn=await rpc('turn/start',{threadId:thread.result.thread.id,input:[{type:'text',text:'Run the boundary fixture.'},{type:'skill',name:'native-probe',path:join(skillDir,'SKILL.md')}]});
   assert(turn.result,JSON.stringify(turn));
@@ -86,17 +101,17 @@ try {
   while(Date.now()<deadline && !notifications.some(x=>x.method==='turn/completed')) await new Promise(resolve=>setTimeout(resolve,100));
   const completed=notifications.find(x=>x.method==='turn/completed');assert(completed,`Missing terminal notification; ${stderr}`);
   assert.equal(completed.params.turn.status,'completed',JSON.stringify(completed));
-  assert.equal(requests.length,3);
+  assert.equal(requests.length,4);
   assert.match(JSON.stringify(requests[0]),/MANAGED_SKILL_BODY_NATIVE_LOADED/);
   const tools=requests[0].tools.map(tool=>tool.name);
-  assert.deepEqual(tools,['device_workspace_context']);
-  assert.equal(dynamicCalls,1);
+  assert.deepEqual(tools,['device_workspace_context','device_skill_draft']);
+  assert.equal(dynamicCalls,2);
   assert.match(JSON.stringify(requests[1].input),/unsupported|REMOTE_WORKSPACE/i);
   assert(!JSON.stringify(requests).includes('CENTRAL_RULES_MUST_NOT_BE_LOADED'));
   assert(!JSON.stringify(requests).includes('CENTRAL_ONLY_NEVER_MODEL_CONTEXT'));
   assert(!existsSync(sideEffect),'A local command or notify hook executed');
   assert(!fixtureError,String(fixtureError));
-  console.log(JSON.stringify({status:'HARNESS_RUNTIME_BOUNDARY_OK',credentials:false,realModel:false,realDevice:false,requests:requests.length,tools,dynamicCalls,root:run}));
+  console.log(JSON.stringify({status:'HARNESS_RUNTIME_BOUNDARY_OK',credentials:false,realModel:false,realDevice:false,managedSkillCapacity:101,overflowDenied:true,requests:requests.length,tools,dynamicCalls,root:run}));
 } finally {
   if(serverProcess) {serverProcess.stdin.end();serverProcess.kill('SIGTERM');}
   for(const pending of waiting.values())pending.resolve({error:{message:'probe ended'}});

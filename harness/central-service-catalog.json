@@ -186,6 +186,52 @@
         "PRODUCTION_QUALIFICATION_PENDING",
         "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
       ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-ac2db7d194274346",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 176296,
+        "sha256": "ac2db7d1942743469bcf74c0dbdb0f03f431024525b26301f0548d0b10d59f82"
+      },
+      "fileCount": 867,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
+    },
+    {
+      "id": "macos-arm64-node24-qa1-1c0bd7472f7b0cc9",
+      "label": "macOS 中央服务 · Apple Silicon 测试包",
+      "version": "0.153.4",
+      "platform": "darwin",
+      "architecture": "aarch64",
+      "marker": "yuan-zhou-remote-workspace/1",
+      "qualified": false,
+      "manifest": {
+        "path": "manifest.json",
+        "bytes": 176296,
+        "sha256": "1c0bd7472f7b0cc9260e900b4995028d5ae30b0b58601f50aa18c875b79e7d42"
+      },
+      "fileCount": 867,
+      "node": "bin/node",
+      "entrypoint": "app/gateway/dist/index.js",
+      "appServer": "bin/codex-app-server",
+      "seatbeltProfile": "harness/worker-isolated.sb",
+      "blockers": [
+        "PRODUCTION_QUALIFICATION_PENDING",
+        "PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING"
+      ]
     }
   ]
 }

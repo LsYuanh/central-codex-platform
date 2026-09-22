@@ -208,9 +208,9 @@ The fixed upstream version remains 0.153.4. `yuan-zhou-managed-skills/1` is an a
 
 `managed-skills-host.rs.inc` is inserted by `apply-fork.mjs`. It reads a fresh `runtime/managed-skills/catalog.json` on every snapshot and permits only listed `<skill-id>/<revision>/SKILL.md` plus gateway-generated `agents/openai.yaml` invocation policy. Paths must be canonical and within the worker root. User/project/system scanning, installation of system skills, arbitrary extra roots, plugin and orchestrator sources remain disabled. `skills/list` accepts only an empty `cwds` and optional `forceReload`. Input skill paths must be current catalog members. Do not re-enable the former host scanner to add support for more resources.
 
-The authenticated gateway owns full packages outside worker directories. It projects normalized name/description and instruction body only; scripts, templates and references never enter the native discovery directory. Explicit selections are converted from platform IDs/revisions or known `$name` mentions to genuine native skill inputs. `device_skill_load` prepares and hashes resources through the bound Local Agent before the model uses them. Instructions direct the model to client resource paths. Native executors and all other existing restrictions remain enforced.
+The authenticated gateway owns full packages outside worker directories. It projects normalized name/description and instruction body only; scripts, templates and references never enter the native discovery directory. Explicit selections are converted from platform IDs/revisions or known `$name` mentions to genuine native skill inputs. `device_skill_load` prepares and hashes resources through the bound Local Agent before the model uses them. `device_skill_draft` registers a draft on that client and must appear in the exact native tool allowlist as well as the gateway's dynamic tools. Instructions direct the model to client resource paths. Native executors and all other existing restrictions remain enforced.
 
-Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. The authorized LAN Mac deployment now uses `macos-arm64-node24-qa1-4d44bb4938c6e2c4` (config revision 9). Real central-model/Windows-Agent skill execution and history verification passed; the Windows AppContainer build, Mac client, and multi-machine matrix remain unqualified. Client installers were not republished.
+Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. The authorized LAN Mac deployment now uses `macos-arm64-node24-qa1-1c0bd7472f7b0cc9` (config revision 11, 2026-09-22). Real central-model/Windows-Agent skill execution and history verification passed; the Windows AppContainer build, Mac client, and multi-machine matrix remain unqualified. Client installers were not republished.
 
 ## Verification and rollback
 
@@ -218,7 +218,9 @@ Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs
 with an independent empty auth directory and loopback Responses fixture. It verifies
 initialize, thread creation with no executor, exact advertised tools, a forged built-in
 rejection, dynamic tool result return, completed Turn, rejected host RPCs, and suppressed
-central AGENTS/notify. Its simulated device/model is not real end-to-end acceptance.
+central AGENTS/notify. It also checks 101 managed skills, rejection of overflow, and
+native advertisement/dispatch of `device_skill_draft`; a gateway-only fixture cannot
+detect a missing native allowlist entry. Its simulated device/model is not real end-to-end acceptance.
 
 `os-boundary-probe.c` separately proves that `worker.sb` allows worker data reads/writes
 while denying a central sentinel read/write and `/bin/sh` execution. Only the system root
