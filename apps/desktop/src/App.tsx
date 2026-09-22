@@ -24,6 +24,7 @@ import { withThreadRunning, withThreadTurn } from "./thread-session-state";
 import { appendStreamDelta } from "./chat-stream";
 import { UiIcon } from "./UiIcon";
 import { ThemePicker } from "./ThemePicker";
+import { ConnectionModePicker, type TestMode } from "./ConnectionModePicker";
 import { ThreadActions } from "./ThreadActions";
 import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
@@ -31,7 +32,6 @@ import { TurnConversation } from "./TurnConversation";
 import { ClientUpdatePanel, useClientUpdates } from "./client-updates";
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
-type TestMode = "central-gateway" | "local-app-server" | "fake-central";
 type AppPage = "conversation" | "settings";
 type SettingsSection = "skills" | "connection" | "conversations" | "diagnostics" | "updates";
 type EventFilter = "all" | "turn" | "tool" | "error";
@@ -1445,8 +1445,8 @@ export default function App() {
   const connectionTitle = mode === "central-gateway" ? "中央网关" : mode === "local-app-server" ? "本机 App Server" : "Fake Central";
   const connectionStateLabel = primaryConnectionState === "online" ? "已连接" : primaryConnectionState === "connecting" ? "连接中" : primaryConnectionState === "reconnecting" ? "重连中" : primaryConnectionState === "error" ? "连接错误" : "未连接";
   const connectionOverview = <div className="connection-status-grid">
-    <div className="connection-status-item"><UiIcon name="server"/><div><strong>{connectionTitle}</strong><small>对话与任务处理</small></div><StatusPill value={primaryConnectionState}/></div>
-    <div className="connection-status-item"><UiIcon name="monitor"/><div><strong>本机设备</strong><small>本机文件与命令执行</small></div><StatusPill value={deviceState} onlineLabel="在线"/></div>
+    <div className="connection-status-item"><strong>{connectionTitle}</strong><StatusPill value={primaryConnectionState}/></div>
+    <div className="connection-status-item"><strong>本机设备</strong><StatusPill value={deviceState} onlineLabel="在线"/></div>
   </div>;
   const connectionAction = appState === "online" ? <button className="button-secondary" disabled={configApplying || configBusy} onClick={disconnectAppServer}>断开连接</button> : <button className="button-secondary" disabled={configApplying || (desktopRuntime && mode === "central-gateway" && !configReady) || appState === "connecting" || appState === "reconnecting"} onClick={() => void connectAppServer()}>{appState === "connecting" ? "正在连接…" : appState === "reconnecting" ? "正在重连…" : appState === "error" ? "重试连接" : "连接"}</button>;
   const canStartConversation = mode !== "fake-central" && appState === "online" && engineState !== "unavailable";
@@ -1701,12 +1701,12 @@ export default function App() {
 
                   {import.meta.env.DEV && <details className="connection-dev-options">
                     <summary>开发选项<span>开发版</span></summary>
-                    <div className="settings-section-heading"><h2>连接模式</h2><p>仅用于协议验证，正式客户端始终连接中央网关。</p></div>
-                    <fieldset className="settings-card mode-settings-card runtime-mode-options" disabled={configApplying || configBusy}>
-                      <label className={`settings-choice ${mode === "central-gateway" ? "selected" : ""}`}><input type="radio" checked={mode === "central-gateway"} onChange={() => { disconnectAppServer(); setAppUrl(runtimeConfig?.uiGatewayUrl ?? defaultGatewayUrl); setMode("central-gateway"); }} /><span><strong>Central Test Gateway</strong><small>推荐 · 中央 Codex App Server 与客户端 Local Agent</small></span><i>中央</i></label>
-                      <label className={`settings-choice ${mode === "local-app-server" ? "selected" : ""}`}><input type="radio" checked={mode === "local-app-server"} onChange={() => { disconnectAppServer(); setAppUrl(defaultAppServerUrl); setMode("local-app-server"); }} /><span><strong>Local Codex App Server</strong><small>仅本机开发与协议调试</small></span><i>DEV</i></label>
-                      <label className={`settings-choice ${mode === "fake-central" ? "selected" : ""}`}><input type="radio" checked={mode === "fake-central"} onChange={() => { disconnectAppServer(); setMode("fake-central"); }} /><span><strong>Fake Central / AgentRPC</strong><small>仅验证工作区权限与设备协议</small></span><i>TEST</i></label>
-                    </fieldset>
+                    <ConnectionModePicker value={mode} disabled={configApplying || configBusy} onChange={next => {
+                      disconnectAppServer();
+                      if (next === "central-gateway") setAppUrl(runtimeConfig?.uiGatewayUrl ?? defaultGatewayUrl);
+                      else if (next === "local-app-server") setAppUrl(defaultAppServerUrl);
+                      setMode(next);
+                    }} />
                   </details>}
                 </div>
               )}

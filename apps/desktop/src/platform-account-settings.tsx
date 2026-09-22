@@ -71,6 +71,7 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
     {(!ready||!state.valid)&&<p className="pairing-description">{!ready?reading?"正在读取本机配对状态…":"暂时无法确认配对状态，请刷新重试。":state.notice}</p>}
     <div id="pairing-connection-details" hidden={!detailsOpen}>
     <dl className="pairing-info">
+      <div><dt>处理分工</dt><dd>中央网关负责对话与任务处理；本机设备负责文件与命令执行。</dd></div>
       {account.user&&<div><dt>关联用户</dt><dd>{account.user.username||account.user.id}</dd></div>}
       <div><dt>中央地址</dt><dd>{gateway.startsWith("wss://")?<code>{gateway}</code>:"配对后自动设置"}</dd></div>
       {account.deviceId&&<div><dt>设备标识</dt><dd><code>{account.deviceId}</code></dd></div>}

@@ -13,12 +13,13 @@ await writeFile(path.join(output,'index.html'),'<div id="root"></div><script typ
 await writeFile(path.join(output,'entry.tsx'),`
 import React from 'react';import {createRoot} from 'react-dom/client';
 import {RuntimeSettings} from '../../apps/desktop/src/runtime-settings';
+import {ConnectionModePicker} from '../../apps/desktop/src/ConnectionModePicker';
 import {ThemePicker} from '../../apps/desktop/src/ThemePicker';
 import {initializeInputFocus} from '../../apps/desktop/src/input-focus';
 import '../../apps/desktop/src/styles.css';
 initializeInputFocus();
-function Fixture(){const [draft,setDraft]=React.useState({gatewayUrl:'ws://192.0.2.20:4510/ws',userId:'old-user',deviceId:'old-device',workspaceRoot:'C:\\\\Synthetic workspace'});const [view,setView]=React.useState({saved:draft,effective:draft,uiGatewayUrl:draft.gatewayUrl,agentGatewayUrl:draft.gatewayUrl,overrides:[],hasSaved:true,needsSetup:true,running:false});const [busy,setBusy]=React.useState(false);window.setBusy=setBusy;const [theme,setTheme]=React.useState('light');const [error,setError]=React.useState('');
-return <main className="settings-page connection-settings-page"><header className="settings-header"><div><h1>常规与连接</h1><p>外观、设备连接与文件保存位置。</p></div></header><div className="settings-content connection-settings"><section className="settings-section"><div className="settings-section-heading"><h2>外观</h2></div><div className="theme-settings-card"><div className="settings-field"><span><strong>主题</strong><small>立即应用，下次启动时保留。</small></span><ThemePicker value={theme} onChange={value=>{setTheme(value);document.documentElement.dataset.theme=value;}}/></div></div></section><RuntimeSettings connectionStatus={<div className="connection-status-grid"><div className="connection-status-item"><div><strong>中央网关</strong><small>对话与任务处理</small></div><span>已连接</span></div><div className="connection-status-item"><div><strong>本机设备</strong><small>本机文件与命令执行</small></div><span>在线</span></div></div>} draft={draft} setDraft={setDraft} view={view} busy={busy} applying={false} error={error} notice="" reload={()=>{setDraft(view.saved);setError('');}} onAuthBoundary={()=>{window.boundaries=(window.boundaries??0)+1;}} apply={async config=>{const next=config??draft;if(window.failApply){setError('测试：保存失败，请重试。');return false;}setError('');window.applied=next;setView({...view,saved:next,effective:next,uiGatewayUrl:next.gatewayUrl,agentGatewayUrl:next.gatewayUrl,needsSetup:false,running:true});return true;}}/></div></main>}
+function Fixture(){const [draft,setDraft]=React.useState({gatewayUrl:'ws://192.0.2.20:4510/ws',userId:'old-user',deviceId:'old-device',workspaceRoot:'C:\\\\Synthetic workspace'});const [view,setView]=React.useState({saved:draft,effective:draft,uiGatewayUrl:draft.gatewayUrl,agentGatewayUrl:draft.gatewayUrl,overrides:[],hasSaved:true,needsSetup:true,running:false});const [busy,setBusy]=React.useState(false);window.setBusy=setBusy;const [theme,setTheme]=React.useState('light');const [error,setError]=React.useState('');const [mode,setMode]=React.useState('central-gateway');
+return <main className="settings-page connection-settings-page"><header className="settings-header"><div><h1>常规与连接</h1><p>外观、设备连接与文件保存位置。</p></div></header><div className="settings-content connection-settings"><section className="settings-section"><div className="settings-section-heading"><h2>外观</h2></div><div className="theme-settings-card"><div className="settings-field"><span><strong>主题</strong><small>立即应用，下次启动时保留。</small></span><ThemePicker value={theme} onChange={value=>{setTheme(value);document.documentElement.dataset.theme=value;}}/></div></div></section><RuntimeSettings connectionStatus={<div className="connection-status-grid"><div className="connection-status-item"><strong>中央网关</strong><span className="status-pill pill-online"><span/>已连接</span></div><div className="connection-status-item"><strong>本机设备</strong><span className="status-pill pill-online"><span/>在线</span></div></div>} draft={draft} setDraft={setDraft} view={view} busy={busy} applying={false} error={error} notice="" reload={()=>{setDraft(view.saved);setError('');}} onAuthBoundary={()=>{window.boundaries=(window.boundaries??0)+1;}} apply={async config=>{const next=config??draft;if(window.failApply){setError('测试：保存失败，请重试。');return false;}setError('');window.applied=next;setView({...view,saved:next,effective:next,uiGatewayUrl:next.gatewayUrl,agentGatewayUrl:next.gatewayUrl,needsSetup:false,running:true});return true;}}/><details className="connection-dev-options" open><summary>开发选项<span>开发版</span></summary><ConnectionModePicker value={mode} disabled={busy} onChange={setMode}/></details></div></main>}
 createRoot(document.getElementById('root')).render(<Fixture/>);`);
 const server=await createServer({configFile:false,root:output,plugins:[react()],server:{host:'127.0.0.1',port:0,fs:{allow:[root]}}});await server.listen();
 let browser;
@@ -72,6 +73,17 @@ try{
   await page.getByRole('button',{name:'重新读取配置',exact:true}).click();assert.match(await directory.inputValue(),/Synthetic workspace/);
   await page.evaluate(()=>window.failApply=false);
   await page.setViewportSize({width:1200,height:760});
+  const modePicker=page.getByRole('group',{name:'连接模式',exact:true});
+  await modePicker.getByRole('radio',{name:'中央网关',exact:true}).focus();
+  await page.keyboard.press('ArrowRight');
+  assert(await modePicker.getByRole('radio',{name:'本机调试',exact:true}).isChecked());
+  await page.getByText('仅用于本机 App Server 开发与协议调试，正式客户端不可用。',{exact:true}).waitFor();
+  await modePicker.getByRole('radio',{name:'模拟测试',exact:true}).check();
+  await page.getByText('Fake Central / AgentRPC：仅验证设备工具与协议，不运行真实推理。',{exact:true}).waitFor();
+  await modePicker.getByRole('radio',{name:'中央网关',exact:true}).check();
+  assert.equal((await modePicker.boundingBox()).height,28);
+  assert((await page.locator('.connection-group').boundingBox()).height<=80);
+  await page.locator('.settings-page').evaluate(el=>el.scrollTop=0);
   for(const theme of ['light','dark']){
     await page.getByRole('radio',{name:theme==='dark'?'深色':'浅色',exact:true}).check();
     await page.waitForTimeout(200);
@@ -91,6 +103,10 @@ try{
   const narrowSaveBox=await narrowSave.boundingBox();
   assert(narrowSaveBox.x>=0&&narrowSaveBox.x+narrowSaveBox.width<=460&&narrowSaveBox.y+narrowSaveBox.height<=1000,'Narrow settings must keep save reachable');
   await page.screenshot({path:path.join(output,'paired-narrow-actions-dark.png'),fullPage:true});
+  await modePicker.scrollIntoViewIfNeeded();
+  const narrowMode=await modePicker.boundingBox();
+  assert(narrowMode.x>=0&&narrowMode.x+narrowMode.width<=460,'Mode segments must fit the narrow viewport');
+  await page.screenshot({path:path.join(output,'paired-narrow-mode-dark.png'),fullPage:true});
   await page.setViewportSize({width:1000,height:1000});
   await updateStatus({remoteAvailable:false,connectionError:'CENTRAL_CONNECTION_TIMEOUT'});
   await card.getByRole('status').filter({hasText:/^待确认$/}).waitFor();
@@ -107,6 +123,7 @@ try{
   await page.evaluate(()=>window.setBusy(true));
   await page.waitForFunction(()=>document.querySelector('.pairing-card-footer button').disabled);
   assert(await refresh.isDisabled(),'Active work must lock pairing actions');
+  assert(await modePicker.getByRole('radio',{name:'本机调试',exact:true}).isDisabled(),'Active work must lock mode switching');
   await page.evaluate(()=>window.setBusy(false));
   await page.getByRole('button',{name:'取消本机配对',exact:true}).click();
   await page.getByText(/中央尚未确认撤销/).waitFor();await input.waitFor();
