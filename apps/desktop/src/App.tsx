@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
-import { useSkills, SkillsPanel } from "./skills";
+import { useSkills, SkillsPanel, type Skill } from "./skills";
 import { SkillComposer, type ComposerDocument, type SkillMention } from "./SkillComposer";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
@@ -1340,18 +1340,23 @@ export default function App() {
     } catch(e) {setAppError(String(e));} finally {setSending(false);}
   };
 
-  const startNewConversation = useCallback((project?: ClientProject) => {
+  const startNewConversation = useCallback((project?: ClientProject, initialSkill?: Skill) => {
     if (appState !== "online" || threadBusy || sendGuard.current) return;
     persistCurrentDraft();
     setAppError("");
     setThreadId(undefined);
     threadIdRef.current = undefined;
     setDraftProject(project);
-    newDraftSlotRef.current = `__new__:${project?.id ?? ""}`;
-    restoreThreadDraft(undefined);
+    // Keep the ordinary new-conversation draft when launching a skill from settings.
+    newDraftSlotRef.current = initialSkill ? `__skill__:${crypto.randomUUID()}` : `__new__:${project?.id ?? ""}`;
+    if (initialSkill) {
+      const text = '$' + initialSkill.name;
+      setComposerDoc({text:text+' ',mentions:[{id:initialSkill.id,revision:initialSkill.revision,name:initialSkill.name,start:0,end:text.length}]});
+      attachments.setDrafts([]);
+    } else restoreThreadDraft(undefined);
     setMessages([]);
     setEvents([]);
-  }, [appState, persistCurrentDraft, restoreThreadDraft, threadBusy]);
+  }, [appState, persistCurrentDraft, restoreThreadDraft, threadBusy, attachments]);
 
   const resumeThread = useCallback(async (nextThreadId: string) => {
     const codexia = codexiaRef.current;
@@ -1763,9 +1768,9 @@ export default function App() {
           </div>
         ) : (
           <div className="settings-page">
-            <header className="settings-header"><div><h1>{settingsSection === "skills" ? "我的技能" : settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "skills" ? "创建和管理个人技能，在不同设备上使用。" : settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>
+            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
             <div className="settings-scroll">
-              {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online"} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
+              {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={skill => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
                 <div className="settings-content">
                   <section className="settings-section">

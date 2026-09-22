@@ -76,7 +76,7 @@ function CodeBlock({ language, text }: { language?: string; text: string }) {
 
   return (
     <div className="markdown-code-wrap">
-      <div className="markdown-code-toolbar"><span>{language || "代码"}</span><button type="button" onClick={() => void copy}>{copied ? "已复制" : "复制"}</button></div>
+      <div className="markdown-code-toolbar"><span>{language || "代码"}</span><button type="button" onClick={() => void copy()}>{copied ? "已复制" : "复制"}</button></div>
       <pre className="markdown-code-block"><code className={language ? `language-${language}` : undefined}>{text}</code></pre>
     </div>
   );
