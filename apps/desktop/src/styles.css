@@ -1971,7 +1971,7 @@ a {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.diagnostics-device-result { border-top:1px solid var(--line); padding-top:8px; }
+.diagnostics-device-result { padding-top:8px; }
 .diagnostics-device-result > summary { padding:4px 0; cursor:pointer; font-size:14px; line-height:20px; font-weight:500; }
 .diagnostics-device-result pre { margin:8px 0 0; max-height:320px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:20px; user-select:text; }
 .diagnostics-events:focus-visible,.diagnostics-device-result pre:focus-visible { outline:2px solid var(--input-focus-ring); outline-offset:2px; }
