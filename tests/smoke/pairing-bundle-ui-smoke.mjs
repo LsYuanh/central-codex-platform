@@ -13,9 +13,12 @@ await writeFile(path.join(output,'index.html'),'<div id="root"></div><script typ
 await writeFile(path.join(output,'entry.tsx'),`
 import React from 'react';import {createRoot} from 'react-dom/client';
 import {RuntimeSettings} from '../../apps/desktop/src/runtime-settings';
+import {ThemePicker} from '../../apps/desktop/src/ThemePicker';
+import {initializeInputFocus} from '../../apps/desktop/src/input-focus';
 import '../../apps/desktop/src/styles.css';
-function Fixture(){const [draft,setDraft]=React.useState({gatewayUrl:'ws://192.0.2.20:4510/ws',userId:'old-user',deviceId:'old-device',workspaceRoot:'C:\\\\Synthetic workspace'});const [view,setView]=React.useState({saved:draft,effective:draft,uiGatewayUrl:draft.gatewayUrl,agentGatewayUrl:draft.gatewayUrl,overrides:[],hasSaved:true,needsSetup:true,running:false});const [busy,setBusy]=React.useState(false);window.setBusy=setBusy;
-return <div style={{maxWidth:800,margin:'0 auto',padding:24,background:'var(--canvas)'}}><h2>连接配置</h2><RuntimeSettings draft={draft} setDraft={setDraft} view={view} busy={busy} applying={false} error="" notice="" reload={()=>{}} onAuthBoundary={()=>{window.boundaries=(window.boundaries??0)+1;}} apply={async config=>{const next=config??draft;window.applied=next;setView({...view,saved:next,effective:next,uiGatewayUrl:next.gatewayUrl,agentGatewayUrl:next.gatewayUrl,needsSetup:false,running:true});return true;}}/></div>}
+initializeInputFocus();
+function Fixture(){const [draft,setDraft]=React.useState({gatewayUrl:'ws://192.0.2.20:4510/ws',userId:'old-user',deviceId:'old-device',workspaceRoot:'C:\\\\Synthetic workspace'});const [view,setView]=React.useState({saved:draft,effective:draft,uiGatewayUrl:draft.gatewayUrl,agentGatewayUrl:draft.gatewayUrl,overrides:[],hasSaved:true,needsSetup:true,running:false});const [busy,setBusy]=React.useState(false);window.setBusy=setBusy;const [theme,setTheme]=React.useState('light');const [error,setError]=React.useState('');
+return <main className="settings-page connection-settings-page"><header className="settings-header"><div><h1>常规与连接</h1><p>外观、设备连接与文件保存位置。</p></div></header><div className="settings-content connection-settings"><section className="settings-section"><div className="settings-section-heading"><h2>外观</h2></div><div className="theme-settings-card"><div className="settings-field"><span><strong>主题</strong><small>立即应用，下次启动时保留。</small></span><ThemePicker value={theme} onChange={value=>{setTheme(value);document.documentElement.dataset.theme=value;}}/></div></div></section><RuntimeSettings connectionStatus={<div className="connection-status-grid"><div className="connection-status-item"><div><strong>中央网关</strong><small>对话与任务处理</small></div><span>已连接</span></div><div className="connection-status-item"><div><strong>本机设备</strong><small>本机文件与命令执行</small></div><span>在线</span></div></div>} draft={draft} setDraft={setDraft} view={view} busy={busy} applying={false} error={error} notice="" reload={()=>{setDraft(view.saved);setError('');}} onAuthBoundary={()=>{window.boundaries=(window.boundaries??0)+1;}} apply={async config=>{const next=config??draft;if(window.failApply){setError('测试：保存失败，请重试。');return false;}setError('');window.applied=next;setView({...view,saved:next,effective:next,uiGatewayUrl:next.gatewayUrl,agentGatewayUrl:next.gatewayUrl,needsSetup:false,running:true});return true;}}/></div></main>}
 createRoot(document.getElementById('root')).render(<Fixture/>);`);
 const server=await createServer({configFile:false,root:output,plugins:[react()],server:{host:'127.0.0.1',port:0,fs:{allow:[root]}}});await server.listen();
 let browser;
@@ -26,6 +29,7 @@ try{
     window.calls=[];window.account={authMode:'device-token-v1',paired:false,loggedIn:false};
     window.__TAURI_INTERNALS__={invoke:async(cmd,args)=>{
       window.calls.push({cmd,action:args?.action});
+      if(cmd==='select_workspace_directory'){if(window.pickerError)throw '测试：选择目录失败';return 'C:\\Synthetic selected';}
       if(cmd!=='platform_account')throw Error('Unexpected IPC');
       if(args.action==='pair-bundle'){
         if(args.input.code==='yzpair1.expired')throw 'PAIR_BUNDLE_EXPIRED';
@@ -57,17 +61,36 @@ try{
   assert.equal(applied.gatewayUrl,'wss://central.example:4510/ws');assert.equal(applied.userId,'paired-user');assert.equal(applied.deviceId,'paired-device');assert.match(applied.workspaceRoot,/Synthetic workspace/);
   assert.equal(await input.count(),0,'A paired device must not expose a replacement form');
   assert(!/保存并应用.*开始连接/.test(await card.innerText()));
-  await card.getByText('设备详情',{exact:true}).click();await card.getByText('paired-device',{exact:true}).waitFor();
-  await card.getByText('设备详情',{exact:true}).click();
+  const details=card.getByRole('button',{name:'连接详情',exact:true});
+  assert.equal(await details.getAttribute('aria-expanded'),'false');assert(!await card.getByText('paired-device',{exact:true}).isVisible());
+  await details.click();await card.getByText('paired-device',{exact:true}).waitFor();
+  assert(await card.getByRole('button',{name:'取消本机配对',exact:true}).isVisible());await details.click();
+  const directory=page.getByRole('textbox',{name:'默认输出目录',exact:true});
+  await page.evaluate(()=>window.pickerError=true);await page.getByRole('button',{name:'选择目录',exact:true}).click();await page.getByRole('alert').filter({hasText:'选择目录失败'}).waitFor();
+  await page.evaluate(()=>window.pickerError=false);await page.getByRole('button',{name:'选择目录',exact:true}).click();assert.equal(await directory.inputValue(),'C:\\Synthetic selected');
+  await page.evaluate(()=>window.failApply=true);await page.getByRole('button',{name:'保存并应用',exact:true}).click();await page.getByText('测试：保存失败，请重试。').waitFor();assert.equal(await directory.inputValue(),'C:\\Synthetic selected');
+  await page.getByRole('button',{name:'重新读取配置',exact:true}).click();assert.match(await directory.inputValue(),/Synthetic workspace/);
+  await page.evaluate(()=>window.failApply=false);
+  await page.setViewportSize({width:1200,height:760});
   for(const theme of ['light','dark']){
-    await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+    await page.getByRole('radio',{name:theme==='dark'?'深色':'浅色',exact:true}).check();
+    await page.waitForTimeout(200);
+    const save=await page.getByRole('button',{name:'保存并应用',exact:true}).boundingBox();
+    assert(save.y+save.height<=760,'Default settings should keep save in the first screen');
+    assert.equal(save.height,32);
+    assert.equal((await refresh.boundingBox()).height,28);
     await page.screenshot({path:path.join(output,`paired-${theme}.png`),fullPage:true});
   }
   await page.setViewportSize({width:460,height:1000});
   await updateStatus({user:{id:'paired-user',username:'很长的关联用户名称用于检查换行'},deviceId:'very-long-device-installation-identity-without-spaces-0123456789abcdef'});
-  await card.getByText('设备详情',{exact:true}).click();
+  await details.click();
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Narrow settings must not overflow horizontally');
   await page.screenshot({path:path.join(output,'paired-narrow-dark.png'),fullPage:true});
+  const narrowSave=page.getByRole('button',{name:'保存并应用',exact:true});
+  await narrowSave.scrollIntoViewIfNeeded();
+  const narrowSaveBox=await narrowSave.boundingBox();
+  assert(narrowSaveBox.x>=0&&narrowSaveBox.x+narrowSaveBox.width<=460&&narrowSaveBox.y+narrowSaveBox.height<=1000,'Narrow settings must keep save reachable');
+  await page.screenshot({path:path.join(output,'paired-narrow-actions-dark.png'),fullPage:true});
   await page.setViewportSize({width:1000,height:1000});
   await updateStatus({remoteAvailable:false,connectionError:'CENTRAL_CONNECTION_TIMEOUT'});
   await card.getByRole('status').filter({hasText:/^待确认$/}).waitFor();
@@ -91,7 +114,7 @@ try{
   assert.match(await page.getByRole('textbox',{name:'默认输出目录',exact:true}).inputValue(),/Synthetic workspace/);
   const calls=await page.evaluate(()=>window.calls);assert(!calls.some(c=>c.action==='set-ca'||c.action==='pair'));
   assert.deepEqual(errors,[]);
-  await writeFile(path.join(output,'result.json'),JSON.stringify({passed:true,syntheticIpc:true,scenarios:['expired','unpaired','paired','details','offline','status-error','revoked','storage-error','busy','disconnect-unconfirmed'],themes:['light','dark'],narrowWidth:460},null,2));
+  await writeFile(path.join(output,'result.json'),JSON.stringify({passed:true,syntheticIpc:true,scenarios:['expired','unpaired','paired','details','directory-picker-error','save-error-retains-draft','reload','offline','status-error','revoked','storage-error','busy','disconnect-unconfirmed'],themes:['light','dark'],narrowWidth:460},null,2));
   console.log('PAIRING_BUNDLE_UI_SMOKE_OK '+output);
 }catch(error){console.error(error);throw error;}
 finally{await browser?.close();await server.close();}

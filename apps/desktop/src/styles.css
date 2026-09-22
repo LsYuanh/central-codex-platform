@@ -1568,17 +1568,22 @@ a {
   margin-top: 24px;
 }
 
-.platform-account-card { margin: 0 0 16px; padding: 20px; }
+.platform-account-card { padding: 14px 0; }
 .pairing-card-header,.pairing-card-title,.pairing-refresh,.pairing-code-row,.pairing-card-footer {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 .pairing-card-header,.pairing-card-footer { justify-content: space-between; flex-wrap: wrap; }
-.pairing-card-title { min-width: 0; flex-wrap: wrap; gap: 10px; }
-.pairing-card-title h3 { margin: 0; font-size: 14px; }
-.pairing-status { color: var(--ink-muted); background: var(--surface); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+.pairing-card-title { min-width: 0; flex:1; display:grid; gap:4px; }
+.pairing-card-title h3 { margin: 0; font-size: 14px; font-weight:500; }
+.pairing-summary { margin:0; font-size:13px; line-height:20px; color:var(--ink-muted); overflow-wrap:anywhere; }
+.pairing-status { color: var(--ink-muted); font-size: 13px; }
 .pairing-status.is-paired { color: var(--success); }
+.pairing-card-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.pairing-details-toggle { display:inline-flex; align-items:center; gap:6px; }
+.pairing-details-toggle .ui-icon { width:14px; height:14px; transform:rotate(-90deg); }
+.pairing-details-toggle[aria-expanded="true"] .ui-icon { transform:none; }
 .pairing-refresh { flex: none; gap: 6px; padding: 6px 8px; font-size: 12px; }
 .pairing-refresh .ui-icon { width: 14px; height: 14px; }
 .pairing-description,.pairing-form p,.pairing-card-footer p { margin: 8px 0 0; color: var(--ink-muted); font-size: 12px; line-height: 20px; }
@@ -1587,9 +1592,6 @@ a {
 .pairing-info dt { color: var(--ink-muted); }
 .pairing-info dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .pairing-info code { font-size: 12px; }
-.pairing-device-details { margin-top: 8px; color: var(--ink-muted); font-size: 12px; }
-.pairing-device-details summary { width: fit-content; padding: 6px 0; cursor: pointer; }
-.pairing-device-details .pairing-info { margin: 0; color: var(--ink); }
 .pairing-form { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .pairing-form label { font-size: 14px; font-weight: 600; }
 .pairing-form p { margin: 4px 0 12px; }
@@ -1599,7 +1601,6 @@ a {
 .pairing-card-footer { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .pairing-card-footer p { flex: 1 1 240px; margin: 0; }
 .pairing-card-footer button { flex: none; }
-.runtime-output-card .settings-field { gap: 12px; }
 .client-update-section > .settings-card { padding-bottom: 16px; }
 
 .settings-warning,.settings-error {
@@ -1662,10 +1663,6 @@ a {
   flex: none;
 }
 
-.runtime-config-card {
-  margin-bottom: 12px;
-}
-
 .runtime-directory-input {
   display: flex;
   width: 100%;
@@ -1683,6 +1680,69 @@ a {
   flex: none;
   color: var(--ink);
   background: var(--surface);
+}
+
+/* General settings: compact desktop groups, with details kept close to their state. */
+.connection-settings-page { background:var(--canvas); }
+.connection-settings-page .settings-header { padding-top:24px; padding-bottom:24px; }
+.connection-settings-page .settings-header p { margin-top:6px; }
+.connection-settings .settings-section { margin-bottom:24px; }
+.connection-settings .settings-section-heading { margin-bottom:12px; }
+.connection-settings .settings-section-heading-with-action { min-height:28px; }
+.connection-settings button { min-height:var(--control-compact); padding:3px 10px; border-radius:var(--control-radius); font-size:13px; line-height:20px; }
+.connection-settings button:where(:not(.button-quiet,.button-danger)) { background:var(--surface); color:var(--ink); border-color:var(--line); }
+.connection-settings button:where(:not(.button-danger)):hover:not(:disabled) { background:var(--hover); }
+.connection-settings button:disabled { background:var(--disabled); color:var(--disabled-ink); }
+.connection-settings .theme-settings-card { padding-bottom:16px; border-bottom:1px solid var(--line); }
+.connection-settings .theme-settings-card .settings-field { min-height:48px; padding:0; gap:16px; }
+.connection-settings .settings-field strong { font-weight:500; }
+.connection-settings .theme-picker { padding:2px; gap:2px; border:1px solid var(--line); background:transparent; border-radius:var(--control-radius); }
+.connection-settings .theme-picker span { padding:2px 10px; line-height:20px; }
+.connection-settings .theme-picker input:checked + span { background:var(--surface); box-shadow:none; }
+.connection-group { padding:0 16px; border:1px solid var(--line); border-radius:10px; background:var(--group); }
+.connection-group > .runtime-config-notice { margin:12px 0; }
+.connection-status-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding:14px 0; }
+.connection-status-item { display:flex; align-items:center; gap:12px; min-width:0; min-height:48px; }
+.connection-status-item + .connection-status-item { padding-left:20px; margin-left:16px; border-left:1px solid var(--line); }
+.connection-status-item > .ui-icon { width:20px; height:20px; flex:none; color:var(--ink-muted); }
+.connection-status-item > div { flex:1; min-width:0; display:grid; gap:4px; }
+.connection-status-item strong { font-size:14px; font-weight:500; }
+.connection-status-item small { font-size:12px; line-height:18px; color:var(--ink-muted); }
+.connection-status-item .status-pill { flex:none; white-space:nowrap; }
+.connection-status-grid + .platform-account-card { border-top:1px solid var(--line); }
+.runtime-directory-field { display:flex; flex:1; align-items:center; gap:8px; min-width:0; }
+.runtime-directory-field > .ui-icon { flex:none; color:var(--ink-muted); }
+.connection-settings .runtime-directory-input { align-items:center; }
+.connection-settings .runtime-directory-input input { min-height:32px; padding:5px 10px; font-size:13px; line-height:20px; border-color:var(--line); background:transparent; }
+.connection-settings .runtime-directory-input input:focus { border-color:var(--input-focus-border); }
+.connection-settings .runtime-config-hint { margin:8px 0; font-size:12px; line-height:20px; }
+.connection-settings .runtime-effective { padding:0; border:0; margin:8px 0 0; }
+.connection-settings .runtime-effective summary { width:fit-content; padding:2px 0; color:var(--ink-muted); }
+.runtime-save-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:20px; }
+.runtime-save-row > .runtime-config-hint { flex:1; min-width:0; }
+.runtime-save-row .settings-actions { margin:0; flex:none; gap:8px; }
+.connection-settings .runtime-save-button { min-height:var(--control-standard); padding:5px 10px; background:var(--selected); }
+.connection-dev-options { padding-top:12px; border-top:1px solid var(--line); font-size:13px; }
+.connection-dev-options > summary { cursor:pointer; padding:4px 0; color:var(--ink-muted); }
+.connection-dev-options > summary span { margin-left:10px; padding:2px 6px; border-radius:4px; background:var(--surface); font-size:11px; }
+.connection-dev-options[open] > summary { margin-bottom:16px; }
+.connection-dev-options .settings-choice { min-height:56px; padding:10px 12px; gap:12px; }
+@media(max-width:1100px) {
+  .connection-status-grid { grid-template-columns:1fr; padding:0; }
+  .connection-status-item { padding:12px 0; }
+  .connection-status-item + .connection-status-item { padding:12px 0; margin:0; border-left:0; border-top:1px solid var(--line); }
+}
+@media(max-width:600px) {
+  .connection-settings .theme-settings-card .settings-field { align-items:flex-start; }
+  .pairing-card-header { align-items:flex-start; gap:12px; }
+  .pairing-card-title { flex-basis:100%; }
+  .pairing-card-actions { margin-left:auto; }
+  .runtime-save-row { flex-direction:column; align-items:stretch; gap:8px; }
+  .runtime-save-row .settings-actions { flex-wrap:wrap; }
+}
+@media(pointer:coarse) {
+  .connection-settings { --control-compact:44px; --control-standard:44px; }
+  .connection-settings .theme-picker span { min-height:44px; display:flex; align-items:center; }
 }
 
 .runtime-effective {

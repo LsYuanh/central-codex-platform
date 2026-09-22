@@ -21,6 +21,7 @@ const paths = {
   bug: "M8 8h8v8a4 4 0 0 1-8 0zM9 8V5h6v3M4 10h4M16 10h4M4 15h4M16 15h4M6 21l3-3M15 18l3 3",
   close: "m6 6 12 12M6 18 18 6",
   monitor: "M3 3h18v14H3zM12 17v4M8 21h8",
+  server: "M4 3h16v8H4zM4 13h16v8H4zM7 7h1M7 17h1M11 7h6M11 17h6",
   sun: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5",
   moon: "M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z",
   check: "m5 12 4 4L19 6",

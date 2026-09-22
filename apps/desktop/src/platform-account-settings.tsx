@@ -16,6 +16,7 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
   const [code,setCode]=useState("");
   const [working,setWorking]=useState(false);const [reading,setReading]=useState(true);const [ready,setReady]=useState(false);
   const [notice,setNotice]=useState("");const [error,setError]=useState("");const [statusError,setStatusError]=useState("");
+  const [detailsOpen,setDetailsOpen]=useState(false);
   const workingRef=useRef(false);const refreshing=useRef(false);const epoch=useRef(0);
   const identityRef=useRef(onIdentity);identityRef.current=onIdentity;
   const workingCallbackRef=useRef(onWorkingChange);workingCallbackRef.current=onWorkingChange;
@@ -62,17 +63,23 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
   };
   const state=deviceAuthorization(account);const locked=disabled||working||reading;
   const statusLabel=!ready?reading?"读取中…":"待确认":state.valid?"已配对":account.storageError?"授权异常":account.authorizationError?"授权失效":state.hasLocalPairing?"待确认":"未配对";
-  return <section className="settings-card platform-account-card" aria-label="设备配对">
+  return <section className="platform-account-card" aria-label="设备配对">
     <div className="pairing-card-header">
-      <div className="pairing-card-title"><h3>设备配对</h3><span className={`pairing-status ${ready&&state.valid?"is-paired":""}`} role="status">{statusLabel}</span></div>
-      <button type="button" className="button-quiet pairing-refresh" disabled={locked} onClick={()=>void refresh()}><UiIcon name="refresh" />{reading?"读取中…":"刷新状态"}</button>
+      <div className="pairing-card-title"><h3>设备配对</h3><p className="pairing-summary"><span className={`pairing-status ${ready&&state.valid?"is-paired":""}`} role="status">{statusLabel}</span>{account.user&&<span className="pairing-user"> · {account.user.username||account.user.id}</span>}</p></div>
+      <div className="pairing-card-actions"><button type="button" className="button-quiet pairing-refresh" aria-label={reading?"读取中…":"刷新状态"} disabled={locked} onClick={()=>void refresh()}><UiIcon name="refresh" />{reading?"读取中…":"刷新"}</button><button type="button" className="button-quiet pairing-details-toggle" aria-expanded={detailsOpen} aria-controls="pairing-connection-details" onClick={()=>setDetailsOpen(!detailsOpen)}>连接详情<UiIcon name="chevronDown"/></button></div>
     </div>
-    <p className="pairing-description">{!ready?reading?"正在读取本机配对状态…":"暂时无法确认配对状态，请刷新重试。":state.notice}</p>
+    {(!ready||!state.valid)&&<p className="pairing-description">{!ready?reading?"正在读取本机配对状态…":"暂时无法确认配对状态，请刷新重试。":state.notice}</p>}
+    <div id="pairing-connection-details" hidden={!detailsOpen}>
     <dl className="pairing-info">
       {account.user&&<div><dt>关联用户</dt><dd>{account.user.username||account.user.id}</dd></div>}
       <div><dt>中央地址</dt><dd>{gateway.startsWith("wss://")?<code>{gateway}</code>:"配对后自动设置"}</dd></div>
+      {account.deviceId&&<div><dt>设备标识</dt><dd><code>{account.deviceId}</code></dd></div>}
     </dl>
-    {account.deviceId&&<details className="pairing-device-details"><summary>设备详情</summary><dl className="pairing-info"><div><dt>设备标识</dt><dd><code>{account.deviceId}</code></dd></div></dl></details>}
+    {(state.hasLocalPairing||account.storageError)&&<div className="pairing-card-footer">
+      <p>取消后将断开本机连接，重新使用需要新的配对码。</p>
+      <button type="button" className="button-danger" disabled={locked} onClick={()=>void run("disconnect")}>取消本机配对</button>
+    </div>}
+    </div>
     {ready&&state.problem&&<p className="settings-error" role="alert">{state.problem}</p>}
     {(!ready||state.canPair)&&<div className="pairing-form">
       <label htmlFor="device-pairing-code">一体配对码</label>
@@ -83,9 +90,5 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
       </div>
     </div>}
     {working&&<p className="runtime-config-notice" role="status">正在处理…</p>}{notice&&<p className="runtime-config-notice" role="status">{notice}</p>}{statusError&&<p className="settings-error" role="status">{statusError}</p>}{error&&<p className="settings-error" role="alert">{error}</p>}
-    {(state.hasLocalPairing||account.storageError)&&<div className="pairing-card-footer">
-      <p>取消后将断开本机连接，重新使用需要新的配对码。</p>
-      <button type="button" className="button-secondary" disabled={locked} onClick={()=>void run("disconnect")}>取消本机配对</button>
-    </div>}
   </section>;
 }

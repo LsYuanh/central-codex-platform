@@ -42,6 +42,7 @@ try{
     else await page.getByRole('button',{name:'设置',exact:true}).click();
   }
   const unpair=page.getByRole('button',{name:'取消本机配对',exact:true});
+  if(await page.locator('.pairing-card-footer button').count())await page.getByRole('button',{name:'连接详情',exact:true}).click();
   if(await unpair.isVisible()){await unpair.click();await page.getByText(/已取消本机配对/).waitFor({timeout:30000});}
   await input.waitFor({timeout:20000});
   await page.screenshot({path:path.join(output,'before.png'),fullPage:true});
@@ -111,6 +112,8 @@ try{
     await page.getByRole('button',{name:'设置',exact:true}).click();
   }
   management('revoke',deviceId);
+  const details=page.getByRole('button',{name:'连接详情',exact:true});
+  if(await details.getAttribute('aria-expanded')==='false')await details.click();
   await page.getByRole('button',{name:'取消本机配对',exact:true}).click();
   await page.getByText(/已取消本机配对/).waitFor({timeout:30000});
   passed=true;

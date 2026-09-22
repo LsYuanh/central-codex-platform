@@ -1444,6 +1444,11 @@ export default function App() {
   const primaryConnectionState = mode === "fake-central" ? gateway.gateway : appState;
   const connectionTitle = mode === "central-gateway" ? "中央网关" : mode === "local-app-server" ? "本机 App Server" : "Fake Central";
   const connectionStateLabel = primaryConnectionState === "online" ? "已连接" : primaryConnectionState === "connecting" ? "连接中" : primaryConnectionState === "reconnecting" ? "重连中" : primaryConnectionState === "error" ? "连接错误" : "未连接";
+  const connectionOverview = <div className="connection-status-grid">
+    <div className="connection-status-item"><UiIcon name="server"/><div><strong>{connectionTitle}</strong><small>对话与任务处理</small></div><StatusPill value={primaryConnectionState}/></div>
+    <div className="connection-status-item"><UiIcon name="monitor"/><div><strong>本机设备</strong><small>本机文件与命令执行</small></div><StatusPill value={deviceState} onlineLabel="在线"/></div>
+  </div>;
+  const connectionAction = appState === "online" ? <button className="button-secondary" disabled={configApplying || configBusy} onClick={disconnectAppServer}>断开连接</button> : <button className="button-secondary" disabled={configApplying || (desktopRuntime && mode === "central-gateway" && !configReady) || appState === "connecting" || appState === "reconnecting"} onClick={() => void connectAppServer()}>{appState === "connecting" ? "正在连接…" : appState === "reconnecting" ? "正在重连…" : appState === "error" ? "重试连接" : "连接"}</button>;
   const canStartConversation = mode !== "fake-central" && appState === "online" && engineState !== "unavailable";
   const selectedModel = models.find((model) => (model.model || model.id) === appModel || model.id === appModel);
   const modelLabel = selectedModel?.displayName || selectedModel?.model || appModel || "服务端默认模型";
@@ -1680,45 +1685,29 @@ export default function App() {
             </section>
           </div>
         ) : (
-          <div className="settings-page">
-            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
+          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : ""}`}>
+            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
-                <div className="settings-content">
+                <div className="settings-content connection-settings">
                   <section className="settings-section">
                     <div className="settings-section-heading"><h2>外观</h2></div>
-                    <div className="settings-card form-settings-card theme-settings-card">
-                      <div className="settings-field"><span><strong>主题</strong><small>立即应用，并在下次启动时恢复</small></span><ThemePicker value={theme} onChange={setTheme} /></div>
+                    <div className="theme-settings-card">
+                      <div className="settings-field"><span><strong>主题</strong><small>立即应用，下次启动时保留。</small></span><ThemePicker value={theme} onChange={setTheme} /></div>
                     </div>
                   </section>
-                  <section className="settings-section">
-                    <div className="settings-section-heading"><h2>连接状态</h2></div>
-                    <div className="status-card-grid">
-                      <div className="status-card"><div><strong>{connectionTitle}</strong><small>对话与任务处理</small></div><StatusPill value={primaryConnectionState} /></div>
-                      <div className="status-card"><div><strong>本机设备</strong><small>本机文件与命令执行</small></div><StatusPill value={deviceState} /></div>
-                    </div>
-                  </section>
+                  {desktopRuntime && mode === "central-gateway" ? <RuntimeSettings connectionStatus={connectionOverview} connectionAction={connectionAction} connectionError={appError} view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setEvents([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} /> : <section className="settings-section"><div className="settings-section-heading settings-section-heading-with-action"><h2>连接与设备</h2>{mode !== "fake-central" && connectionAction}</div><div className="connection-group">{connectionOverview}{mode === "fake-central" && <StatusLine label="Worker" value={gateway.worker?.state ?? "unknown"} />}</div>{appError && <p className="settings-error" role="alert">{appError}</p>}</section>}
 
-                  {import.meta.env.DEV && <section className="settings-section">
-                    <div className="settings-section-heading"><h2>连接模式</h2><p>开发模式用于协议验证；正式客户端默认只连接中央网关。</p></div>
+                  {import.meta.env.DEV && <details className="connection-dev-options">
+                    <summary>开发选项<span>开发版</span></summary>
+                    <div className="settings-section-heading"><h2>连接模式</h2><p>仅用于协议验证，正式客户端始终连接中央网关。</p></div>
                     <fieldset className="settings-card mode-settings-card runtime-mode-options" disabled={configApplying || configBusy}>
                       <label className={`settings-choice ${mode === "central-gateway" ? "selected" : ""}`}><input type="radio" checked={mode === "central-gateway"} onChange={() => { disconnectAppServer(); setAppUrl(runtimeConfig?.uiGatewayUrl ?? defaultGatewayUrl); setMode("central-gateway"); }} /><span><strong>Central Test Gateway</strong><small>推荐 · 中央 Codex App Server 与客户端 Local Agent</small></span><i>中央</i></label>
                       <label className={`settings-choice ${mode === "local-app-server" ? "selected" : ""}`}><input type="radio" checked={mode === "local-app-server"} onChange={() => { disconnectAppServer(); setAppUrl(defaultAppServerUrl); setMode("local-app-server"); }} /><span><strong>Local Codex App Server</strong><small>仅本机开发与协议调试</small></span><i>DEV</i></label>
                       <label className={`settings-choice ${mode === "fake-central" ? "selected" : ""}`}><input type="radio" checked={mode === "fake-central"} onChange={() => { disconnectAppServer(); setMode("fake-central"); }} /><span><strong>Fake Central / AgentRPC</strong><small>仅验证工作区权限与设备协议</small></span><i>TEST</i></label>
                     </fieldset>
-                  </section>}
-
-                  {mode !== "fake-central" ? (
-                    <section className="settings-section">
-                      <div className="settings-section-heading"><h2>连接配置</h2><p>管理设备配对和默认文件保存位置。</p></div>
-                      {desktopRuntime && mode === "central-gateway" && <RuntimeSettings view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setEvents([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} />}
-                      {appError && <p className="settings-error">{appError}</p>}
-                      <div className="settings-actions">{appState === "online" ? <button className="button-secondary" disabled={configApplying || configBusy} onClick={disconnectAppServer}>断开连接</button> : <button disabled={configApplying || (desktopRuntime && mode === "central-gateway" && !configReady) || appState === "connecting" || appState === "reconnecting"} onClick={() => void connectAppServer()}>{appState === "connecting" ? "正在连接…" : appState === "reconnecting" ? "正在重连…" : appState === "error" ? "重试连接" : "连接"}</button>}</div>
-                    </section>
-                  ) : (
-                    <section className="settings-section"><div className="settings-section-heading"><h2>Fake Central 状态</h2></div><div className="settings-card compact-settings-card"><StatusLine label="Gateway" value={gateway.gateway} /><StatusLine label="Local Agent" value={gateway.agent} /><StatusLine label="Worker" value={gateway.worker?.state ?? "unknown"} /></div></section>
-                  )}
+                  </details>}
                 </div>
               )}
 
@@ -1922,8 +1911,8 @@ function ExpandableOutput({ content }: { content: string }) {
   return <div className="expandable-output"><pre className={isLong && !expanded ? "output-collapsed" : ""}>{content}</pre>{isLong && <button className="output-expand" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起输出" : "展开完整输出"}</button>}</div>;
 }
 
-function StatusPill({ value }: { value: string }) {
-  const label: Record<string, string> = { online: "已连接", offline: "离线", connecting: "连接中", reconnecting: "重连中", error: "连接错误", ready: "就绪", unknown: "未知" };
+function StatusPill({ value, onlineLabel = "已连接" }: { value: string; onlineLabel?: string }) {
+  const label: Record<string, string> = { online: onlineLabel, offline: "离线", connecting: "连接中", reconnecting: "重连中", error: "连接错误", ready: "就绪", unknown: "未知" };
   return <span className={`status-pill pill-${value}`}><span />{label[value] ?? value}</span>;
 }
 
