@@ -991,17 +991,6 @@ a {
   overflow-wrap: anywhere;
 }
 
-.output-expand {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--ink-muted);
-  background: var(--surface);
-}
-
-.output-expand:hover:not(:disabled) {
-  background: var(--hover);
-}
-
 .turn-timing-summary {
   align-self: stretch;
   width: 100%;
@@ -1919,12 +1908,17 @@ a {
   overflow-wrap: anywhere;
 }
 
-.expandable-output pre.output-collapsed {
-  max-height: 220px;
-  overflow: hidden;
-}
-
-.diagnostics-toolbar,.diagnostics-filter-group {
+.diagnostics-page .settings-header { padding-top:24px; padding-bottom:24px; }
+.diagnostics-page .settings-header p { margin-top:6px; }
+.diagnostics-content .settings-section { margin-bottom:24px; }
+.diagnostics-content .settings-section-heading { margin-bottom:8px; }
+.diagnostics-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:32px; margin:0; }
+.diagnostics-summary > div { display:flex; align-items:baseline; gap:16px; min-width:0; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px; line-height:20px; }
+.diagnostics-summary dt { flex:none; min-width:78px; color:var(--ink-muted); }
+.diagnostics-summary dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+.diagnostics-summary code { font-size:12px; user-select:text; }
+.diagnostics-summary .diagnostics-thread { grid-column:1 / -1; border-bottom:0; }
+.diagnostics-toolbar,.diagnostics-filter-group,.diagnostics-events-heading {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1933,35 +1927,58 @@ a {
 
 .diagnostics-toolbar {
   justify-content: space-between;
-  margin: 0 0 12px;
+  margin: 0 0 6px;
   color: var(--ink-muted);
   font-size: 12px;
 }
+.diagnostics-events-heading h2 { margin:0; color:var(--ink); font-size:15px; line-height:22px; font-weight:600; }
+.diagnostics-filter-group { gap:2px; padding:2px; border:1px solid var(--line); border-radius:var(--control-radius); }
 
 .diagnostics-filter-group button {
+  min-height:22px;
+  padding:1px 10px;
+  line-height:20px;
+  border:0;
+  border-radius:4px;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
-.diagnostics-filter-group button.active {
+.diagnostics-filter-group button[aria-pressed="true"] {
   background: var(--selected);
   color: var(--ink);
 }
+.diagnostics-filter-group button:hover:not(:disabled) { background:var(--hover); color:var(--ink); }
+.diagnostics-event-hint { margin:0 0 8px; color:var(--ink-muted); font-size:12px; line-height:20px; }
 
 .diagnostics-events {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   max-height: 320px;
   overflow: auto;
-  padding: 12px;
-  gap: 8px;
+  padding: 8px 0;
+  border-block:1px solid var(--line);
+  font-size:12px;
+  line-height:20px;
+  user-select:text;
 }
 
 .diagnostics-events code {
-  padding: 8px;
-  background: var(--surface);
+  flex:none;
+  padding: 2px 0;
+  font-size:12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.diagnostics-device-result { border-top:1px solid var(--line); padding-top:8px; }
+.diagnostics-device-result > summary { padding:4px 0; cursor:pointer; font-size:14px; line-height:20px; font-weight:500; }
+.diagnostics-device-result pre { margin:8px 0 0; max-height:320px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:20px; user-select:text; }
+.diagnostics-events:focus-visible,.diagnostics-device-result pre:focus-visible { outline:2px solid var(--input-focus-ring); outline-offset:2px; }
+@media(max-width:480px) { .diagnostics-summary { grid-template-columns:1fr; } }
+@media(pointer:coarse) {
+  .diagnostics-filter-group button { min-height:44px; min-width:44px; }
+  .diagnostics-device-result > summary { min-height:44px; display:list-item; align-content:center; }
 }
 
 .status-line {

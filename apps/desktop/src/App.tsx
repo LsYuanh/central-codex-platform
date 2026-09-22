@@ -1685,7 +1685,7 @@ export default function App() {
             </section>
           </div>
         ) : (
-          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : ""}`}>
+          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : settingsSection === "diagnostics" ? " diagnostics-page" : ""}`}>
             {settingsSection !== "skills" && settingsSection !== "updates" && <header className="settings-header"><div><h1>{ settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : "查看连接与运行信息，定位问题。"}</p></div>{settingsSection === "conversations" && <button className="button-secondary settings-refresh-button" aria-label="刷新归档对话" disabled={appState !== "online" || archivedThreadsLoading} onClick={() => void refreshArchivedThreads()}><UiIcon name="refresh" />{archivedThreadsLoading ? "刷新中…" : "刷新"}</button>}</header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
@@ -1735,23 +1735,23 @@ export default function App() {
 
               {settingsSection === "updates" && <ClientUpdatePanel update={clientUpdate} version={runtimeVersion} busy={updateBusy} enabled={updateEnabled} />}
               {settingsSection === "diagnostics" && (
-                <div className="settings-content">
+                <div className="settings-content diagnostics-content">
                   <section className="settings-section">
-                    <div className="settings-section-heading"><h2>运行信息</h2><p>用于定位中央连接、设备连接和事件流问题。</p></div>
-                    <div className="settings-card form-settings-card diagnostic-card">
-                      <div className="settings-value-row"><span><strong>客户端版本</strong><small>Tauri Desktop</small></span><code>{runtimeVersion}</code></div>
-                      <div className="settings-value-row"><span><strong>中央连接</strong><small>{connectionTitle}</small></span><StatusPill value={primaryConnectionState} /></div>
-                      <div className="settings-value-row"><span><strong>Local Agent</strong><small>客户端设备通道</small></span><StatusPill value={deviceState} /></div>
-                      <div className="settings-value-row"><span><strong>当前 Thread</strong><small>仅显示用户已选中的对话</small></span><code>{threadId || "—"}</code></div>
-                      <div className="settings-value-row"><span><strong>并行对话</strong><small>当前窗口仍在运行的 Thread</small></span><code>{runningThreadIds.size}</code></div>
-                    </div>
+                    <div className="settings-section-heading"><h2>运行信息</h2></div>
+                    <dl className="diagnostics-summary">
+                      <div><dt title="当前客户端连接目标">{connectionTitle}</dt><dd><StatusPill value={primaryConnectionState} /></dd></div>
+                      <div><dt title="Local Agent 客户端设备通道">本机设备</dt><dd><StatusPill value={deviceState} onlineLabel="在线" /></dd></div>
+                      <div><dt>客户端版本</dt><dd><code>{runtimeVersion}</code></dd></div>
+                      <div><dt title="当前窗口仍在运行的对话">运行中对话</dt><dd>{runningThreadIds.size}</dd></div>
+                      <div className="diagnostics-thread"><dt>当前对话 ID</dt><dd><code>{threadId || "—"}</code></dd></div>
+                    </dl>
                   </section>
                   <section className="settings-section">
-                    <div className="settings-section-heading"><h2>最近事件</h2><p>最多保留当前会话的 80 条 App Server 与网关事件。</p></div>
-                    <div className="diagnostics-toolbar"><div className="diagnostics-filter-group" role="group" aria-label="事件筛选"><button className={eventFilter === "all" ? "active" : ""} onClick={() => setEventFilter("all")}>全部</button><button className={eventFilter === "turn" ? "active" : ""} onClick={() => setEventFilter("turn")}>对话</button><button className={eventFilter === "tool" ? "active" : ""} onClick={() => setEventFilter("tool")}>工具</button><button className={eventFilter === "error" ? "active" : ""} onClick={() => setEventFilter("error")}>错误</button></div><span>{visibleEvents.length}/{events.length}</span></div>
-                    <div className="settings-card diagnostics-events">{visibleEvents.length === 0 ? <span className="muted">{events.length === 0 ? "连接后会显示协议事件" : "当前筛选条件下没有事件"}</span> : visibleEvents.map((event, index) => <code key={`${event}-${index}`}>{event}</code>)}</div>
+                    <div className="diagnostics-toolbar"><div className="diagnostics-events-heading"><h2>最近事件</h2><span aria-label={`显示 ${visibleEvents.length} 条，共 ${events.length} 条`}>{visibleEvents.length}/{events.length}</span></div><div className="diagnostics-filter-group" role="group" aria-label="事件筛选"><button aria-pressed={eventFilter === "all"} onClick={() => setEventFilter("all")}>全部</button><button aria-pressed={eventFilter === "turn"} onClick={() => setEventFilter("turn")}>对话</button><button aria-pressed={eventFilter === "tool"} onClick={() => setEventFilter("tool")}>工具</button><button aria-pressed={eventFilter === "error"} onClick={() => setEventFilter("error")}>错误</button></div></div>
+                    <p className="diagnostics-event-hint">本次会话的 App Server 与网关事件，最多保留 80 条。</p>
+                    <div className="diagnostics-events" role="region" aria-label="最近事件列表" tabIndex={0}>{visibleEvents.length === 0 ? <span className="muted">{events.length === 0 ? "连接后会显示协议事件" : "当前筛选条件下没有事件"}</span> : visibleEvents.map((event, index) => <code key={`${event}-${index}`}>{event}</code>)}</div>
                   </section>
-                  <section className="settings-section"><div className="settings-section-heading"><h2>最近设备结果</h2></div><ExpandableOutput content={gatewayOutput} /></section>
+                  <details className="diagnostics-device-result"><summary>最近设备结果</summary><pre tabIndex={0} role="region" aria-label="最近设备结果完整输出">{gatewayOutput}</pre></details>
                 </div>
               )}
             </div>
@@ -1904,12 +1904,6 @@ function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutpu
       {message.delivery && <span className="bubble-meta" role="status">{({sending:"正在发送追加要求…",sent:"追加要求已接收",failed:"追加未发送，可在输入框重试",unknown:"追加结果待核对"})[message.delivery]}</span>}
     </div>
   );
-}
-
-function ExpandableOutput({ content }: { content: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const isLong = content.length > 4_000;
-  return <div className="expandable-output"><pre className={isLong && !expanded ? "output-collapsed" : ""}>{content}</pre>{isLong && <button className="output-expand" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起输出" : "展开完整输出"}</button>}</div>;
 }
 
 function StatusPill({ value, onlineLabel = "已连接" }: { value: string; onlineLabel?: string }) {
