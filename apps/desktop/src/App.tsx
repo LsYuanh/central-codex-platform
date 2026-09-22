@@ -6,7 +6,6 @@ import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
 import { useSidebarOrganization, useThreadDrag, OrganizeThreadDialog } from "./SidebarOrganization";
 import { useProjects, readProject, type ClientProject } from "./projects";
-import { joinClientPath, parentClientPath } from "./client-paths";
 import { getVersion } from "@tauri-apps/api/app";
 import { useTrayNewConversation } from "./use-tray-new-conversation";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -19,7 +18,6 @@ import { PlatformGatewayClient, type RpcClient } from "./platform-gateway-client
 import { MarkdownMessage } from "./MarkdownMessage";
 import { messagesFromThreadRead } from "./thread-history";
 import { recoverInitialThread, threadRecoveryError } from "./thread-recovery";
-import { WorkspacePanel } from "./WorkspacePanel";
 import { useAttachments, MessageAttachments, localAttachment, type DraftAttachment } from "./attachments";
 import { OutputCard, type OutputArtifact } from "./outputs";
 import { withThreadRunning, withThreadTurn } from "./thread-session-state";
@@ -35,9 +33,8 @@ import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
 type TestMode = "central-gateway" | "local-app-server" | "fake-central";
 type AppPage = "conversation" | "settings";
-type SettingsSection = "skills" | "connection" | "conversations" | "workspace" | "diagnostics" | "updates";
+type SettingsSection = "skills" | "connection" | "conversations" | "diagnostics" | "updates";
 type EventFilter = "all" | "turn" | "tool" | "error";
-type WorkspaceResultStatus = "idle" | "loading" | "success" | "error";
 type ModelPickerSubmenu = "model" | "effort" | "speed";
 
 interface ModelReasoningOption {
@@ -80,12 +77,6 @@ interface BackgroundNotice {
   id: string;
   threadId: string;
   message: string;
-}
-
-interface WorkspaceEntry {
-  name: string;
-  kind: "directory" | "file" | "other";
-  bytes?: number;
 }
 
 const gatewayUrl = "ws://127.0.0.1:4310/ws/ui";
@@ -248,13 +239,6 @@ export default function App() {
   const uncertainSubmission = threadId ? uncertainSubmissions.get(threadId) : undefined;
   const attachments = useAttachments(sending || configApplying || Boolean(uncertainSubmission), mode === "central-gateway");
   const [gatewayOutput, setGatewayOutput] = useState("等待 Device Broker 连接……");
-  const [workspaceResultStatus, setWorkspaceResultStatus] = useState<WorkspaceResultStatus>("idle");
-  const [workspacePath, setWorkspacePath] = useState(".");
-  const [workspaceEntries, setWorkspaceEntries] = useState<WorkspaceEntry[]>([]);
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [workspaceContent, setWorkspaceContent] = useState("");
-  const [workspaceContentPath, setWorkspaceContentPath] = useState("");
-  const [workspaceCommand, setWorkspaceCommand] = useState<"git" | "node">("git");
   const turnId = threadId ? turnIdsByThread.get(threadId) : undefined;
   const turnRunning = Boolean(threadId && runningThreadIds.has(threadId));
   const approval = approvals.find((item) => !item.threadId || item.threadId === threadId);
@@ -490,10 +474,8 @@ export default function App() {
             setGateway({ gateway: message.gateway ?? "online", agent: message.agent ?? "offline", worker: message.worker });
           } else if (message.type === "agent.response") {
             setGatewayOutput(JSON.stringify(message.response, null, 2));
-            setWorkspaceResultStatus(asRecord(message.response)?.ok === false ? "error" : "success");
           } else if (message.type === "gateway.error") {
             setGatewayOutput(message.error ?? "Fake Central 返回未知错误");
-            setWorkspaceResultStatus("error");
           }
         } catch {
           setGatewayOutput("Fake Central 返回了无法解析的消息");
@@ -858,9 +840,6 @@ export default function App() {
     setDeviceState("offline");
     setThreads([]);
     setArchivedThreads([]);
-    setWorkspaceEntries([]);
-    setWorkspaceContent("");
-    setWorkspaceContentPath("");
   }, []);
 
   const refreshThreads = useCallback(async () => {
@@ -1105,7 +1084,7 @@ export default function App() {
     }
   }, [appUrl, disconnectAppServer, handleAppServerMessage, mode, refreshModels, syncRuntimeHistory]);
 
-  const configBusy = sending || uncertainSubmissions.size > 0 || approvals.length > 0 || attachments.adding || workspaceLoading || Boolean(threadBusy) || runtimeWorkCount > 0 || messages.some(message => message.outputs?.some(output => output.status === "saving"));
+  const configBusy = sending || uncertainSubmissions.size > 0 || approvals.length > 0 || attachments.adding || Boolean(threadBusy) || runtimeWorkCount > 0 || messages.some(message => message.outputs?.some(output => output.status === "saving"));
   const updateEnabled = desktopRuntime && mode === "central-gateway" && configReady && !configApplying && !configLoading;
   const clientUpdate = useClientUpdates(`${runtimeConfig?.effective.gatewayUrl}:${runtimeConfig?.effective.deviceId}`, updateEnabled);
   const updateBusy = configBusy || runningThreadIds.size > 0 || Boolean(composer.trim()) || attachments.drafts.length > 0 || [...threadDraftsRef.current.values()].some(d => d.text.trim() || d.attachments.length);
@@ -1124,7 +1103,7 @@ export default function App() {
       disconnectAppServer();
       const view = await invoke<ConfigView>("apply_desktop_config", { config: selectedConfig ?? configDraft });
       setRuntimeConfig(view); setConfigDraft(view.saved); setAppUrl(view.uiGatewayUrl); setConfigReady(true);
-      setWorkspacePath("."); setWorkspaceResultStatus("idle"); setGatewayOutput("默认输出目录已更新，请刷新目录");
+      setGatewayOutput("配置已更新，等待新的设备执行结果。");
       if (previousUrl !== view.uiGatewayUrl) {
         archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); runtimeWorkRef.current.clear(); setRuntimeWorkCount(0); setRunningThreadIds(new Set()); setMessages([]);
       }
@@ -1435,70 +1414,6 @@ export default function App() {
     }
   }, [approvalResponse, sendApprovalResponse]);
 
-  const sendGatewayRequest = useCallback((method: string, params: Record<string, unknown>) => {
-    const socket = gatewaySocketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      setGatewayOutput("Fake Central 尚未连接");
-      setWorkspaceResultStatus("error");
-      return;
-    }
-    const id = crypto.randomUUID();
-    setWorkspaceResultStatus("loading");
-    setGatewayOutput(`请求 ${method} (${id})……`);
-    socket.send(JSON.stringify({ type: "agent.request", request: { id, method, params } }));
-  }, []);
-
-  const sendWorkspaceRequest = useCallback(async (method: "workspace/list" | "read_file" | "exec", params: Record<string, unknown>) => {
-    if (configApplyingRef.current) return;
-    if (mode === "fake-central") {
-      sendGatewayRequest(method, params);
-      return;
-    }
-    const client = appClientRef.current;
-    if (!(client instanceof PlatformGatewayClient)) {
-      setGatewayOutput("请先连接中央测试网关");
-      setWorkspaceResultStatus("error");
-      return;
-    }
-    setWorkspaceLoading(true);
-    setWorkspaceResultStatus("loading");
-    setGatewayOutput(`请求 ${method}……`);
-    try {
-      const response = await client.requestDevice(method, params);
-      const payload = asRecord(response.result);
-      if (payload?.ok === false) {
-        setGatewayOutput(JSON.stringify(payload, null, 2));
-        setWorkspaceResultStatus("error");
-        return;
-      }
-      const result = payload?.result ?? payload ?? response.result;
-      if (method === "workspace/list") {
-        const record = asRecord(result);
-        const entries = Array.isArray(record?.entries) ? workspaceEntriesFromResult(record.entries) : [];
-        setWorkspaceEntries(entries);
-        if (typeof record?.path === "string") setWorkspacePath(record.path);
-        setWorkspaceContent("");
-        setWorkspaceContentPath("");
-        setGatewayOutput(`${entries.length} 个条目 · ${typeof record?.path === "string" ? record.path : params.path ?? "."}`);
-      } else if (method === "read_file") {
-        const record = asRecord(result);
-        const content = typeof record?.content === "string" ? record.content : "";
-        const path = typeof record?.path === "string" ? record.path : String(params.path ?? "");
-        setWorkspaceContent(content);
-        setWorkspaceContentPath(path);
-        setGatewayOutput(`${path} · ${typeof record?.bytes === "number" ? record.bytes : content.length} bytes`);
-      } else {
-        setGatewayOutput(JSON.stringify(result, null, 2));
-      }
-      setWorkspaceResultStatus("success");
-    } catch (error) {
-      setGatewayOutput(error instanceof Error ? error.message : String(error));
-      setWorkspaceResultStatus("error");
-    } finally {
-      setWorkspaceLoading(false);
-    }
-  }, [mode, sendGatewayRequest]);
-
   const visibleThreads = sidebarOrder.rows;
   const recentThreads = visibleThreads.filter(t => sidebarOrder.group(t) === null);
   const currentProject = threadId ? threads.find(t => t.id === threadId)?.clientProject : projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject;
@@ -1525,24 +1440,6 @@ export default function App() {
     if (eventFilter === "tool") return normalized.includes("tool") || normalized.includes("device") || normalized.includes("approval");
     return normalized.includes("turn") || normalized.includes("message") || normalized.includes("thread");
   });
-
-  const workspaceAvailable = mode === "fake-central" ? gateway.gateway === "online" : mode === "central-gateway" && appState === "online" && deviceState === "online";
-  const joinWorkspacePath = joinClientPath;
-
-  const navigateWorkspace = useCallback((path: string) => {
-    setWorkspacePath(path || ".");
-    setWorkspaceContent("");
-    setWorkspaceContentPath("");
-    void sendWorkspaceRequest("workspace/list", { path: path || "." });
-  }, [sendWorkspaceRequest]);
-
-  const readWorkspaceEntry = useCallback((entry: WorkspaceEntry) => {
-    const path = joinWorkspacePath(workspacePath, entry.name);
-    if (entry.kind === "directory") navigateWorkspace(path);
-    else if (entry.kind === "file") void sendWorkspaceRequest("read_file", { path });
-  }, [joinWorkspacePath, navigateWorkspace, sendWorkspaceRequest, workspacePath]);
-
-  const parentWorkspacePath = parentClientPath(workspacePath);
 
   const primaryConnectionState = mode === "fake-central" ? gateway.gateway : appState;
   const connectionTitle = mode === "central-gateway" ? "中央网关" : mode === "local-app-server" ? "本机 App Server" : "Fake Central";
@@ -1653,7 +1550,6 @@ export default function App() {
               <button className={settingsSection === "skills" ? "active" : ""} onClick={() => openSettings("skills")}><UiIcon name="review" /><strong>我的技能</strong></button>
               <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="settings" /><strong>常规与连接</strong></button>
               <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="review" /><strong>对话管理</strong></button>
-              <button className={settingsSection === "workspace" ? "active" : ""} onClick={() => openSettings("workspace")}><UiIcon name="folder" /><strong>文件与工具</strong></button>
               <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => openSettings("diagnostics")}><UiIcon name="activity" /><strong>诊断</strong></button>
               <button className={settingsSection === "updates" ? "active" : ""} onClick={() => openSettings("updates")}><UiIcon name="settings" /><strong>版本更新{clientUpdate.release.version ? " · 有更新" : ""}</strong></button>
             </nav>
@@ -1785,7 +1681,7 @@ export default function App() {
           </div>
         ) : (
           <div className="settings-page">
-            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : settingsSection === "workspace" ? "文件与工具" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "workspace" ? "管理默认保存位置，查看本机文件与工具。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
+            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "调整外观，管理远舟与这台电脑的连接。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
@@ -1830,15 +1726,6 @@ export default function App() {
                   ) : (
                     <section className="settings-section"><div className="settings-section-heading"><h2>Fake Central 状态</h2></div><div className="settings-card compact-settings-card"><StatusLine label="Gateway" value={gateway.gateway} /><StatusLine label="Local Agent" value={gateway.agent} /><StatusLine label="Worker" value={gateway.worker?.state ?? "unknown"} /></div></section>
                   )}
-                </div>
-              )}
-
-              {settingsSection === "workspace" && (
-                <div className="settings-content workspace-settings-content">
-                  <div className="settings-section-heading page-intro"><h2>客户端工作区</h2><p>文件读取和命令执行始终由当前设备的 Local Agent 完成。</p></div>
-                  {desktopRuntime && mode === "central-gateway" && <div className="settings-card runtime-workspace-summary"><span>默认输出目录：<code>{runtimeConfig?.effective.workspaceRoot || "尚未读取配置"}</code></span><button className="button-secondary" onClick={() => openSettings("connection")}>修改输出目录</button></div>}
-                  {platformCapabilities.remoteWorkspace === true && <p className="attachment-notice">当前运行时使用客户端工作区。{platformCapabilities.imageGeneration === false ? "新图片生成暂不可用；已有图片输出仍可查看和保存。" : ""}{platformCapabilities.plugins === false ? "插件暂不可用。" : ""}{platformCapabilities.subagents === false ? "子任务暂不可用。" : ""}</p>}
-                  <WorkspacePanel diffScope={`${appUrl}:${deviceId}:${runtimeConfig?.effective.workspaceRoot ?? ""}:${workspacePath}`} loadDiff={mode === "central-gateway" && platformCapabilities.remoteWorkspace === true ? staged => { const adapter = codexiaRef.current; if (!adapter) return Promise.reject(new Error("中央网关尚未连接")); return adapter.workspaceDiff(workspacePath, staged); } : undefined} mode={mode} deviceState={deviceState} path={workspacePath} entries={workspaceEntries} loading={workspaceLoading} output={gatewayOutput} resultStatus={workspaceResultStatus} content={workspaceContent} contentPath={workspaceContentPath} command={workspaceCommand} available={workspaceAvailable} onPathChange={setWorkspacePath} onOpen={() => navigateWorkspace(workspacePath)} onParent={() => navigateWorkspace(parentWorkspacePath)} onRefresh={() => navigateWorkspace(workspacePath)} onEntryClick={readWorkspaceEntry} onCommandChange={setWorkspaceCommand} onRunCommand={() => void sendWorkspaceRequest("exec", { program: workspaceCommand, args: ["--version"], cwd: workspacePath })} onCloseContent={() => { setWorkspaceContent(""); setWorkspaceContentPath(""); }} />
                 </div>
               )}
 
@@ -2053,15 +1940,6 @@ function StatusLine({ label, value }: { label: string; value: string }) {
 
 function asRecord(value: unknown): Record<string, any> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, any>) : undefined;
-}
-
-function workspaceEntriesFromResult(value: unknown[]): WorkspaceEntry[] {
-  return value.flatMap((item) => {
-    const record = asRecord(item);
-    if (!record || typeof record.name !== "string") return [];
-    const kind = record.kind === "directory" || record.kind === "file" ? record.kind : "other";
-    return [{ name: record.name, kind, bytes: typeof record.bytes === "number" ? record.bytes : undefined }];
-  });
 }
 
 function formatBytes(bytes: number): string {
