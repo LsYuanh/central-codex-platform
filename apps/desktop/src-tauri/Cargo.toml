@@ -14,7 +14,8 @@ tauri-build = { version = "2.6.3", features = [] }
 platform-security = { path = "../../../crates/platform-security" }
 futures-util.workspace = true
 tokio-tungstenite.workspace = true
-tauri.workspace = true
+tauri = { workspace = true, features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
 tauri-plugin-opener = "2"
 serde_json.workspace = true
 serde.workspace = true

@@ -11,6 +11,7 @@ use std::{
 use tauri::Manager;
 mod platform;
 mod runtime;
+mod tray;
 mod updates;
 #[cfg(windows)]
 mod webview_runtime;
@@ -271,6 +272,10 @@ fn main() {
         }
     }
     let app = tauri::Builder::default()
+        // Must run before other plugins, setup, and Local Agent startup.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            tray::show_main_window(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
@@ -289,9 +294,11 @@ fn main() {
                 app.path().app_config_dir()?.join("desktop-runtime-v1.json"),
                 suggested_workspace,
             ));
+            tray::setup(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tray::set_tray_new_conversation_enabled,
             window_frame::set_window_caption_color,
             attachment_request,
             select_attachment_paths,
@@ -308,19 +315,13 @@ fn main() {
         ])
         .on_window_event(move |window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window
-                    .app_handle()
-                    .state::<updates::UpdateState>()
-                    .ensure_idle()
-                    .is_err()
-                {
+                if window.label() == "main" {
                     api.prevent_close();
-                    return;
+                    // Keep the WebView, its connections, and the Local Agent alive.
+                    if let Err(error) = window.hide() {
+                        eprintln!("无法隐藏远舟窗口：{error}");
+                    }
                 }
-                let _ = window.hide();
-                // macOS normally keeps an app alive after its last window closes.
-                // This single-window client owns its Agent for the entire app lifetime.
-                window.app_handle().exit(0);
             }
         })
         .build(context);
@@ -336,12 +337,19 @@ fn main() {
     let app = app.expect("failed to build desktop Spike");
     app.run(|app, event| {
         if let tauri::RunEvent::ExitRequested {
-            code: None, api, ..
+            code: None | Some(0),
+            api,
+            ..
         } = &event
         {
             if app.state::<updates::UpdateState>().ensure_idle().is_err() {
                 api.prevent_exit();
+                tray::show_main_window(app);
             }
+        }
+        #[cfg(target_os = "macos")]
+        if matches!(event, tauri::RunEvent::Reopen { .. }) {
+            tray::show_main_window(app);
         }
         if matches!(event, tauri::RunEvent::Exit) {
             // Includes the application menu / Cmd+Q path, which does not close

@@ -63,7 +63,8 @@ Device Broker / dynamic tools
 桌面客户端必须管理 Local Agent 生命周期：
 
 - 桌面程序配置就绪后自动启动 Local Agent（首次配置未保存时不启动）；
-- 桌面窗口关闭时自动停止 Local Agent；
+- 桌面主窗口关闭时隐藏到系统托盘，Local Agent 和连接继续运行；选择托盘「退出远舟」或系统应用退出时停止 Local Agent；
+- 客户端按应用标识单实例运行，再次启动只恢复并聚焦现有窗口，不重复启动 Agent；托盘单击恢复窗口，右键菜单为「新对话」「退出远舟」；
 - `dev:desktop` 在启动 Tauri 前先构建 `local-agent`；
 - 默认从桌面可执行文件同目录寻找 `local-agent.exe`；
 - 安装包已通过 Tauri `externalBin` 内置 Local Agent，继续使用现有生命周期管理。
@@ -164,15 +165,18 @@ curl.exe --fail --cacert 'C:\path\to\existing-public-ca.pem' https://192.0.2.10:
 - Tauri/Rust 改动：`cargo fmt --check`、`cargo check -p desktop-spike`；
 - Local Agent 改动：`cargo check/test`，再运行设备 smoke；
 - 网关改动：TypeScript build、协议 smoke，并验证真实中央连接；
-- 生命周期改动：实际启动客户端，确认 Local Agent 出现；关闭窗口，确认 Local Agent 退出；
+- 生命周期改动：实际启动客户端，确认 Local Agent 出现；关闭窗口后确认驻留托盘且 Agent 在线；再次启动确认唤起原窗口且无重复进程；从托盘退出后确认 Agent 回收；
 - 系统工具改动：确认结果来自客户端机器，而不是中央机。
 
 真实生命周期验收预期：
 
 ```text
 客户端启动：desktop-spike=1，local-agent=1，healthz devices=1
-客户端关闭：desktop-spike=0，local-agent=0，healthz devices=0
+窗口关闭/再次启动唤起：desktop-spike=1，local-agent=1，healthz devices=1
+客户端真正退出：desktop-spike=0，local-agent=0，healthz devices=0
 ```
+
+中央存在其他在线设备时，按该客户端相对基线的增减核对 devices，不要求全局设备数为零。开发版与旧安装版混开不能作为新版单实例验收。
 
 如果真实中央机不可用，应明确记录未验证项，不得用 Fake Central 的成功代替真实链路验收。
 

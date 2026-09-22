@@ -8,6 +8,7 @@ import { useSidebarOrganization, useThreadDrag, OrganizeThreadDialog } from "./S
 import { useProjects, readProject, type ClientProject } from "./projects";
 import { joinClientPath, parentClientPath } from "./client-paths";
 import { getVersion } from "@tauri-apps/api/app";
+import { useTrayNewConversation } from "./use-tray-new-conversation";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { RuntimeSettings, type ConfigView, type DesktopConfig } from "./runtime-settings";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -130,7 +131,7 @@ export default function App() {
   const [deviceId, setDeviceId] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("browser preview");
   const [activePage, setActivePage] = useState<AppPage>("conversation");
-  const [pendingNavigation, setPendingNavigation] = useState<{ page: AppPage; section: SettingsSection }>();
+  const [pendingNavigation, setPendingNavigation] = useState<{ page: AppPage; section: SettingsSection; newConversation?: boolean }>();
   const unsavedDialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = unsavedDialogRef.current;
@@ -1557,23 +1558,37 @@ export default function App() {
   }))]);
 
   const configDirty = runtimeConfig && (Object.keys(configDraft) as (keyof DesktopConfig)[]).some(key => configDraft[key] !== runtimeConfig.saved[key]);
-  const finishNavigation = (page: AppPage, section: SettingsSection) => {
+  const finishNavigation = (page: AppPage, section: SettingsSection, newConversation = false) => {
     setSettingsSection(section); setActivePage(page); setPendingNavigation(undefined);
     setSidebarOpen(false);
+    if (newConversation) {
+      startNewConversation();
+      requestAnimationFrame(() => composerInputRef.current?.focus());
+    }
   };
-  const navigatePage = (page: AppPage, section: SettingsSection = "connection") => {
+  const navigatePage = (page: AppPage, section: SettingsSection = "connection", newConversation = false) => {
     if (activePage === "settings" && settingsSection === "connection" && configDirty && (page !== "settings" || section !== "connection")) {
-      setPendingNavigation({ page, section });
-    } else finishNavigation(page, section);
+      setPendingNavigation({ page, section, newConversation });
+    } else finishNavigation(page, section, newConversation);
   };
   const openSettings = (section: SettingsSection = "connection") => navigatePage("settings", section);
 
   const closeSidebar = () => setSidebarOpen(false);
 
   const startConversationFromSidebar = () => {
-    if (canStartConversation) startNewConversation();
+    if (canStartConversation) navigatePage("conversation", "connection", true);
     else openSettings("connection");
   };
+
+  useTrayNewConversation(
+    !sending && !threadBusy && appState !== "connecting" && !configApplying && !pendingNavigation && clientUpdate.phase !== "installing",
+    () => {
+      // A tray action must not bypass an open confirmation or editing dialog.
+      if (document.querySelector("dialog[open]")) return;
+      startConversationFromSidebar();
+    },
+    setAppError,
+  );
 
   return (
     <main className={`desktop-shell ${sidebarOpen ? "sidebar-open" : ""}`}>
@@ -1883,11 +1898,11 @@ export default function App() {
         <div className="button-row">
           <button type="button" disabled={configApplying || configBusy || configLoading} onClick={async () => {
             const target = pendingNavigation;
-            if (await applyRuntimeConfig()) finishNavigation(target.page, target.section);
+            if (await applyRuntimeConfig()) finishNavigation(target.page, target.section, target.newConversation);
           }}>{configApplying ? "正在保存…" : "保存并应用"}</button>
           <button type="button" className="button-secondary" disabled={configApplying} onClick={() => {
             if (runtimeConfig) setConfigDraft(runtimeConfig.saved);
-            finishNavigation(pendingNavigation.page, pendingNavigation.section);
+            finishNavigation(pendingNavigation.page, pendingNavigation.section, pendingNavigation.newConversation);
           }}>放弃修改</button>
           <button type="button" className="button-quiet" disabled={configApplying} autoFocus onClick={() => setPendingNavigation(undefined)}>继续编辑</button>
         </div>
