@@ -9,6 +9,12 @@
 | Tauri CLI | 2.11.4 | npm `@tauri-apps/cli` | Apache-2.0 OR MIT | 桌面开发与构建 |
 | Tauri JavaScript API | 2.11.1 | npm `@tauri-apps/api` | Apache-2.0 OR MIT | 桌面运行时信息 |
 | React / React DOM | 19.2.8 | npm | MIT | Spike UI |
+| react-markdown | 10.1.0 | npm | MIT | CommonMark 消息与技能预览 |
+| remark-gfm / remark-breaks / remark-math | 4.0.1 / 4.0.0 / 6.0.0 | npm | MIT | 表格、脚注、清单、聊天换行与公式语法 |
+| KaTeX | 0.18.7 | npm | MIT | 按需公式展示及随包字体 |
+| Mermaid | 11.17.2 | npm | MIT | 按需图表展示，严格模式 |
+| highlight.js | 11.12.0 | npm | BSD-3-Clause | 按需代码语法高亮 |
+| @types/katex | 0.16.8 | npm | MIT | 公式渲染 TypeScript 类型 |
 | Vite | 8.2.2 | npm | MIT | 前端开发服务器与构建 |
 | React Vite Plugin | 6.1.1 | npm `@vitejs/plugin-react` | MIT | React 转换 |
 | TypeScript | 7.0.2 | npm | Apache-2.0 | 前端与 Fake Central 类型检查 |

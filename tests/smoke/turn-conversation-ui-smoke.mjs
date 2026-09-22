@@ -11,7 +11,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const output = path.join(root, 'target/turn-conversation-qa');
 await mkdir(output, { recursive: true });
 const bundle = await build({ entryPoints: [path.join(root, 'tests/fixtures/turn-conversation-qa.tsx')],
-  bundle: true, write: false, outdir: output, platform: 'browser', format: 'iife', jsx: 'automatic' });
+  bundle: true, write: false, outdir: output, platform: 'browser', format: 'iife', jsx: 'automatic',
+  loader: { '.woff2': 'dataurl', '.woff': 'dataurl', '.ttf': 'dataurl' } });
 const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL ?? 'msedge' });
 try {
   const page = await browser.newPage({ viewport: { width: 1040, height: 760 } });

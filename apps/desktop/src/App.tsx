@@ -10,7 +10,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useTrayNewConversation } from "./use-tray-new-conversation";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { RuntimeSettings, type ConfigView, type DesktopConfig } from "./runtime-settings";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { MarkdownImageReference } from "./markdown-images";
 import { AppServerClient, type AppServerMessage, threadIdFromResult } from "./app-server-client";
 import { reduceExecutions, type GatewayUiEvent, type ExecutionActivity, type ExecutionLogChunk, type ExecutionStatus, type ConnectionState, type DeviceState, type ChatMessage, type ThreadSummary, type ApprovalRequest, type PlatformCapabilities, type CentralEngineState } from "./gateway-ui-events";
 import { CodexiaGatewayAdapter } from "./codexia-gateway-adapter";
@@ -205,6 +206,12 @@ export default function App() {
     return {text,mentions:current.mentions.filter(m=>text.slice(m.start,m.end)==="$"+m.name)};
   }), []);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const markdownImageCache = useRef<MarkdownImageReference[]>([]);
+  const markdownImages = useMemo(() => {
+    const next = messages.flatMap(message => [...(message.attachments ?? []), ...(message.outputs ?? [])]);
+    if (next.length !== markdownImageCache.current.length || next.some((image, index) => image !== markdownImageCache.current[index])) markdownImageCache.current = next;
+    return markdownImageCache.current;
+  }, [messages]);
   const threadMessageCacheRef = useRef(new Map<string, ChatMessage[]>());
   const threadDraftsRef = useRef(new Map<string, ThreadDraft>());
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -1605,7 +1612,7 @@ export default function App() {
                   running={turnRunning && Boolean(group.turnId) && group.turnId === turnId} now={executionClock}
                   executions={visibleExecutions.filter(execution => execution.turnId === group.turnId)}
                   renderExecution={execution => <ExecutionPanel executions={[execution]} now={executionClock} continuing={false} />}
-                  renderMessage={message => <ChatBubble key={message.id} message={message} retryOutput={async(output)=>{
+                  renderMessage={message => <ChatBubble key={message.id} message={message} images={markdownImages} retryOutput={async(output)=>{
                   if(!appClientRef.current)throw new Error("请先连接中央网关");
                   const reply=await appClientRef.current.request("output/retry",{threadId:output.threadId,outputId:output.id});
                   const result=asRecord(reply.result);
@@ -1879,7 +1886,8 @@ function formatDuration(milliseconds: number): string {
     : `${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
 }
 
-function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutput:(output:OutputArtifact)=>Promise<void> }) {
+function ChatBubble({ message, images, retryOutput }: { message: ChatMessage; images: MarkdownImageReference[]; retryOutput:(output:OutputArtifact)=>Promise<void> }) {
+  const imageReferences = useMemo(() => [...(message.attachments ?? []), ...(message.outputs ?? []), ...images.slice().reverse()], [message.attachments, message.outputs, images]);
   const displayTime = formatMessageTime(message.createdAt);
   if (message.timingOnly) return null;
   if (message.kind === "tool") return <div className="process-tool-summary">
@@ -1893,7 +1901,7 @@ function ChatBubble({ message, retryOutput }: { message: ChatMessage; retryOutpu
         {message.attachments?.length ? <MessageAttachments attachments={message.attachments}/> : null}
         {message.outputs?.map(output=><OutputCard key={output.id} output={output} retry={retryOutput}/>)}
         <div className="bubble-content">
-          <MarkdownMessage content={message.content} />
+          <MarkdownMessage content={message.content} streaming={message.itemStatus === "running"} images={imageReferences} />
         </div>
       </article>
       {displayTime && <time className="bubble-meta" dateTime={message.createdAt}>{displayTime}</time>}
