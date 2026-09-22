@@ -134,7 +134,7 @@ export default function App() {
   const runtimeModeRef = useRef(mode);
   runtimeModeRef.current = mode;
   const [appUrl, setAppUrl] = useState(persisted.appUrl ?? defaultGatewayUrl);
-  const [appCwd, setAppCwd] = useState(persisted.appCwd ?? defaultAppServerCwd);
+  const [appCwd] = useState(persisted.appCwd ?? defaultAppServerCwd);
   const [runtimeConfig, setRuntimeConfig] = useState<ConfigView>();
   const [configDraft, setConfigDraft] = useState<DesktopConfig>({ gatewayUrl: "", userId: "", deviceId: "", workspaceRoot: "" });
   const [configReady, setConfigReady] = useState(!desktopRuntime);
@@ -1713,13 +1713,6 @@ export default function App() {
                     <section className="settings-section">
                       <div className="settings-section-heading"><h2>连接配置</h2><p>管理设备配对和默认文件保存位置。</p></div>
                       {desktopRuntime && mode === "central-gateway" && <RuntimeSettings view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setEvents([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} />}
-                      <details className="connection-details"><summary>高级连接选项</summary><div className="settings-card form-settings-card">
-                        {!(desktopRuntime && mode === "central-gateway") && <>
-                        <label className="settings-field"><span><strong>WebSocket 地址</strong><small>{mode === "central-gateway" ? "桌面客户端连接中央网关，不直连 App Server" : "开发代理监听地址"}</small></span><input value={appUrl} onChange={(event) => setAppUrl(event.target.value)} placeholder={mode === "central-gateway" ? "wss://192.0.2.10:4510/ws" : "ws://127.0.0.1:4501"} /></label>
-                        {mode === "local-app-server" && <label className="settings-field"><span><strong>默认工作目录</strong><small>开发模式创建新 Thread 时使用，可留空</small></span><input value={appCwd} onChange={(event) => setAppCwd(event.target.value)} placeholder="C:\\work\\project" /></label>}
-                        </>}
-                        <label className="settings-field"><span><strong>默认模型</strong><small>由中央 App Server 解析，可留空</small></span><input value={appModel} onChange={(event) => setAppModel(event.target.value)} placeholder="使用服务端默认模型" /></label>
-                      </div></details>
                       {appError && <p className="settings-error">{appError}</p>}
                       <div className="settings-actions">{appState === "online" ? <button className="button-secondary" disabled={configApplying || configBusy} onClick={disconnectAppServer}>断开连接</button> : <button disabled={configApplying || (desktopRuntime && mode === "central-gateway" && !configReady) || appState === "connecting" || appState === "reconnecting"} onClick={() => void connectAppServer()}>{appState === "connecting" ? "正在连接…" : appState === "reconnecting" ? "正在重连…" : appState === "error" ? "重试连接" : "连接"}</button>}</div>
                     </section>
