@@ -1685,8 +1685,8 @@ export default function App() {
             </section>
           </div>
         ) : (
-          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : ""}`}>
-            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
+          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : ""}`}>
+            {settingsSection !== "skills" && <header className="settings-header"><div><h1>{ settingsSection === "updates" ? "版本更新" : settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : settingsSection === "updates" ? "检查并管理远舟客户端的版本。" : "查看连接与运行信息，定位问题。"}</p></div>{settingsSection === "conversations" && <button className="button-secondary settings-refresh-button" aria-label="刷新归档对话" disabled={appState !== "online" || archivedThreadsLoading} onClick={() => void refreshArchivedThreads()}><UiIcon name="refresh" />{archivedThreadsLoading ? "刷新中…" : "刷新"}</button>}</header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
@@ -1712,22 +1712,23 @@ export default function App() {
               )}
 
               {settingsSection === "conversations" && (
-                <div className="settings-content">
+                <div className="settings-content archived-settings-content">
                   <section className="settings-section">
-                    <div className="settings-section-heading settings-section-heading-with-action">
-                      <div><h2>归档对话</h2><p>归档对话不会出现在主页列表中。你可以恢复它，或在这里永久删除。</p></div>
-                      <button className="button-secondary settings-refresh-button" aria-label="刷新归档对话" disabled={appState !== "online" || archivedThreadsLoading} onClick={() => void refreshArchivedThreads()}>{archivedThreadsLoading ? "刷新中…" : "刷新"}</button>
+                    <div className="settings-section-heading">
+                      <h2>归档对话 <span className="archived-thread-count">· {archivedThreadsLoading && archivedThreads.length === 0 ? "…" : appState === "online" || archivedThreads.length > 0 ? archivedThreads.length : "—"}</span></h2>
+                      <p>恢复后回到主页，永久删除不可撤销。</p>
                     </div>
-                    <div className="settings-card archived-thread-card">
+                    <div className="archived-thread-list" role={archivedThreads.length > 0 ? "list" : "status"} aria-label="归档对话" aria-busy={archivedThreadsLoading}>
                       {archivedThreadsLoading && archivedThreads.length === 0 ? <div className="settings-empty-state">正在加载归档对话…</div> : archivedThreads.length === 0 ? <div className="settings-empty-state">{appState === "online" ? "暂无归档对话" : "连接后显示归档对话"}</div> : archivedThreads.map((thread) => {
                         const busy = threadBusy?.startsWith(`${thread.id}:`);
-                        return <div className="archived-thread-row" key={thread.id}>
-                          <div className="archived-thread-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong><small>{thread.preview && thread.preview !== threadDisplayTitle(thread) ? thread.preview : "已归档"}</small></div>
-                          <div className="archived-thread-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : <><button className="button-secondary" disabled={Boolean(threadBusy)} onClick={() => void restoreThread(thread)}>恢复</button><button className="button-danger" disabled={Boolean(threadBusy)} onClick={() => void deleteThread(thread)}>永久删除</button></>}</div>
+                        const title = threadDisplayTitle(thread);
+                        return <div className="archived-thread-row" role="listitem" key={thread.id}>
+                          <div className="archived-thread-copy"><strong title={title}>{title}</strong>{thread.preview?.trim() && thread.preview.trim() !== title && <small title={thread.preview}>{thread.preview}</small>}</div>
+                          <div className="archived-thread-actions">{busy ? <span className="archived-thread-progress" role="status">处理中…</span> : <><button className="button-secondary" aria-label={`恢复对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void restoreThread(thread)}>恢复</button><button className="button-quiet archived-thread-delete" title="永久删除" aria-label={`永久删除对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void deleteThread(thread)}><UiIcon name="trash" /></button></>}</div>
                         </div>;
                       })}
                     </div>
-                    {appError && <p className="settings-error">{appError}</p>}
+                    {appError && <p className="settings-error" role="alert">{appError}</p>}
                   </section>
                 </div>
               )}

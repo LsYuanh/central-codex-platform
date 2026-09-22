@@ -1632,7 +1632,8 @@ a {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 14px 0;
+  min-height: 44px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1642,6 +1643,7 @@ a {
 
 .archived-thread-copy {
   display: grid;
+  flex: 1;
   min-width: 0;
   gap: 4px;
 }
@@ -1680,6 +1682,23 @@ a {
   flex: none;
   color: var(--ink);
   background: var(--surface);
+}
+
+.archived-settings-page .settings-header { padding-top:24px; padding-bottom:24px; align-items:flex-start; }
+.archived-settings-page .settings-header p { margin-top:6px; }
+.archived-settings-page button { min-height:var(--control-compact); padding:3px 10px; border-radius:var(--control-radius); font-size:13px; line-height:20px; }
+.archived-settings-page .settings-refresh-button { display:flex; align-items:center; gap:6px; flex:none; margin-top:2px; }
+.archived-settings-content .settings-section-heading { margin-bottom:12px; }
+.archived-thread-count { margin-left:6px; color:var(--ink-muted); font-size:12px; font-weight:400; }
+.archived-thread-list { border-top:1px solid var(--line); }
+.archived-thread-copy strong { font-size:14px; font-weight:500; line-height:20px; }
+.archived-thread-copy small { line-height:18px; }
+.archived-settings-page .archived-thread-delete { display:grid; place-items:center; width:var(--control-compact); padding:0; border-color:transparent; }
+.archived-settings-page .archived-thread-delete:hover:not(:disabled) { color:var(--danger); background:var(--danger-bg); }
+.archived-thread-progress { color:var(--ink-muted); font-size:12px; line-height:28px; }
+.archived-settings-content .settings-empty-state { padding:24px 0; text-align:left; font-size:13px; }
+@media(pointer:coarse) {
+  .archived-settings-page { --control-compact:44px; }
 }
 
 /* General settings: compact desktop groups, with details kept close to their state. */
