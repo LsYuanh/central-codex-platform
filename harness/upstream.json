@@ -1,26 +1,25 @@
 {
   "repository": "https://github.com/openai/codex",
-  "tag": "rust-v0.153.4",
-  "annotatedTag": "042fb41b7c813ac7999105e886b2b7aa715b5081",
-  "commit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
-  "version": "0.153.4",
+  "tag": "rust-v0.156.1",
+  "commit": "b412ff32c417f855c2b2d1581b77058eed87c84b",
+  "version": "0.156.1",
   "marker": "yuan-zhou-remote-workspace/1",
   "archive": {
-    "url": "https://codeload.github.com/openai/codex/tar.gz/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
-    "sha256": "bbbf66ffa30846f1e9bc3ae8a87a5aa0bb768efee8dbb94759dc9eb64bb4aa3a"
+    "url": "https://codeload.github.com/openai/codex/tar.gz/b412ff32c417f855c2b2d1581b77058eed87c84b",
+    "sha256": "1ac6a92e7318b8acf3d767170c5c5e6dceeffdc074c73b1c5d422b46f0de4daf"
   },
   "patch": {
     "path": "remote-workspace.patch",
-    "sha256": "7636ba692694e3430131dce5ee8ce886b683c4835f6f192633e231d074c66b80"
+    "sha256": "40b324f567e2be88274fa25c1a174195b28b127a9e7e471e4ec55e417013ecd2"
   },
   "schema": {
     "stable": {
       "path": "schema/app-server-exports-stable.json.zst",
-      "sha256": "90cc88760f6b43c84d1266f5ddd6791d1e6971e7c402f591883aa85c7b406a28"
+      "sha256": "dfd6f7197d4caa6a240c49984d6d2441ba768ca38a657dc92e2d48f726548476"
     },
     "experimental": {
       "path": "schema/app-server-exports-experimental.json.zst",
-      "sha256": "05948c1ae7d50d2ec2d01153eeb4eb9b82cf6f7d851acb576ebb5fb201c38b2c"
+      "sha256": "d12fa7acdd7a0067879e7ae2b228cd19a4256b9a18dc6a6557676fcfa500a6ce"
     }
   },
   "licenses": [
@@ -35,9 +34,9 @@
   ],
   "rust": {
     "requested": "1.95.0",
-    "verifiedCompiler": "1.98.0 (existing central compiler; exact 1.95.0 not yet tested)"
+    "verifiedCompiler": "1.95.0 (macOS arm64 Harness build and native probes, 2026-09-23)"
   },
-  "lockfileAdjustment": "Only source-less workspace package versions 0.0.0 -> 0.153.4; third-party versions and checksums unchanged.",
+  "lockfileAdjustment": "Only source-less workspace package versions 0.0.0 -> 0.156.1; third-party versions and checksums unchanged.",
   "windowsPatch": {
     "path": "windows-home.patch",
     "sha256": "104ad03dc5db0678b2ceb1250f22079e51d5c3f767e18814e30fab50a47d7981",
@@ -45,7 +44,7 @@
   },
   "windowsModelPatch": {
     "path": "windows-model.patch",
-    "sha256": "9d22bc3e6456c936831c54dce2f4fe8e1d531efdf07163a05410fa57e0bd38b9",
+    "sha256": "f772a5361e03c01624f6520da22a1e84c1f2e002dba45301a8d54b21bde6cf1e",
     "scope": "Windows remote AppContainer model-only authenticated TLS named pipe transport"
   }
 }

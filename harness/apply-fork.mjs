@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-// Applies only audited edits to a pinned, clean Codex 0.153.4 source tree.
+// Applies only audited edits to the pinned, clean Codex source tree.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(process.argv[2] ?? join(here, '.cache/codex-3d2ee51ca2d5db578f328aa75e20aa22c0197c9a'));
+const pin = JSON.parse(readFileSync(join(here, 'upstream.json'), 'utf8'));
+const root = resolve(process.argv[2] ?? join(here, `.cache/codex-${pin.commit}`));
 const condition = 'std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")';
 const coreCondition = 'crate::remote_workspace::enabled()';
 const edits = new Map();
@@ -24,7 +25,7 @@ const at = (path, anchor, addition) => replace('codex-rs/' + path, anchor, ancho
 {
   const path = 'codex-rs/Cargo.lock';
   const original = readFileSync(join(root, path), 'utf8');
-  const text = original.replace(/(\[\[package\]\]\nname = "[^"]+"\nversion = ")0\.0\.0("\n)(?!source =)/g, '$10.153.4$2');
+  const text = original.replace(/(\[\[package\]\]\nname = "[^"]+"\nversion = ")0\.0\.0("\n)(?!source =)/g, (_, before, after) => before + pin.version + after);
   edits.set(path, { original, text });
 }
 at('core/src/lib.rs', 'pub mod config;', 'pub mod remote_workspace;');
@@ -51,7 +52,8 @@ replace('codex-rs/core/src/tools/spec_plan.rs', ') -> CodexResult<ToolRouter> {\
     let default_agent_type_description =`);
 at('features/src/lib.rs', '    pub fn enabled(&self, f: Feature) -> bool {', `        if ${condition} { return false; }`);
 at('core/src/agents_md.rs', '    let mut loaded = LoadedAgentsMd::from_user_instructions(user_instructions);', `    if ${coreCondition} { return Ok((!loaded.is_empty()).then_some(loaded)); }`);
-at('core/src/thread_manager.rs', '    ) -> LoadedUserInstructions {', `        if ${coreCondition} { return LoadedUserInstructions::default(); }`);
+// 0.156 moved global instructions into codex-home and refreshes them each turn.
+at('codex-home/src/instructions/mod.rs', '    async fn load_from_codex_home(&self) -> LoadedUserInstructions {', `        if ${condition} { return LoadedUserInstructions::default(); }`);
 at('core/src/thread_manager.rs', '    ) -> CodexResult<NewThread> {\n        let fork_source = self.get_thread(forked_from_thread_id).await?;', '');
 replace('codex-rs/core/src/thread_manager.rs', '    ) -> CodexResult<NewThread> {\n        let fork_source = self.get_thread(forked_from_thread_id).await?;\n', `    ) -> CodexResult<NewThread> {
         if ${coreCondition} { return Err(CodexErr::InvalidRequest("REMOTE_WORKSPACE_UNSUPPORTED: subagent".into())); }
@@ -109,14 +111,14 @@ at('git-utils/src/info.rs', 'pub fn get_git_repo_root(base_dir: &Path) -> Option
 at('git-utils/src/info.rs', 'pub async fn collect_git_info(cwd: &Path) -> Option<GitInfo> {', `    if ${condition} { return None; }`);
 at('git-utils/src/info.rs', 'fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {', `    if ${condition} { return None; }`);
 at('git-utils/src/git_process.rs', 'fn spawn_git_command(command: &mut Command) -> Option<(Child, KillGitProcessTreeOnDrop)> {', `    if ${condition} { return None; }`);
-at('app-server/src/extensions.rs', '    let mut builder = ExtensionRegistryBuilder::<Config>::with_event_sink(Arc::clone(&event_sink));', `    if codex_core::remote_workspace::enabled() {
+at('app-server/src/extensions.rs', '        builder.turn_start_admission(admission);\n    }', `    if codex_core::remote_workspace::enabled() {
         let providers = codex_skills_extension::SkillProviders::new().with_host_provider(Arc::new(codex_skills_extension::HostSkillProvider::new()));
         codex_skills_extension::install_with_providers_and_metrics(&mut builder, providers, codex_otel::global(), |config: &Config| codex_skills_extension::SkillsExtensionConfig {
             include_instructions: config.include_skill_instructions, max_context_tokens: config.skill_max_context_tokens, bundled_skills_enabled: false, orchestrator_skills_enabled: false, shadow_selection_enabled: false,
         });
         return Arc::new(builder.build());
     }`);
-at('app-server/src/lib.rs', '    runtime_options: AppServerRuntimeOptions,\n) -> IoResult<()> {', `    let mut runtime_options = runtime_options;
+at('app-server/src/lib.rs', '    runtime_options: AppServerRuntimeOptions,\n) -> IoResult<AppServerExit> {', `    let mut runtime_options = runtime_options;
     if codex_core::remote_workspace::enabled() {
         runtime_options.plugin_startup_tasks = PluginStartupTasks::Skip;
         runtime_options.remote_control_startup_mode = RemoteControlStartupMode::DisabledEphemeral;
@@ -133,9 +135,9 @@ replace('codex-rs/app-server/src/request_processors/initialize_processor.rs', ' 
 const catalogEnabled = 'std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker") && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")';
 at('models-manager/src/manager.rs', '    async fn should_refresh_models(&self) -> bool {', `        if ${catalogEnabled} { return true; }`);
 replace('codex-rs/models-manager/src/manager.rs', 'presets = ModelPreset::filter_by_auth(presets, uses_codex_backend);', `presets = ModelPreset::filter_by_auth(presets, uses_codex_backend || (${catalogEnabled}));`);
-replace('codex-rs/models-manager/src/manager.rs', '&& self.auth_manager.as_ref().is_some_and(|auth_manager| {\n                auth_manager\n                    .auth_mode()\n                    .is_some_and(AuthMode::has_chatgpt_account)\n            });', `&& ((${catalogEnabled}) || self.auth_manager.as_ref().is_some_and(|auth_manager| {
-                auth_manager.auth_mode().is_some_and(AuthMode::has_chatgpt_account)
-            }));`);
+// The broker token is not an OpenAI API key; retain the Codex catalog wire format.
+replace('codex-rs/models-manager/src/manager.rs', '        if self.uses_api_key_auth()\n', `        if !(${catalogEnabled}) && self.uses_api_key_auth()\n`);
+replace('codex-rs/models-manager/src/manager.rs', '&& (self.supports_api_key_discovery()\n', `&& ((${catalogEnabled}) || self.supports_api_key_discovery()\n`);
 
 const baseDir = join(here, '.cache/patch-base');
 const expectedFiles = new Map(JSON.parse(readFileSync(join(here, 'source-files.json'), 'utf8')).map(item => [item.path, item.upstreamSha256]));

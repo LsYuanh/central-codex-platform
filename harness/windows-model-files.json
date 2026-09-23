@@ -1,23 +1,23 @@
 [
   {
     "path": "codex-rs/http-client/src/lib.rs",
-    "upstreamSha256": "71acfb139b0e32dc0d9da286f48812162f69f532ab4bfdf3e5c351379c15f25a",
-    "patchedSha256": "0b99389012e80272f3fac833ac94b76af294c70418b52126f73f8f350cba5f47"
+    "upstreamSha256": "da00f57cdec89c37398db754d8d6985201c5c91252933286d987ea67a4f5457e",
+    "patchedSha256": "fc1fe43c0f9b932615878578f0bb34d67aeabed95790bffbef1a19f64cedb5a2"
   },
   {
     "path": "codex-rs/http-client/src/transport.rs",
-    "upstreamSha256": "77a3179491dbb8a1d8cd47b09396284cbd7fc27b6d3473ac8ca6ba996c77b74b",
-    "patchedSha256": "30f96a5e2404386c225834af0b85ff9d423d0865e0d3b2bd90392329c337521f"
+    "upstreamSha256": "99926f135ca9c2cbea4bcde5910751ad4fb6242a0587768c61fff5ca04180789",
+    "patchedSha256": "a7d17b1e21955b370dae445072804355bf4b8e2dca17175943c0fabd78fbf59e"
   },
   {
     "path": "codex-rs/core/src/client.rs",
-    "upstreamSha256": "e77f1dfd562f2c21c1e30a95870bd171d56b1bb46361d07dd82f32992fca28f2",
-    "patchedSha256": "4b10a03d84605d76a341d775c0e6e02c4baf9bb99cee024ceca4a1cbe07d3784"
+    "upstreamSha256": "37d57264e6b9b2e56230af547104545af579819b95fcda40138fcf1cf3fae29a",
+    "patchedSha256": "f7c72f493fc3044fef246e750c4f835fe174d57c19df486c95ca21adb4f48093"
   },
   {
     "path": "codex-rs/codex-api/src/sse/responses.rs",
-    "upstreamSha256": "ffe0a51e8b496d6c6e3b887859a3ee1afcc5b9a4c76d2f3bdffffa719de0aa9c",
-    "patchedSha256": "0b6136cf940a2fb618f970b40f1de0a580b2314a4d0011e92cdefb0b34e30449"
+    "upstreamSha256": "a5cb3694cc305199dbcc2c82e0c10dc917dc512970b9c4417d555b21e626d8f1",
+    "patchedSha256": "d80a5fc50bea98e5d401fc5ad17c6fd9794c668d340e40f502e163f219379c49"
   },
   {
     "path": "codex-rs/http-client/src/windows_model_transport.rs",

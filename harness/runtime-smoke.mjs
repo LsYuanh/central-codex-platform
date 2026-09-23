@@ -18,6 +18,7 @@ mkdirSync(home); mkdirSync(worker);
 const sentinel = join(run, 'central-marker.txt'), sideEffect = join(run, 'FORBIDDEN-EXECUTED');
 writeFileSync(sentinel, 'CENTRAL_ONLY_NEVER_MODEL_CONTEXT');
 writeFileSync(join(worker, 'AGENTS.md'), 'CENTRAL_RULES_MUST_NOT_BE_LOADED');
+writeFileSync(join(home, 'AGENTS.md'), 'CENTRAL_GLOBAL_RULES_MUST_NOT_BE_LOADED');
 const requests = [], notifications = [], waiting = new Map();
 let fixtureError, dynamicCalls = 0, stderr = '', serverProcess;
 const respondSse = (res, index, item) => {
@@ -108,6 +109,7 @@ try {
   assert.equal(dynamicCalls,2);
   assert.match(JSON.stringify(requests[1].input),/unsupported|REMOTE_WORKSPACE/i);
   assert(!JSON.stringify(requests).includes('CENTRAL_RULES_MUST_NOT_BE_LOADED'));
+  assert(!JSON.stringify(requests).includes('CENTRAL_GLOBAL_RULES_MUST_NOT_BE_LOADED'));
   assert(!JSON.stringify(requests).includes('CENTRAL_ONLY_NEVER_MODEL_CONTEXT'));
   assert(!existsSync(sideEffect),'A local command or notify hook executed');
   assert(!fixtureError,String(fixtureError));

@@ -14,6 +14,8 @@ const report=await checkUpstream(join(output,'upstream'));
 await writeFile(join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
 if(report.status!=='ready-for-validation'){console.log(JSON.stringify(report));process.exit(report.status==='up-to-date'?0:1);}
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(TOKEN|SECRET|PASSWORD|SIGNING|API_KEY|CODEX_HOME)/i.test(key)));
+// Honor the reviewed candidate's rust-toolchain.toml, not a runner's stable override.
+delete env.RUSTUP_TOOLCHAIN;
 Object.assign(env,{CARGO_TARGET_DIR:join(output,'cargo-target'),HARNESS_QA_ROOT:output,DEVELOPER_DIR:'/Library/Developer/CommandLineTools'});
 function run(command,args,cwd=root){const r=spawnSync(command,args,{cwd,env,stdio:'inherit',timeout:90*60*1000});if(r.status!==0)throw Error('RUNTIME_VALIDATION_FAILED');}
 try{
@@ -21,6 +23,7 @@ try{
   run('cargo',['build','-p','codex-app-server','--bin','codex-app-server','--locked'],join(report.source,'codex-rs'));
   const binary=join(env.CARGO_TARGET_DIR,'debug/codex-app-server');
   run(process.execPath,['harness/runtime-smoke.mjs',binary]);
+  run(process.execPath,['harness/model-catalog-smoke.mjs',binary,join(report.source,'codex-rs/models-manager/models.json'),report.latestVersion]);
   run(process.execPath,['harness/thread-delete-smoke.mjs',binary]);
   run(process.execPath,['harness/worker-isolation-smoke.mjs']);
   run(process.execPath,['tests/smoke/model-credential-broker-smoke.mjs']);

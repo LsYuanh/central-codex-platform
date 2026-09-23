@@ -98,7 +98,7 @@ try{
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname==='192.0.2.10'&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
   check(path.isAbsolute(config.workspace)&&path.isAbsolute(config.output)&&!existsSync(config.output),'QA_OUTPUT_INVALID');
-  check(config.model==='gpt-6-astra','QA_MODEL_INVALID');
+  check(['gpt-6-astra','gpt-6-sol'].includes(config.model),'QA_MODEL_INVALID');
   check(typeof config.code==='string'&&(/^[A-Za-z0-9_-]{43}$/.test(config.code)||config.code.length<=98304&&/^yzpair1\.[A-Za-z0-9_-]+$/.test(config.code)),'QA_PAIR_CODE_INVALID');
   const workspace=realpathSync(config.workspace),root=path.dirname(workspace),tokenRoot=path.join(root,'central-live-token-data');
   check(lstatSync(workspace).isDirectory()&&!lstatSync(config.workspace).isSymbolicLink()&&!existsSync(tokenRoot),'QA_WORKSPACE_INVALID');
@@ -138,6 +138,9 @@ try{
   let agentDiagnostic='';agent.stderr.on('data',chunk=>{agentDiagnostic=(agentDiagnostic+chunk.toString('utf8')).slice(-8192);if(/(?:^|\r?\n)Error: "?DEVICE_REVOKED"?\r?(?:\n|$)/.test(agentDiagnostic))agentTerminal=true;});
   const initialized=await request('session.initialize',{clientInfo:{name:'central-live-client-qa',version:'1'}});
   check(typeof initialized?.userAgent==='string'&&initialized.userAgent.includes(marker),'QA_RUNTIME_MARKER_MISSING');
+  const catalog=await request('model.list',{limit:100,includeHidden:false});
+  check(catalog?.data?.some(model=>model.id===config.model),'QA_MODEL_NOT_LISTED');
+  emit({phase:'model-listed',model:config.model});
   let ready=false;const onlineDeadline=Date.now()+20000;
   while(!ready&&Date.now()<onlineDeadline){try{const context=await request('device.workspace.context',{},4000);ready=context?.ok===true;}catch{}if(!ready)await delay(200);if(failure)throw Error(failure);}
   check(ready,'QA_REAL_AGENT_OFFLINE');

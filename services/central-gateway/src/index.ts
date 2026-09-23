@@ -1943,7 +1943,7 @@ function sanitizeThreadMetadata(value: unknown): unknown {
   if(value.type==="imageGeneration") return {type:"imageGeneration",id:value.id,status:value.status,failure:value.failure};
   const sanitized: JsonObject = {};
   for (const [key, nested] of Object.entries(value)) {
-    if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath", "clientProject"].includes(key)) continue;
+    if (["cwd", "workingDirectory", "workspaceRoot", "workspacePath", "clientProject", "environments", "runtimeWorkspaceRoots"].includes(key)) continue;
     if (["url", "image_url", "imageUrl"].includes(key) && typeof nested === "string" && nested.startsWith("data:image/")) continue;
     sanitized[key] = ["message", "error"].includes(key) && typeof nested === "string" ? explainRuntimeError(nested) : sanitizeThreadMetadata(nested);
   }

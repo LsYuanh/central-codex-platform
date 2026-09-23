@@ -21,7 +21,7 @@ for(const project of ['packages/agentrpc-types','services/central-gateway']) {
 }
 const staged=await stageGateway({sourceRoot:root,nodeExe:args[1],nodeLicense:args[3],appServer:args[5],seatbeltProfile:path.join(root,'harness/worker-isolated.sb')});
 const manifest=await verifyCandidate(staged.destination);
-const pin={id:staged.packageId,label:'macOS 中央服务 · Apple Silicon 测试包',version:'0.153.4',platform:'darwin',architecture:'aarch64',marker:'yuan-zhou-remote-workspace/1',qualified:false,
+const pin={id:staged.packageId,label:'macOS 中央服务 · Apple Silicon 测试包',version:manifest.upstream.version,platform:'darwin',architecture:'aarch64',marker:'yuan-zhou-remote-workspace/1',qualified:false,
   manifest:{path:'manifest.json',...await digestFile(path.join(staged.destination,'manifest.json'))},fileCount:manifest.files.length,
   node:'bin/node',entrypoint:manifest.entrypoint,appServer:'bin/codex-app-server',seatbeltProfile:'harness/worker-isolated.sb',
   blockers:['PRODUCTION_QUALIFICATION_PENDING','PROJECT_LICENSE_DISTRIBUTION_REVIEW_PENDING']};

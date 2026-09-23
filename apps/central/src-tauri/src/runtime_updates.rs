@@ -508,6 +508,8 @@ mod tests {
     fn fixture_path(temp: &tempfile::TempDir) -> PathBuf {
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o700)).unwrap();
             temp.path().canonicalize().unwrap()
         }
         #[cfg(not(unix))]
@@ -582,8 +584,8 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let original = fixture_path(&root).join("original");
         let changed = fixture_path(&root).join("changed");
-        fs::create_dir(&original).unwrap();
-        fs::create_dir(&changed).unwrap();
+        drop(platform_security::central_secret_store::lock_runtime_root(&original).unwrap());
+        drop(platform_security::central_secret_store::lock_runtime_root(&changed).unwrap());
         let selected = Selection {
             baseline_id: "qa".into(),
             active: Envelope {

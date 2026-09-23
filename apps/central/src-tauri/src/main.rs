@@ -25,6 +25,59 @@ mod service;
 mod service_process;
 mod tls;
 
+#[cfg(any(test, all(target_os = "macos", debug_assertions)))]
+fn retry_native_start<T>(
+    attempts: usize,
+    mut operation: impl FnMut() -> config::Result<T>,
+) -> config::Result<T> {
+    for attempt in 0..attempts.max(1) {
+        match operation() {
+            Err(error) if error.code == "OPERATION_BUSY" && attempt + 1 < attempts => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            result => return result,
+        }
+    }
+    unreachable!()
+}
+
+#[cfg(test)]
+mod native_start_tests {
+    use super::*;
+
+    #[test]
+    fn retries_only_temporary_contention_and_stops_at_limit() {
+        let mut calls = 0;
+        assert_eq!(
+            retry_native_start(3, || {
+                calls += 1;
+                if calls < 3 {
+                    Err(config::failure("OPERATION_BUSY"))
+                } else {
+                    Ok(42)
+                }
+            })
+            .unwrap(),
+            42
+        );
+        assert_eq!(calls, 3);
+        calls = 0;
+        let result: config::Result<()> = retry_native_start(2, || {
+            calls += 1;
+            Err(config::failure("OPERATION_BUSY"))
+        });
+        assert_eq!(result.unwrap_err().code, "OPERATION_BUSY");
+        assert_eq!(calls, 2);
+        calls = 0;
+        let result: config::Result<()> = retry_native_start(3, || {
+            calls += 1;
+            Err(config::failure("CONFIG_REVISION_CONFLICT"))
+        });
+        assert_eq!(result.unwrap_err().code, "CONFIG_REVISION_CONFLICT");
+        assert_eq!(calls, 1);
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CentralUiContext {
@@ -859,7 +912,16 @@ fn main() {
             let account_id = args[2].clone();
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let result = (|| -> config::Result<()> {
+                // UI startup reads may briefly hold the configuration lock.
+                // Keep one idempotency key across bounded contention retries.
+                let request_id = format!(
+                    "native-launch-{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos()
+                );
+                let result = retry_native_start(50, || -> config::Result<()> {
                     let root = config_root(&handle)?;
                     let saved = config::read(&root)?
                         .config
@@ -868,26 +930,19 @@ fn main() {
                         .path()
                         .resource_dir()
                         .map_err(|_| config::failure("RUNTIME_MISSING"))?;
-                    let request_id = format!(
-                        "native-launch-{}",
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_nanos()
-                    );
                     handle.state::<Arc<service::Service>>().start(
                         &root,
                         &resources,
                         service::StartRequest {
-                            request_id,
+                            request_id: request_id.clone(),
                             expected_revision: saved.revision,
-                            account_id,
+                            account_id: account_id.clone(),
                             admin_username: None,
                             admin_password: None,
                         },
                     )?;
                     Ok(())
-                })();
+                });
                 if let Err(error) = result {
                     eprintln!("Native startup: {}", error.code);
                 }

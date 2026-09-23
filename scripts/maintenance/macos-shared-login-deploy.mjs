@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Explicit operator deployment for the authorized central Mac; not a product runtime.
-import {readFile,writeFile,mkdir,copyFile,rename,open,access} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename,open,access,realpath} from 'node:fs/promises';
 import {execFileSync,spawn} from 'node:child_process';
 import {homedir} from 'node:os';
 import {request} from 'node:https';
@@ -93,14 +93,18 @@ async function start(accountId,packageId) {
 }
 async function restore(state) {
   if(!await exists(backup))throw Error('PREVIOUS_APP_NOT_BACKED_UP');
+  const snapshot=path.join(runDir,'profile-before');
+  if(!await exists(path.join(snapshot,'central-data')))throw Error('FULL_PROFILE_BACKUP_REQUIRED');
   const current=await json(path.join(formal,'running-app.json'));
   await quit(current);
   if(await exists(installed))await rename(installed,path.join(runDir,`failed-app-${Date.now()}.app`));
   await rename(backup,installed);
-  const cfg=path.join(profile,'config/central-config.json');
-  const tmp=path.join(profile,'config',`restore-${Date.now()}.json`);
-  await copyFile(path.join(runDir,'profile-before/config/central-config.json'),tmp);
-  await rename(tmp,cfg);
+  // App Server may migrate history databases. Restore the complete stopped
+  // profile, preserving both the snapshot and failed version for diagnosis.
+  const restored=path.join(runDir,`restore-profile-${Date.now()}`);
+  command('/usr/bin/ditto',[snapshot,restored]);
+  await rename(profile,path.join(runDir,`failed-profile-${Date.now()}`));
+  await rename(restored,profile);
   await save(path.join(formal,'deployment.json'),state.deployment);
   const pid=await start(state.deployment.accountId,state.config.runtimePackageId);
   await save(path.join(runDir,'rollback-result.json'),{restored:true,pid,status:await status()});
@@ -121,13 +125,21 @@ else if(action==='--verify') {
   command('/usr/bin/codesign',['--verify','--deep','--strict',installed]);
   const host=await readFile(path.join(installed,'Contents/Resources/central-service',result.packageId,'app/gateway/dist/native-service-host.js'),'utf8');
   if(!host.includes('accountUpdatesReady')||!host.includes('account/update'))throw Error('GATEWAY_UPDATE_SUPPORT_MISSING');
-  const verified={verified:true,version,packageId:result.packageId,referenceOnly:true,otherConfigurationPreserved:true,gatewaySupportsUpdates:true,status:await status()};
+  if(!host.includes('runtimeUpdatesReady')||!host.includes('update/verify'))throw Error('RUNTIME_UPDATE_SUPPORT_MISSING');
+  const resource=path.join(installed,'Contents/Resources/central-service',result.packageId);
+  const manifest=await json(path.join(resource,'manifest.json'));
+  const upstream=await json(path.join(work,'harness/upstream.json'));
+  if(manifest.upstream.version!==upstream.version||manifest.upstream.commit!==upstream.commit)throw Error('RUNTIME_VERSION_CHANGED');
+  const verified={verified:true,version,runtimeVersion:manifest.upstream.version,packageId:result.packageId,referenceOnly:true,otherConfigurationPreserved:true,gatewaySupportsUpdates:true,status:await status()};
   await save(path.join(runDir,'verification.json'),verified);console.log(JSON.stringify(verified));
 }
 else if(action==='--prepare') {
   const built=await json(path.join(work,'target/central-macos/latest-build.json'));
-  if(built.appVersion!=='0.1.1'||built.app!==path.join(work,'target/debug/bundle/macos/远舟中央管理.app'))throw Error('BUILD_CHANGED');
+  const appVersion=(await json(path.join(work,'apps/central/src-tauri/tauri.conf.json'))).version;
+  if(built.appVersion!==appVersion||built.app!==path.join(work,'target/debug/bundle/macos/远舟中央管理.app'))throw Error('BUILD_CHANGED');
   const config=(await json(path.join(profile,'config/central-config.json'))).config;
+  // This deployment snapshots the full profile, including all persisted history.
+  if(await realpath(config.dataDirectory)!==path.join(await realpath(profile),'central-data'))throw Error('EXTERNAL_DATA_BACKUP_REQUIRED');
   const deployment=await json(path.join(formal,'deployment.json'));
   const running=await json(path.join(formal,'running-app.json'));
   if(running.installed!==installed||!alive(running.pid))throw Error('FORMAL_APP_NOT_RUNNING');

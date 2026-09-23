@@ -1,8 +1,8 @@
 diff --git a/codex-rs/http-client/src/lib.rs b/codex-rs/http-client/src/lib.rs
-index cb7f120..34043be 100644
+index f9cdb1f..dffe9a2 100644
 --- a/codex-rs/http-client/src/lib.rs
 +++ b/codex-rs/http-client/src/lib.rs
-@@ -10,6 +10,8 @@ mod route_aware_client_pool;
+@@ -11,6 +11,8 @@ mod route_aware_client_pool;
  mod route_aware_redirect;
  mod tls_backend_fallback;
  mod transport;
@@ -12,10 +12,10 @@ index cb7f120..34043be 100644
  pub use crate::chatgpt_cloudflare_cookies::with_chatgpt_cloudflare_cookie_store;
  pub use crate::chatgpt_hosts::is_allowed_chatgpt_host;
 diff --git a/codex-rs/http-client/src/transport.rs b/codex-rs/http-client/src/transport.rs
-index 337b1e8..4e249d6 100644
+index 13bddd0..9bf3cde 100644
 --- a/codex-rs/http-client/src/transport.rs
 +++ b/codex-rs/http-client/src/transport.rs
-@@ -36,20 +36,40 @@ pub trait HttpTransport: Send + Sync {
+@@ -42,20 +42,40 @@ pub trait HttpTransport: Send + Sync {
  #[derive(Clone, Debug)]
  pub struct ReqwestTransport {
      client: HttpClient,
@@ -57,7 +57,7 @@ index 337b1e8..4e249d6 100644
          let prepared = req.prepare_body_for_send().map_err(TransportError::Build)?;
  
          let Request {
-@@ -77,6 +97,17 @@ impl ReqwestTransport {
+@@ -84,6 +104,17 @@ impl ReqwestTransport {
          Ok(builder)
      }
  
@@ -73,11 +73,11 @@ index 337b1e8..4e249d6 100644
 +    }
 +
      fn map_error(err: reqwest::Error) -> TransportError {
+         let err = err.without_url();
          if err.is_connect() {
-             TransportError::Connection(err.without_url())
-@@ -116,7 +147,10 @@ impl HttpTransport for ReqwestTransport {
- 
+@@ -125,7 +156,10 @@ impl HttpTransport for ReqwestTransport {
          let url = req.url.clone();
+         let response_body_limit_bytes = req.response_body_limit_bytes;
          let builder = self.build(req)?;
 -        let resp = builder.send().await.map_err(Self::map_error)?;
 +        let resp = builder
@@ -86,10 +86,10 @@ index 337b1e8..4e249d6 100644
 +            .map_err(|err| self.map_send_error(err))?;
          let status = resp.status();
          let headers = resp.headers().clone();
-         let bytes = resp.bytes().await.map_err(Self::map_error)?;
-@@ -141,7 +175,10 @@ impl HttpTransport for ReqwestTransport {
- 
+         let bytes = match response_body_limit_bytes {
+@@ -160,7 +194,10 @@ impl HttpTransport for ReqwestTransport {
          let url = req.url.clone();
+         let response_body_limit_bytes = req.response_body_limit_bytes;
          let builder = self.build(req)?;
 -        let resp = builder.send().await.map_err(Self::map_error)?;
 +        let resp = builder
@@ -100,10 +100,10 @@ index 337b1e8..4e249d6 100644
          let headers = resp.headers().clone();
          if !status.is_success() {
 diff --git a/codex-rs/core/src/client.rs b/codex-rs/core/src/client.rs
-index 9f03c93..1d44ff4 100644
+index 1c5b493..30755f7 100644
 --- a/codex-rs/core/src/client.rs
 +++ b/codex-rs/core/src/client.rs
-@@ -1047,6 +1047,10 @@ impl ModelClient {
+@@ -1019,6 +1019,10 @@ impl ModelClient {
      ///
      /// WebSocket use is controlled by provider capability and session-scoped fallback state.
      pub fn responses_websocket_enabled(&self) -> bool {
@@ -114,12 +114,13 @@ index 9f03c93..1d44ff4 100644
          if !self.state.provider.info().supports_websockets
              || self.state.disable_websockets.load(Ordering::Relaxed)
          {
-@@ -1127,6 +1131,27 @@ impl ModelClient {
+@@ -1177,6 +1181,28 @@ impl ModelClient {
          endpoint: &str,
+         redirect_policy: ClientRedirectPolicy,
      ) -> Result<ReqwestTransport> {
-         let request_url = api_provider.url_for_path(endpoint);
 +        #[cfg(windows)]
 +        {
++            let request_url = api_provider.url_for_path(endpoint);
 +            if crate::remote_workspace::enabled()
 +                && (api_provider.retry.max_attempts != 0
 +                    || self.state.provider.info().stream_max_retries() != 0)
@@ -139,10 +140,10 @@ index 9f03c93..1d44ff4 100644
 +                return Ok(ReqwestTransport::from_model_pipe_http_client(client));
 +            }
 +        }
-         let client = create_client_for_route(
-             &self.http_client_factory,
-             &request_url,
-@@ -2419,6 +2444,10 @@ async fn handle_unauthorized(
+         let redirect_policy = if api_provider
+             .headers
+             .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
+@@ -2540,6 +2566,10 @@ async fn handle_unauthorized(
      event_sender: Option<&Sender<ProtocolEvent>>,
      turn_id: Option<&str>,
  ) -> Result<UnauthorizedRecoveryExecution> {
@@ -154,23 +155,10 @@ index 9f03c93..1d44ff4 100644
      if !*provider_auth_recovery_attempted {
          *provider_auth_recovery_attempted = true;
 diff --git a/codex-rs/codex-api/src/sse/responses.rs b/codex-rs/codex-api/src/sse/responses.rs
-index abef246..de45b74 100644
+index 3f867d5..74bf3d0 100644
 --- a/codex-rs/codex-api/src/sse/responses.rs
 +++ b/codex-rs/codex-api/src/sse/responses.rs
-@@ -574,7 +574,11 @@ async fn process_sse_with_treatment(
- 
-     loop {
-         let start = Instant::now();
--        let response = timeout(idle_timeout, stream.next()).await;
-+        let response = tokio::select! {
-+            biased;
-+            _ = tx_event.closed() => return,
-+            response = timeout(idle_timeout, stream.next()) => response,
-+        };
-         if let Some(t) = telemetry.as_ref() {
-             t.on_sse_poll(&response, start.elapsed());
-         }
-@@ -818,6 +822,63 @@ mod tests {
+@@ -843,6 +843,63 @@ mod tests {
          Duration::from_millis(1000)
      }
  

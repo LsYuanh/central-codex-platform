@@ -60,9 +60,11 @@ changes.set('codex-rs/core/src/client.rs',text=> {
         if crate::remote_workspace::enabled() {
             return false;
         }`);
-  text=replace(text,'        let request_url = api_provider.url_for_path(endpoint);',`        let request_url = api_provider.url_for_path(endpoint);
+  text=replace(text,'        redirect_policy: ClientRedirectPolicy,\n    ) -> Result<ReqwestTransport> {',`        redirect_policy: ClientRedirectPolicy,
+    ) -> Result<ReqwestTransport> {
         #[cfg(windows)]
         {
+            let request_url = api_provider.url_for_path(endpoint);
             if crate::remote_workspace::enabled()
                 && (api_provider.retry.max_attempts != 0
                     || self.state.provider.info().stream_max_retries() != 0)
@@ -86,11 +88,8 @@ changes.set('codex-rs/core/src/client.rs',text=> {
     let debug = extract_response_debug_context(&transport);`);
 });
 changes.set('codex-rs/codex-api/src/sse/responses.rs',text=> {
-  text=replace(text,'        let response = timeout(idle_timeout, stream.next()).await;',`        let response = tokio::select! {
-            biased;
-            _ = tx_event.closed() => return,
-            response = timeout(idle_timeout, stream.next()) => response,
-        };`);
+  // Upstream 0.156.1 includes cancellation; retain our regression test.
+  if(!text.includes('_ = tx_event.closed() => return,')) throw Error('Upstream SSE cancellation missing');
   return replace(text,'    #[tokio::test]\n    async fn parses_items_and_completed()',`    #[tokio::test]
     async fn receiver_drop_releases_silent_sse_body_without_waiting_idle_timeout() {
         use std::pin::Pin;

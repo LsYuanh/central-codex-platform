@@ -14,7 +14,8 @@ export DEVELOPER_DIR=/Library/Developer/CommandLineTools
 # Select the reviewed Rust toolchain through PATH before invoking this script.
 rustc --version
 node "$HARNESS_DIR/fetch-source.mjs" "$HARNESS_BUILD_ROOT/source"
-cd "$HARNESS_BUILD_ROOT/source/codex-3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs"
+HARNESS_COMMIT=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1])).commit" "$HARNESS_DIR/upstream.json")
+cd "$HARNESS_BUILD_ROOT/source/codex-$HARNESS_COMMIT/codex-rs"
 cargo check -p codex-app-server --locked
 cargo build -p codex-app-server --bin codex-app-server --locked
 shasum -a 256 "$CARGO_TARGET_DIR/debug/codex-app-server"

@@ -7,6 +7,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 if(process.platform!=='win32')throw Error('WINDOWS_REQUIRED');
+const model=process.env.CENTRAL_QA_MODEL??'gpt-6-astra';
+if(!['gpt-6-astra','gpt-6-sol'].includes(model))throw Error('INVALID_QA_MODEL');
 const remote='/Users/operator/central-codex-platform';
 // The deployed Mac checkout is migrated separately from this local workspace.
 const remoteLayout=process.env.CENTRAL_REMOTE_SOURCE_LAYOUT??'legacy';
@@ -36,7 +38,7 @@ const pair=management(bundled?'pair-bundle':'pair');
 // for the observed sub-second central clock lead without changing code expiry.
 if(bundled)await new Promise(resolve=>setTimeout(resolve,2000));
 const child=spawn(process.execPath,[path.join(root,'scripts/maintenance/central-live-client-qa.mjs'),'--formal-4510'],{cwd:root,stdio:['pipe','pipe','pipe'],windowsHide:true});
-const config={gateway:'wss://192.0.2.10:4510/ws',caPath:bundled?'':path.join(root,'target/central-macos/formal-ca.pem'),code:pair.code,agentBinary:legacyWorkspace?path.resolve(root,'artifacts/client-paths-20260914/windows-installed-before/local-agent.exe'):installed?path.join(process.env.LOCALAPPDATA,'远舟/local-agent.exe'):path.join(root,'target/debug/local-agent.exe'),helperBinary:path.join(root,'target/debug/examples/central-live-client.exe'),workspace:path.join(output,'workspace'),output:path.join(output,'client-result.json'),model:'gpt-6-astra',legacyWorkspace};
+const config={gateway:'wss://192.0.2.10:4510/ws',caPath:bundled?'':path.join(root,'target/central-macos/formal-ca.pem'),code:pair.code,agentBinary:legacyWorkspace?path.resolve(root,'artifacts/client-paths-20260914/windows-installed-before/local-agent.exe'):installed?path.join(process.env.LOCALAPPDATA,'远舟/local-agent.exe'):path.join(root,'target/debug/local-agent.exe'),helperBinary:path.join(root,'target/debug/examples/central-live-client.exe'),workspace:path.join(output,'workspace'),output:path.join(output,'client-result.json'),model,legacyWorkspace};
 if(projects)config.projects=true;
 if(skills)config.skills=true;
 if(creator)config.creator=creator;

@@ -23,7 +23,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(q.method==='thread/resume')result={thread:{id:q.params.threadId}};
  if(q.method==='thread/start'||q.method==='thread/resume')lastInstructions=q.params.developerInstructions;
  if(q.method==='thread/start')lastTools=q.params.dynamicTools;
- if(q.method==='thread/read')result={thread:{id:q.params.threadId},lastTool,lastInstructions,lastTools};
+ if(q.method==='thread/read')result={thread:{id:q.params.threadId,environments:[{environmentId:'central',cwd:'/central/private',runtimeWorkspaceRoots:['/central/private']}],runtimeWorkspaceRoots:['/central/private']},lastTool,lastInstructions,lastTools};
  if(q.method==='turn/start')result={turn:{id:'turn-'+ ++next}};
  process.stdout.write(JSON.stringify({id:q.id,result})+'\\n');
  if(q.method==='turn/start'&&q.params.input?.[0]?.text==='patch')process.stdout.write(JSON.stringify({id:'patch-tool-'+next,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:'device_workspace_apply_patch',arguments:{patch:'*** Begin Patch\\n*** Add File: example.txt\\n+hello\\n*** End Patch'}}})+'\\n');
@@ -60,6 +60,9 @@ try{
  assert.equal(migrated.users.owner[0].summary.remoteWorkspace.policy,'remote-workspace/v1');
  const threadId=(await request('conversation.create')).thread.id;
  const policy=await request('conversation.read',{threadId});
+ assert.equal(policy.thread.environments,undefined);
+ assert.equal(policy.thread.runtimeWorkspaceRoots,undefined);
+ assert(!JSON.stringify(policy.thread).includes('/central/private'));
  assert.match(policy.lastInstructions,legacy?/Legacy workspace client/:/Client path policy/);
  assert.match(policy.lastTools.find(t=>t.name==='device_exec').description,legacy?/cwd must be omitted or workspace-relative/:/cwd accepts an absolute client directory/);
  assert.match(policy.lastTools.find(t=>t.name==='device_workspace_read_text').inputSchema.properties.path.description,legacy?/Workspace-relative/:/Absolute client path/);
