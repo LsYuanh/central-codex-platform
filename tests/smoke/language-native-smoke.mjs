@@ -10,6 +10,10 @@ import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 const exe=process.env.LANGUAGE_NATIVE_EXE;assert(exe,'Set LANGUAGE_NATIVE_EXE to the isolated QA executable');
 const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+async function chooseLanguage(page, label) {
+ await page.locator('#desktop-language').click();
+ await page.getByRole('option',{name:label,exact:true}).click();
+}
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/language-native-'));
 const server=await createServer({root:resolve('apps/desktop'),configFile:false,plugins:[react()],cacheDir:join(output,'.vite'),server:{host:'127.0.0.1',port:1423,strictPort:true,fs:{allow:[resolve('.')]}}});await server.listen();
 let child,browser;
@@ -32,14 +36,16 @@ async function stop(){await browser?.close();browser=undefined;if(child&&child.e
 try{
  let page=await start();
  assert.equal(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:app|identifier')),'com.centralcodex.harnessqa.language');
- await page.locator('#desktop-language').getByText('简体中文',{exact:true}).click();
+ await chooseLanguage(page,'简体中文');
  await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
- await page.locator('#desktop-language').getByText('English',{exact:true}).click();await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
+ await chooseLanguage(page,'English');await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('desktop_language')),'en');
  await page.screenshot({path:join(output,'native-en-light.png')});
+ await page.locator('#desktop-language').click();await page.screenshot({path:join(output,'native-menu-light.png')});await page.keyboard.press('Escape');
  await page.getByRole('radio',{name:'Dark',exact:true}).check();await page.screenshot({path:join(output,'native-en-dark.png')});
- await stop();page=await start();assert.equal(await page.locator('#desktop-language input:checked').inputValue(),'en');
- await page.locator('#desktop-language').getByText('简体中文',{exact:true}).click();await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
+ await page.locator('#desktop-language').click();await page.screenshot({path:join(output,'native-menu-dark.png')});await page.keyboard.press('Escape');
+ await stop();page=await start();assert.equal(await page.locator('#desktop-language').innerText(),'English');
+ await chooseLanguage(page,'简体中文');await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
  await page.getByRole('radio',{name:'浅色',exact:true}).check();await page.screenshot({path:join(output,'native-zh-light.png')});
  await writeFile(join(output,'result.json'),JSON.stringify({passed:true,checks:['actual Tauri IPC','Chinese/English UI','native preference survives process restart','light/dark screenshots'],limits:['system picker and tray menu require native visual inspection']},null,2));
  console.log(`LANGUAGE_NATIVE_OK ${output}`);
