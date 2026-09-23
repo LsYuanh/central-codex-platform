@@ -1248,6 +1248,9 @@ a {
   color: var(--ink-muted);
 }
 
+.model-picker-fast { display:flex; align-items:center; flex:none; color:var(--ink); }
+.model-picker-fast .ui-icon { width:12px; height:12px; fill:currentColor; stroke-width:1; }
+
 .model-picker-chevron {
   width: 7px;
   height: 7px;
@@ -1263,10 +1266,10 @@ a {
   bottom: calc(100% + 12px);
   right: 0;
   z-index: 30;
-  width: min(320px,calc(100vw - 36px));
+  width: min(260px,calc(100vw - 36px));
   max-height: min(440px,60dvh);
   overflow: auto;
-  padding: 8px;
+  padding: 6px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--ink);
@@ -1278,10 +1281,11 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
-  padding: 8px;
-  border-radius: 8px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border-radius: 6px;
   font-size: 13px;
+  line-height: 20px;
   list-style: none;
   cursor: pointer;
 }
@@ -1291,7 +1295,8 @@ a {
 }
 
 .model-picker-row-value {
-  max-width: 165px;
+  min-width: 0;
+  max-width: 145px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1308,7 +1313,7 @@ a {
 }
 
 .model-picker-submenu-panel {
-  padding: 4px 4px 10px 12px;
+  padding: 2px 0 4px 8px;
 }
 
 .model-picker-submenu:not([open])>.model-picker-submenu-panel {
@@ -1321,9 +1326,14 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
   text-align: left;
   font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
   color: var(--ink);
   background: transparent;
 }
@@ -1345,6 +1355,10 @@ a {
 
 .model-picker-error {
   color: var(--danger);
+}
+
+@media (pointer: coarse) {
+  .model-picker-row,.model-picker-submenu-panel button { min-height:44px; }
 }
 
 /* Settings: shared group surfaces and inset dividers. */
@@ -2975,7 +2989,7 @@ button.composer-remove-button { display: grid; place-items: center; flex: none; 
   }
   .model-picker-popover {
     right: -44px;
-    width: min(320px,calc(100vw - 48px));
+    width: min(260px,calc(100vw - 48px));
   }
   .settings-content {
     padding: 0 16px 32px;

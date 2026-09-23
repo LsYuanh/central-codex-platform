@@ -1479,6 +1479,9 @@ export default function App() {
   const modelLabel = selectedModel?.displayName || selectedModel?.model || appModel || t("服务端默认模型");
   const reasoningOptions = selectedModel?.supportedReasoningEfforts ?? [];
   const serviceTierOptions = selectedModel?.serviceTiers ?? [];
+  const selectedServiceTier = serviceTierOptions.find(tier => tier.id === appServiceTier);
+  const acceleratedSpeed = selectedServiceTier && ["priority", "fast"].includes(selectedServiceTier.id);
+  const speedIndicatorLabel = acceleratedSpeed ? t("加速模式：{{p0}}", { p0: selectedServiceTier.name }) : "";
   const visibleExecutions = executions.filter((execution) => !execution.threadId || execution.threadId === threadId);
   const threadTimings = threadId ? timingStoreRef.current?.forThread(threadId) ?? [] : [];
   const conversationGroups = groupConversation([...messages, ...visibleExecutions.filter(execution => !messages.some(row => row.executionId === execution.requestId)).map(execution => ({
@@ -1680,7 +1683,7 @@ export default function App() {
                   <div className="composer-footer">
                     {mode === "central-gateway" && attachments.pickerButton}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
-                      <summary aria-label={t("切换模型、推理强度和速度")}><span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-chevron" aria-hidden="true" /></summary>
+                      <summary aria-label={[t("切换模型、推理强度和速度"), speedIndicatorLabel].filter(Boolean).join(". ")}>{acceleratedSpeed && <span className="model-picker-fast" title={speedIndicatorLabel} aria-hidden="true"><UiIcon name="bolt" /></span>}<span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-chevron" aria-hidden="true" /></summary>
                       <div className="model-picker-popover">
                         <details className="model-picker-submenu" open={openModelSubmenu === "model"}>
                           <summary className="model-picker-row" onClick={(event) => { event.preventDefault(); setOpenModelSubmenu((current) => current === "model" ? null : "model"); }}><span>{t("模型")}</span><span className="model-picker-row-value">{modelLabel}</span><span className="model-picker-row-arrow">›</span></summary>
@@ -1688,7 +1691,7 @@ export default function App() {
                         </details>
                         <details className="model-picker-submenu" open={openModelSubmenu === "effort"}>
                           <summary className="model-picker-row" onClick={(event) => { event.preventDefault(); setOpenModelSubmenu((current) => current === "effort" ? null : "effort"); }}><span>{t("推理强度")}</span><span className="model-picker-row-value">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-row-arrow">›</span></summary>
-                          <div className="model-picker-submenu-panel"><span className="model-picker-submenu-title">{t("推理强度")}</span>{reasoningOptions.length === 0 ? <span className="model-picker-hint">{t("当前模型不提供推理强度选项")}</span> : reasoningOptions.map((option) => <button type="button" key={option.reasoningEffort} className={appEffort === option.reasoningEffort ? "selected" : ""} onClick={() => setAppEffort(option.reasoningEffort)}><span>{option.reasoningEffort}</span>{appEffort === option.reasoningEffort && <span>✓</span>}</button>)}<small>{t("更快消耗使用额度")}</small></div>
+                          <div className="model-picker-submenu-panel"><span className="model-picker-submenu-title">{t("推理强度")}</span>{reasoningOptions.length === 0 ? <span className="model-picker-hint">{t("当前模型不提供推理强度选项")}</span> : reasoningOptions.map((option) => <button type="button" key={option.reasoningEffort} className={appEffort === option.reasoningEffort ? "selected" : ""} onClick={() => setAppEffort(option.reasoningEffort)}><span>{option.reasoningEffort}</span>{appEffort === option.reasoningEffort && <span>✓</span>}</button>)}</div>
                         </details>
                         <details className="model-picker-submenu" open={openModelSubmenu === "speed"}>
                           <summary className="model-picker-row" onClick={(event) => { event.preventDefault(); setOpenModelSubmenu((current) => current === "speed" ? null : "speed"); }}><span>{t("速度")}</span><span className="model-picker-row-value">{serviceTierOptions.find((tier) => tier.id === appServiceTier)?.name || t("标准")}</span><span className="model-picker-row-arrow">›</span></summary>

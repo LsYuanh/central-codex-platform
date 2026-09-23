@@ -173,7 +173,7 @@ export const en = {
   "正在读取中央模型列表…": "Loading central model list…",
   "推理强度": "Reasoning effort",
   "当前模型不提供推理强度选项": "This model has no reasoning effort options",
-  "更快消耗使用额度": "Uses your allowance faster",
+  "加速模式：{{p0}}": "Accelerated mode: {{p0}}",
   "速度": "Speed",
   "标准": "Standard",
   "当前模型不提供额外速度选项": "This model has no additional speed options",

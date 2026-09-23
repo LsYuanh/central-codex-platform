@@ -27,6 +27,7 @@ const paths = {
   sun: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5",
   moon: "M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z",
   check: "m5 12 4 4L19 6",
+  bolt: "m13 2-9 12h7l-1 8 10-12h-7l1-8Z",
   chevronDown: "m6 9 6 6 6-6",
   arrowDown: "M12 4v16m-7-7 7 7 7-7",
   archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
