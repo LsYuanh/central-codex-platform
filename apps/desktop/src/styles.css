@@ -1341,8 +1341,10 @@ a {
   background: var(--hover);
 }
 
-.model-picker-submenu-panel button.selected>span:last-child {
-  color: var(--accent);
+.model-picker-submenu-panel button > .ui-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-muted);
 }
 
 .model-picker-hint,.model-picker-error,.model-picker-submenu-panel small {
