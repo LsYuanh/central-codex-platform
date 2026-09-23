@@ -30,6 +30,8 @@ import { ThemePicker } from "./ThemePicker";
 import { ConnectionModePicker, type TestMode } from "./ConnectionModePicker";
 import { ThreadActions } from "./ThreadActions";
 import { ThreadDeleteDialog } from "./ThreadDeleteDialog";
+import { ArchivedChats } from "./ArchivedChats";
+import { loadArchivedChats } from "./archived-chats";
 import { useThreadIdCopy } from "./useThreadIdCopy";
 import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
@@ -191,7 +193,11 @@ export default function App() {
   const sidebarOrder = useSidebarOrganization(projectScope, threads, projectService.projects);
   const threadDrag = useThreadDrag(projectScope, sidebarOrder.move);
   const [archivedThreads, setArchivedThreads] = useState<ThreadSummary[]>([]);
-  const [deleteTarget, setDeleteTarget] = useState<{ thread: ThreadSummary; client: CodexiaGatewayAdapter | undefined; trigger: HTMLElement }>();
+  const [deleteTarget, setDeleteTarget] = useState<{ threads: ThreadSummary[]; all: boolean; completed: Set<string>; client: CodexiaGatewayAdapter | undefined; trigger: HTMLElement }>();
+  const [archiveComplete, setArchiveComplete] = useState(false);
+  const [archiveError, setArchiveError] = useState("");
+  const [archiveNotice, setArchiveNotice] = useState("");
+  const [deleteProgress, setDeleteProgress] = useState("");
   const archivedRefreshRef = useRef<HTMLButtonElement>(null);
   const [threadBusy, setThreadBusy] = useState<string | undefined>();
   const [renameTarget, setRenameTarget] = useState<ThreadSummary | undefined>();
@@ -848,6 +854,9 @@ export default function App() {
     setThreadsLoading(false);
     archivedThreadsLoadingRef.current = false;
     setArchivedThreadsLoading(false);
+    setArchiveComplete(false);
+    setArchiveError("");
+    setArchiveNotice("");
     setDeviceState("offline");
     setThreads([]);
     setArchivedThreads([]);
@@ -888,20 +897,24 @@ export default function App() {
     if (!codexia || appState !== "online" || archivedThreadsLoadingRef.current) return;
     archivedThreadsLoadingRef.current = true;
     setArchivedThreadsLoading(true);
+    setArchiveComplete(false);
+    setArchiveError("");
+    setArchiveNotice("");
     try {
-      const response = await codexia.threadList({ limit: 100, sortKey: "updated_at", archived: true });
-      const fetched = threadSummariesFromResult(response.result)
-        .filter((thread) => !restoredThreadIdsRef.current.has(thread.id) && (thread.archived || archivedThreadIdsRef.current.has(thread.id)))
-        .map((thread) => ({ ...thread, archived: true }));
+      const fetched = (await loadArchivedChats(codexia, () => codexiaRef.current === codexia, threadSummariesFromResult))
+        .filter((thread) => !restoredThreadIdsRef.current.has(thread.id));
       setArchivedThreads((current) => {
         const fetchedIds = new Set(fetched.map((thread) => thread.id));
         return [...fetched, ...current.filter((thread) => archivedThreadIdsRef.current.has(thread.id) && !fetchedIds.has(thread.id))];
       });
+      setArchiveComplete(true);
     } catch (error) {
-      setAppError(error instanceof Error ? error.message : String(error));
+      if (codexiaRef.current === codexia) setArchiveError(error instanceof Error ? error.message : String(error));
     } finally {
-      archivedThreadsLoadingRef.current = false;
-      setArchivedThreadsLoading(false);
+      if (codexiaRef.current === codexia) {
+        archivedThreadsLoadingRef.current = false;
+        setArchivedThreadsLoading(false);
+      }
     }
   }, [appState]);
 
@@ -983,27 +996,31 @@ export default function App() {
     const codexia = codexiaRef.current;
     if (!codexia || !thread.archived) return;
     setThreadBusy(`${thread.id}:unarchive`);
-    setAppError("");
+    setArchiveError("");
+    setArchiveNotice("");
     try {
       try {
         await codexia.threadUnarchive(thread.id);
       } catch (error) {
         if (!isMissingRolloutError(error)) throw error;
       }
+      if (codexiaRef.current !== codexia) return;
       archivedThreadIdsRef.current.delete(thread.id);
       restoredThreadIdsRef.current.add(thread.id);
       setArchivedThreads((current) => current.filter((item) => item.id !== thread.id));
       setThreads((current) => [{ ...thread, archived: false }, ...current.filter((item) => item.id !== thread.id)]);
+      setArchiveNotice("已取消归档，可在主页继续聊天。");
     } catch (error) {
-      setAppError(error instanceof Error ? error.message : String(error));
+      if (codexiaRef.current === codexia) setArchiveError(error instanceof Error ? error.message : String(error));
     } finally {
-      setThreadBusy(undefined);
+      if (codexiaRef.current === codexia) setThreadBusy(undefined);
     }
   }, []);
 
   const deleteThread = useCallback(async (thread: ThreadSummary, expectedClient: CodexiaGatewayAdapter | undefined) => {
     const codexia = codexiaRef.current;
     if (!codexia || codexia !== expectedClient) throw new Error("连接已变化，请关闭弹窗并刷新列表后重试。");
+    if (!codexia.transport.connected) throw new Error("中央连接已断开，请恢复连接并核对列表后重试。");
     if (runtimeWorkRef.current.has(`turn:${thread.id}`)) {
       throw new Error("运行中的对话不能删除，请先等待完成或中断该对话。");
     }
@@ -1015,15 +1032,39 @@ export default function App() {
       } catch (error) {
         if (!isMissingRolloutError(error)) throw error;
       }
+      if (codexiaRef.current !== codexia) throw new Error("连接已变化，请关闭弹窗并刷新列表核对删除结果。");
       timingStoreRef.current?.removeThread(thread.id);
       refreshTimings();
       archivedThreadIdsRef.current.delete(thread.id);
       restoredThreadIdsRef.current.delete(thread.id);
       setArchivedThreads((current) => current.filter((item) => item.id !== thread.id));
     } finally {
-      setThreadBusy(undefined);
+      if (codexiaRef.current === codexia) setThreadBusy(undefined);
     }
   }, []);
+
+  const confirmArchiveDelete = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    let failed = 0;
+    let firstError = "";
+    setArchiveNotice("");
+    for (const thread of target.threads) {
+      if (target.completed.has(thread.id)) continue;
+      setDeleteProgress(`已删除 ${target.completed.size} / ${target.threads.length} 个聊天`);
+      try {
+        await deleteThread(thread, target.client);
+        target.completed.add(thread.id);
+      } catch (error) {
+        failed++;
+        firstError ||= error instanceof Error ? error.message : String(error);
+        if (codexiaRef.current !== target.client || !target.client?.transport.connected) break;
+      }
+    }
+    setDeleteProgress(`已删除 ${target.completed.size} / ${target.threads.length} 个聊天`);
+    if (failed) throw new Error(target.all ? `已删除 ${target.completed.size} 个，${target.threads.length - target.completed.size} 个未删除。${firstError}` : firstError);
+    setArchiveNotice(`已删除 ${target.completed.size} 个已归档聊天。`);
+  };
 
   const connectAppServer = useCallback(async (overrideUrl?: string, preferredThreadId?: string) => {
     if (connectionInFlightRef.current) return false;
@@ -1558,7 +1599,7 @@ export default function App() {
             <nav className="settings-nav" aria-label="设置分类">
               <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="sliders" /><strong>常规与连接</strong></button>
               <button className={settingsSection === "skills" ? "active" : ""} onClick={() => openSettings("skills")}><UiIcon name="skill" /><strong>我的技能</strong></button>
-              <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="chat" /><strong>对话管理</strong></button>
+              <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="archive" /><strong>已归档聊天</strong></button>
               <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => openSettings("diagnostics")}><UiIcon name="activity" /><strong>诊断</strong></button>
               <button className={settingsSection === "updates" ? "active" : ""} onClick={() => openSettings("updates")}><UiIcon name="update" /><strong>版本更新{clientUpdate.release.version ? " · 有更新" : ""}</strong></button>
             </nav>
@@ -1690,7 +1731,7 @@ export default function App() {
           </div>
         ) : (
           <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : settingsSection === "diagnostics" ? " diagnostics-page" : ""}`}>
-            {settingsSection !== "skills" && settingsSection !== "updates" && <header className="settings-header"><div><h1>{ settingsSection === "connection" ? "常规与连接" : settingsSection === "conversations" ? "对话管理" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : settingsSection === "conversations" ? "查看和管理你的历史对话。" : "查看连接与运行信息，定位问题。"}</p></div>{settingsSection === "conversations" && <button ref={archivedRefreshRef} className="button-secondary settings-refresh-button" aria-label="刷新归档对话" disabled={appState !== "online" || archivedThreadsLoading} onClick={() => void refreshArchivedThreads()}><UiIcon name="refresh" />{archivedThreadsLoading ? "刷新中…" : "刷新"}</button>}</header>}
+            {settingsSection !== "skills" && settingsSection !== "updates" && settingsSection !== "conversations" && <header className="settings-header"><div><h1>{settingsSection === "connection" ? "常规与连接" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
@@ -1716,25 +1757,12 @@ export default function App() {
               )}
 
               {settingsSection === "conversations" && (
-                <div className="settings-content archived-settings-content">
-                  <section className="settings-section">
-                    <div className="settings-section-heading">
-                      <h2>归档对话 <span className="archived-thread-count">· {archivedThreadsLoading && archivedThreads.length === 0 ? "…" : appState === "online" || archivedThreads.length > 0 ? archivedThreads.length : "—"}</span></h2>
-                      <p>恢复后回到主页，永久删除不可撤销。</p>
-                    </div>
-                    <div className="archived-thread-list" role={archivedThreads.length > 0 ? "list" : "status"} aria-label="归档对话" aria-busy={archivedThreadsLoading}>
-                      {archivedThreadsLoading && archivedThreads.length === 0 ? <div className="settings-empty-state">正在加载归档对话…</div> : archivedThreads.length === 0 ? <div className="settings-empty-state">{appState === "online" ? "暂无归档对话" : "连接后显示归档对话"}</div> : archivedThreads.map((thread) => {
-                        const busy = threadBusy?.startsWith(`${thread.id}:`);
-                        const title = threadDisplayTitle(thread);
-                        return <div className="archived-thread-row" role="listitem" key={thread.id}>
-                          <div className="archived-thread-copy"><strong title={title}>{title}</strong>{thread.preview?.trim() && thread.preview.trim() !== title && <small title={thread.preview}>{thread.preview}</small>}</div>
-                          <div className="archived-thread-actions"><button className="button-quiet archived-thread-copy-id" title="复制对话 ID" aria-label={`复制对话 ID：${title}`} onClick={() => threadIdCopy.copy(thread.id)}><UiIcon name="copy" /></button>{busy ? <span className="archived-thread-progress" role="status">处理中…</span> : <><button className="button-secondary" aria-label={`恢复对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void restoreThread(thread)}>恢复</button><button className="button-quiet archived-thread-delete" title="永久删除" aria-label={`永久删除对话：${title}`} disabled={Boolean(threadBusy)} onClick={event => setDeleteTarget({ thread, client: codexiaRef.current, trigger: event.currentTarget })}><UiIcon name="trash" /></button></>}</div>
-                        </div>;
-                      })}
-                    </div>
-                    {appError && <p className="settings-error" role="alert">{appError}</p>}
-                  </section>
-                </div>
+                <ArchivedChats key={projectScope} threads={archivedThreads} projects={projectService.projects} groupFor={sidebarOrder.group}
+                  online={appState === "online"} loading={archivedThreadsLoading} complete={archiveComplete} busy={threadBusy}
+                  error={archiveError} notice={archiveNotice} refreshRef={archivedRefreshRef} refresh={() => void refreshArchivedThreads()}
+                  restore={thread => void restoreThread(thread)} copyId={id => threadIdCopy.copy(id)}
+                  remove={(thread, trigger) => { setDeleteProgress(""); setDeleteTarget({threads:[thread], all:false, completed:new Set(), client:codexiaRef.current, trigger}); }}
+                  removeAll={trigger => { setDeleteProgress(""); setDeleteTarget({threads:[...archivedThreads], all:true, completed:new Set(), client:codexiaRef.current, trigger}); }} />
               )}
 
               {settingsSection === "updates" && <ClientUpdatePanel update={clientUpdate} version={runtimeVersion} busy={updateBusy} enabled={updateEnabled} />}
@@ -1767,8 +1795,8 @@ export default function App() {
           <span><strong>{notice.message}</strong><small>{threadDisplayTitle(threads.find((thread) => thread.id === notice.threadId))}</small></span><span>查看</span>
         </button>)}
       </div>}
-      {deleteTarget && <ThreadDeleteDialog title={threadDisplayTitle(deleteTarget.thread)} trigger={deleteTarget.trigger}
-        fallbackFocus={() => archivedRefreshRef.current} onConfirm={() => deleteThread(deleteTarget.thread, deleteTarget.client)} onClose={() => setDeleteTarget(undefined)} />}
+      {deleteTarget && <ThreadDeleteDialog title={deleteTarget.all ? undefined : threadDisplayTitle(deleteTarget.threads[0])} count={deleteTarget.all ? deleteTarget.threads.length : undefined} progress={deleteProgress} trigger={deleteTarget.trigger}
+        fallbackFocus={() => archivedRefreshRef.current} onConfirm={confirmArchiveDelete} onClose={() => setDeleteTarget(undefined)} />}
       {pendingNavigation && <dialog ref={unsavedDialogRef} className="unsaved-dialog" aria-labelledby="unsaved-title" onCancel={event => { event.preventDefault(); if (!configApplying) setPendingNavigation(undefined); }}>
         <h2 id="unsaved-title">连接配置尚未保存</h2>
         <p>保存并应用后生效。你也可以放弃修改，或返回继续编辑。</p>
