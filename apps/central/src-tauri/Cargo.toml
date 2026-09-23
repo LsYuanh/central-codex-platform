@@ -23,6 +23,9 @@ platform-security = { path = "../../../crates/platform-security" }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }
 zeroize = "1"
 base64 = "0.22"
+minisign-verify = "0.2.5"
+flate2 = "1"
+tar = "0.4"
 der = "0.7.10"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 

@@ -20,6 +20,7 @@ mod people;
 #[cfg(all(test, windows, debug_assertions))]
 mod people_ui_qa;
 mod runtime_package;
+mod runtime_updates;
 mod service;
 mod service_process;
 mod tls;
@@ -384,6 +385,16 @@ fn central_service_status(
     state: tauri::State<'_, Arc<service::Service>>,
 ) -> service_process::Snapshot {
     state.snapshot()
+}
+#[tauri::command]
+fn central_runtime_update_status(
+    controller: tauri::State<'_, Arc<service::Service>>,
+) -> runtime_updates::Status {
+    controller.updates.status()
+}
+#[tauri::command]
+fn central_runtime_update_check(controller: tauri::State<'_, Arc<service::Service>>) {
+    controller.updates.request_check();
 }
 #[tauri::command]
 async fn central_service_context(
@@ -766,6 +777,8 @@ fn main() {
             central_model_login_cancel,
             central_model_login_open,
             central_service_status,
+            central_runtime_update_status,
+            central_runtime_update_check,
             central_service_context,
             central_service_start,
             central_service_stop,
@@ -783,6 +796,46 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("无法启动中央管理应用");
     if let Ok(root) = config_root(app.handle()) {
+        if let Ok(resources) = app.path().resource_dir() {
+            let weak = Arc::downgrade(app.state::<Arc<service::Service>>().inner());
+            let update_root = root.clone();
+            std::thread::spawn(move || {
+                let mut next_check = std::time::Instant::now();
+                loop {
+                    if APP_EXIT_STARTED.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    let Some(controller) = weak.upgrade() else {
+                        break;
+                    };
+                    if std::time::Instant::now() >= next_check || controller.updates.take_request()
+                    {
+                        let result = controller.updates.check(&update_root);
+                        next_check = std::time::Instant::now()
+                            + std::time::Duration::from_secs(if result.is_ok() {
+                                86400
+                            } else {
+                                3600
+                            });
+                    }
+                    if let Err(error) = controller.apply_pending_update(&update_root, &resources) {
+                        if error.code != "OPERATION_BUSY"
+                            && !matches!(
+                                controller.updates.status().state,
+                                "rolled-back" | "activation-unconfirmed"
+                            )
+                        {
+                            if let Ok(mut candidate) = controller.updates.candidate.lock() {
+                                *candidate = None;
+                            }
+                            controller.updates.set("failed", Some(error.code));
+                        }
+                    }
+                    drop(controller);
+                    std::thread::sleep(std::time::Duration::from_secs(30));
+                }
+            });
+        }
         let weak = Arc::downgrade(app.state::<Arc<service::Service>>().inner());
         std::thread::spawn(move || {
             loop {

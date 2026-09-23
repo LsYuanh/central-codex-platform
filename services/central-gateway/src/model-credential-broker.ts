@@ -7,6 +7,7 @@ import https from "node:https";
 import {Transform, type Duplex} from "node:stream";
 import {createModelPipeTls, MODEL_PIPE_SERVER_NAME} from "./model-pipe-tls.js";
 import {readWindowsPrivateJson, WindowsPrivateJsonError} from "./windows-private-json.js";
+import {catalogVersion, fetchModelCatalog} from "./model-catalog.js";
 
 type Provider = {id:string;kind:"chatgpt"|"api-key";credentialFile:string;baseUrl?:string};
 type Binding = {providerId:string;enabled:boolean};
@@ -286,6 +287,16 @@ export class ModelCredentialBroker {
     }catch(error){this.release(key);stop();if(error instanceof SafeError)throw error;return fail("MODEL_PIPE_ENDPOINT_FAILED");}
   }
   private tokenKey(token:string){return createHash("sha256").update(token).digest("hex");}
+  /** Native update validation only: no renderer-selected provider or destination. */
+  async verifyCatalog(userId:string,version:string){
+    if(!/^\d+\.\d+\.\d+$/.test(version))throw Error('MODEL_CATALOG_VERSION_INVALID');
+    const {provider}=this.binding(this.readConfig(),userId),credential=this.credential(provider);
+    if(provider.kind!=='chatgpt')throw Error('MODEL_CATALOG_UNSUPPORTED');
+    const url=this.endpoint(provider);url.pathname=url.pathname.replace(/\/responses$/,'/models');url.searchParams.set('client_version',version);
+    const body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},AbortSignal.timeout(4500));
+    const models=JSON.parse(body.toString('utf8')).models as Array<{slug:string;visibility:string}>;
+    return models.filter(model=>model.visibility==='list').map(model=>model.slug);
+  }
   private scope(userId:string,value:string){return createHash("sha256").update(this.scopeSecret).update(JSON.stringify([userId,value])).digest("hex");}
   private sessionScope(userId:string,value:string){const hash=this.scope(userId,value);return `${hash.slice(0,8)}-${hash.slice(8,12)}-4${hash.slice(13,16)}-${((parseInt(hash[16]!,16)&3)|8).toString(16)}${hash.slice(17,20)}-${hash.slice(20,32)}`;}
   private release(key:string){const lease=this.leases.get(key);if(!lease)return;this.leases.delete(key);for(const controller of lease.controllers)controller.abort();lease.stopEndpoint?.();}
@@ -307,7 +318,8 @@ export class ModelCredentialBroker {
     let lease:Lease|undefined,controller:AbortController|undefined,timer:NodeJS.Timeout|undefined,admitted=false;
     try{
       if(this.closed)return fail("MODEL_BROKER_CLOSED");
-      if(request.method!=="POST"||!["/v1/responses","/responses"].includes(request.url??""))return fail("MODEL_BROKER_ROUTE_DENIED",404);
+      const version=catalogVersion(request.method,request.url);
+      if(!version&&(request.method!=="POST"||!["/v1/responses","/responses"].includes(request.url??"")))return fail("MODEL_BROKER_ROUTE_DENIED",404);
       const auth=request.headers.authorization;
       if(request.rawHeaders.filter((_,index)=>index%2===0&&request.rawHeaders[index]!.toLowerCase()==="authorization").length!==1)return fail("MODEL_LEASE_INVALID",401);
       if(typeof auth!=="string"||!/^Bearer [A-Za-z0-9_-]{43}$/.test(auth))return fail("MODEL_LEASE_INVALID",401);
@@ -319,6 +331,20 @@ export class ModelCredentialBroker {
       if((lease.mode==="pipe")!==(expectedLeaseKey!==undefined))return fail("MODEL_LEASE_INVALID",401);
       if(lease.expiresAt!==undefined&&Date.now()>=lease.expiresAt){this.release(leaseKey);return fail("MODEL_LEASE_INVALID",401);}
       const {provider}=this.binding(config,lease.userId),credential=this.credential(provider),url=this.endpoint(provider);
+      if(version){
+        if(provider.kind!=="chatgpt")return fail("MODEL_CATALOG_UNSUPPORTED",404);
+        if(request.headers['transfer-encoding']||Number(request.headers['content-length']??0)!==0)return fail("MODEL_REQUEST_INVALID",400);
+        if(this.requests>=this.concurrent||(this.perUser.get(lease.userId)??0)>=this.userConcurrent)return fail("MODEL_BROKER_BUSY",429);
+        controller=new AbortController();lease.controllers.add(controller);this.requests++;this.perUser.set(lease.userId,(this.perUser.get(lease.userId)??0)+1);admitted=true;
+        timer=setTimeout(()=>controller?.abort(),Math.min(this.timeout,4500));timer.unref();
+        response.once('close',()=>controller?.abort());
+        url.pathname=url.pathname.replace(/\/responses$/,'/models');url.searchParams.set('client_version',version);
+        let body:Buffer;
+        try{body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},controller.signal);}
+        catch{return fail('MODEL_CATALOG_UNAVAILABLE');}
+        this.emit('model.catalog',lease.userId,'succeeded');
+        response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});response.end(body);return;
+      }
       if(request.headers["content-encoding"]||!String(request.headers["content-type"]??"").toLowerCase().startsWith("application/json"))return fail("MODEL_REQUEST_INVALID",400);
       if(this.requests>=this.concurrent||(this.perUser.get(lease.userId)??0)>=this.userConcurrent)return fail("MODEL_BROKER_BUSY",429);
       const length=request.headers["content-length"];if(length!==undefined&&(!/^\d+$/.test(length)||Number(length)>this.bodyLimit))return fail("MODEL_REQUEST_TOO_LARGE",413);

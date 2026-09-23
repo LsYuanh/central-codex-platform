@@ -31,6 +31,7 @@ export class WorkerManager {
   private readonly workers=new Map<string,Worker>();
   private readonly retryAfter=new Map<string,number>();
   private closed=false;
+  private updateQuiesced=false;
   private readonly exitWaiters=new Set<()=>void>();
   private readonly timer:NodeJS.Timeout;
   private readonly startTimeout:number;
@@ -119,6 +120,7 @@ export class WorkerManager {
   }
   forUser(userId:string){return {request:(method:string,params:unknown)=>this.request(userId,method,params)};}
   private async request(userId:string,method:string,params:unknown):Promise<unknown>{
+    if(this.updateQuiesced)throw Error('CENTRAL_UPDATING: reconnect after the central runtime update');
     const w=this.get(userId);
     if(w.calls>=this.options.maxRequests)throw Error("WORKER_REQUEST_LIMIT: too many pending requests");
     const tid=record(params)&&typeof params.threadId==="string"?params.threadId:undefined;
@@ -189,6 +191,11 @@ export class WorkerManager {
   }
   hasActiveThreads(matches:(threadId:string)=>boolean){return [...this.workers.values()].some(w=>[...w.turns.keys()].some(matches));}
   snapshot(){return [...this.workers.values()].map(w=>({userId:w.userId,pid:w.bridge?.pid,ready:!w.stopping&&(w.bridge?.enforcedRuntimeReady??false),alive:w.bridge?.alive??false,starting:!!w.starting,stopping:w.stopping,pendingRequests:w.calls,activeTurns:w.turns.size}));}
+  /** Check and close admission in one event-loop turn; polling metrics is insufficient. */
+  quiesceIfIdle(){
+    if(this.closed||[...this.workers.values()].some(w=>w.starting||w.stopping||w.calls||w.turns.size))return false;
+    this.updateQuiesced=true;return true;
+  }
   get enforcedRuntimeReady(){const entries=[...this.workers.values()];return entries.length>0&&entries.every(w=>!w.stopping&&w.bridge?.enforcedRuntimeReady);}
   private stop(w:Worker,idle=false){if(w.stopping)return;w.stopping=true;if(w.startTimer)clearTimeout(w.startTimer);w.startTimer=undefined;w.cancelStart?.();w.bridge?.close(idle);}
   stopUser(userId:string){const w=this.workers.get(this.key(userId));if(w)this.stop(w);}

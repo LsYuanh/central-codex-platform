@@ -11,7 +11,7 @@
   },
   "patch": {
     "path": "remote-workspace.patch",
-    "sha256": "e8137ddc014f7888a402c9dada5037c46287101c4cb9528fd110dea764af2110"
+    "sha256": "7636ba692694e3430131dce5ee8ce886b683c4835f6f192633e231d074c66b80"
   },
   "schema": {
     "stable": {

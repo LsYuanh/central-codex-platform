@@ -1,0 +1,60 @@
+name: Validate stable App Server
+on:
+  schedule:
+    - cron: '25 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: runtime-stable
+  cancel-in-progress: false
+jobs:
+  validate:
+    # A dedicated disposable builder; never attach this label to the live central host.
+    runs-on: [self-hosted, macOS, ARM64, runtime-build]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: npm ci && npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/central-gateway
+      - name: Check, build and validate
+        run: node scripts/release/build-runtime-update.mjs "$RUNNER_TEMP/runtime-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$RUNTIME_NODE_LICENSE"
+        env:
+          RUNTIME_NODE_LICENSE: ${{ vars.RUNTIME_NODE_LICENSE }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-candidate
+          path: |
+            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/report.json
+            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/latest.json
+            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/runtime.tar.gz
+            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/schema-changes.json
+            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/upstream/patch-conflicts.txt
+          retention-days: 7
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: runtime-signing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-candidate
+          path: candidate
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Sign and publish only a validated candidate
+        run: node scripts/release/publish-runtime-update.mjs candidate
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.RUNTIME_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.RUNTIME_SIGNING_PRIVATE_KEY_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

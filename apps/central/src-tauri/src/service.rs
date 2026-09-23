@@ -2,7 +2,7 @@
 //! Native central service orchestration. No renderer launch paths or credential files.
 use crate::{
     config::{self, CentralConfig, Result, failure},
-    model_accounts, runtime_package,
+    model_accounts, runtime_package, runtime_updates,
     service_process::{LaunchSpec, ServiceProcess, Snapshot, State},
     tls,
 };
@@ -24,6 +24,7 @@ const OPERATIONS: &str = "service-operations-v1";
 const MAX_OPERATIONS: usize = 4096;
 
 pub struct Service {
+    pub updates: runtime_updates::Updater,
     process: ServiceProcess,
     mutation: AtomicBool,
     closing: AtomicBool,
@@ -164,6 +165,7 @@ fn needs_admin(config: &CentralConfig) -> Result<bool> {
 impl Service {
     pub fn new() -> Self {
         Self {
+            updates: runtime_updates::Updater::new(),
             process: ServiceProcess::new(),
             mutation: AtomicBool::new(false),
             closing: AtomicBool::new(false),
@@ -180,8 +182,149 @@ impl Service {
     pub fn snapshot(&self) -> Snapshot {
         self.process.snapshot()
     }
+    fn wait_update_state(&self, running: bool) -> Result<()> {
+        let deadline = Instant::now() + Duration::from_secs(55);
+        while Instant::now() < deadline {
+            self.open()?;
+            let snapshot = self.snapshot();
+            if running && snapshot.state == State::Running {
+                return Ok(());
+            }
+            if !running
+                && snapshot.cleanup_verified
+                && matches!(snapshot.state, State::Stopped | State::Failed)
+            {
+                return Ok(());
+            }
+            if running && snapshot.state == State::Failed {
+                return Err(failure("SERVICE_UPDATE_START_FAILED"));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Err(failure("SERVICE_UPDATE_TIMEOUT"))
+    }
+    pub fn apply_pending_update(&self, app_data: &Path, resources: &Path) -> Result<()> {
+        if self.updates.status().state == "activation-unconfirmed"
+            && self.snapshot().state == State::Running
+        {
+            let _gate = self.mutation()?;
+            self.process.verify_runtime(true).map_err(failure)?;
+            self.updates.set("updated", None);
+            if let Some(selected) = runtime_updates::selection(app_data).map_err(failure)? {
+                runtime_updates::prune(app_data, &selected).map_err(failure)?;
+            }
+            return Ok(());
+        }
+        let Some(candidate) = self
+            .updates
+            .candidate
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))?
+            .clone()
+        else {
+            return Ok(());
+        };
+        if self.snapshot().state != State::Running {
+            return Ok(());
+        }
+        let _gate = self.mutation()?;
+        let config = config::read(app_data)?
+            .config
+            .ok_or_else(|| failure("CONFIG_INVALID"))?;
+        let account = self
+            .running_account
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))?
+            .as_ref()
+            .map(|a| a.1.clone())
+            .ok_or_else(|| failure("SERVICE_STATE_FAILED"))?;
+        let request = || StartRequest {
+            request_id: format!(
+                "runtime-update-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            ),
+            expected_revision: config.revision,
+            account_id: account.clone(),
+            admin_username: None,
+            admin_password: None,
+        };
+        // Reauthenticate and pin all candidate bytes before interrupting service admission.
+        let descriptor = runtime_updates::authenticate(&candidate).map_err(failure)?;
+        let root = runtime_updates::root(app_data).map_err(failure)?;
+        let _candidate_guard =
+            runtime_package::prepare_authenticated_update(&root, descriptor.package)
+                .map_err(failure)?;
+        match self.process.stop_if_idle() {
+            Err("SERVICE_UPDATE_BUSY") => return Ok(()),
+            Err(code) => {
+                self.updates.set("failed", Some(code));
+                return Err(failure(code));
+            }
+            Ok(()) => {}
+        }
+        self.updates.set("applying", None);
+        *self
+            .updates
+            .candidate
+            .lock()
+            .map_err(|_| failure("SERVICE_STATE_FAILED"))? = None;
+        self.wait_update_state(false)?;
+        let data = Path::new(&config.data_directory);
+        let validation = (|| {
+            let previous = runtime_updates::selection(app_data).map_err(failure)?;
+            let backup = runtime_updates::backup(app_data, data).map_err(failure)?;
+            let mut selected = runtime_updates::Selection {
+                baseline_id: config.runtime_package_id.clone(),
+                active: candidate,
+                previous: previous
+                    .filter(|s| s.baseline_id == config.runtime_package_id)
+                    .map(|s| s.active),
+                pending: true,
+                backup_id: backup,
+                data_directory: runtime_updates::data_identity(data).map_err(failure)?,
+            };
+            runtime_updates::save_json(&root, "selection.json", &selected).map_err(failure)?;
+            self.start_inner(app_data, resources, request(), true)?;
+            self.wait_update_state(true)?;
+            self.process.verify_runtime(false).map_err(failure)?;
+            // Commit before opening admission; every earlier failure is recoverable.
+            selected.pending = false;
+            runtime_updates::save_json(&root, "selection.json", &selected).map_err(failure)?;
+            Ok::<_, config::Failure>(selected)
+        })();
+        let selected = match validation {
+            Ok(selected) => selected,
+            Err(error) => {
+                self.updates.set("rolling-back", Some(error.code));
+                self.process.stop().map_err(failure)?;
+                self.wait_update_state(false)?;
+                runtime_updates::recover(app_data, data).map_err(failure)?;
+                self.start_inner(app_data, resources, request(), false)?;
+                self.wait_update_state(true)?;
+                runtime_updates::save_json(&root, "failed-sequence.json", &descriptor.sequence)
+                    .map_err(failure)?;
+                self.updates.set("rolled-back", Some(error.code));
+                return Err(error);
+            }
+        };
+        // Commit recovery state before opening admission. Never restore a backup
+        // after clients could have submitted new work to the validated runtime.
+        if let Err(code) = self.process.verify_runtime(true) {
+            self.updates.current(descriptor.version);
+            self.updates.set("activation-unconfirmed", Some(code));
+            return Err(failure(code));
+        }
+        self.updates.set("updated", None);
+        self.updates.current(descriptor.version);
+        runtime_updates::prune(app_data, &selected).map_err(failure)?;
+        Ok(())
+    }
     /// Called by one native background loop, never by model tools or a renderer timer.
     pub fn renew_account(&self, root: &Path) -> Result<()> {
+        let _gate = self.mutation()?;
         self.open()?;
         let Some((instance, id, previous, revision)) = self
             .running_account
@@ -385,10 +528,19 @@ impl Service {
         resources: &Path,
         request: StartRequest,
     ) -> Result<Snapshot> {
+        let _gate = self.mutation()?;
+        self.start_inner(app_data, resources, request, false)
+    }
+    fn start_inner(
+        &self,
+        app_data: &Path,
+        resources: &Path,
+        request: StartRequest,
+        update_validation: bool,
+    ) -> Result<Snapshot> {
         if !cfg!(all(debug_assertions, any(windows, target_os = "macos"))) {
             return Err(failure("PACKAGE_NOT_QUALIFIED"));
         }
-        let _gate = self.mutation()?;
         if !valid_request_id(&request.request_id)
             || request.account_id.len() != 32
             || !request.account_id.bytes().all(|c| c.is_ascii_hexdigit())
@@ -429,8 +581,12 @@ impl Service {
         if config.revision != request.expected_revision {
             return Err(failure("CONFIG_REVISION_CONFLICT"));
         }
+        if !update_validation {
+            runtime_updates::recover(app_data, Path::new(&config.data_directory))
+                .map_err(failure)?;
+        }
         let package = std::sync::Arc::new(
-            runtime_package::prepare_service(resources, &config.runtime_package_id)
+            runtime_updates::prepare(app_data, resources, &config.runtime_package_id)
                 .map_err(failure)?,
         );
         let data_path = Path::new(&config.data_directory);
@@ -504,6 +660,8 @@ impl Service {
         }
         #[derive(Serialize)]
         struct Bootstrap<'a> {
+            #[serde(rename = "updateValidation", skip_serializing_if = "Option::is_none")]
+            update_validation: Option<bool>,
             config: &'a CentralConfig,
             tls: Tls<'a>,
             account: Account<'a>,
@@ -515,6 +673,7 @@ impl Service {
         serde_json::to_writer(
             &mut bootstrap,
             &Bootstrap {
+                update_validation: update_validation.then_some(true),
                 config: &config,
                 tls: Tls {
                     cert: &cert,

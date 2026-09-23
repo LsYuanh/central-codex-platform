@@ -939,6 +939,7 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
 
 const httpHandler = (request: IncomingMessage, response: ServerResponse) => {
   if(nativeService)response.setHeader('x-central-service-instance',nativeService.serviceInstanceId);
+  if(nativeService?.updateBlocked&&request.url!=="/healthz"){writeJson(response,503,{ok:false,error:'CENTRAL_UPDATING'});return;}
   const url = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`);
   if(auditFailed&&url.pathname!=="/healthz"){writeJson(response,503,{ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
   if(url.pathname.startsWith("/client-updates/")) {
@@ -1002,6 +1003,7 @@ httpServer.headersTimeout=10_000;
 
 const websocketServer = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 httpServer.on("upgrade", (request, socket, head) => {
+  if(nativeService?.updateBlocked){socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');return;}
   if(auditFailed){socket.destroy();return;}
   const path = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`).pathname;
   if (path !== "/ws" && path !== "/ws/agent") {
@@ -1086,6 +1088,7 @@ function rehomePendingApprovals(disconnected: ConnectedClient): void {
 }
 
 async function handleGatewayMessage(client: ConnectedClient, message: GatewayMessage | undefined): Promise<void> {
+  if(nativeService?.updateBlocked){if(message)send(client.socket,{type:'response',requestId:message.requestId,ok:false,error:'CENTRAL_UPDATING: 中央正在验证更新，请稍后重试'});return;}
   if(clientUpdates.locked(client.deviceId)) {
     if(message)send(client.socket,{type:"response",requestId:message.requestId,ok:false,error:"UPDATE_IN_PROGRESS: 客户端正在升级，请稍后重连"});
     return;
@@ -2055,3 +2058,23 @@ async function shutdown():Promise<void>{
 }
 for(const signal of ["SIGINT","SIGTERM"] as const)process.on(signal,()=>{shutdownPromise??=shutdown();});
 nativeService?.bindStop(()=>{shutdownPromise??=shutdown();});
+nativeService?.bindIdleStop(()=>deviceGatewayCalls.size===0&&pendingAgentRequests.size===0&&pendingServerRequests.size===0&&workers.quiesceIfIdle());
+nativeService?.bindVerification(async()=>{
+  const user=auth?.serviceUsers().find(user=>!user.disabled);
+  if(!user||!modelBroker||!nativeService)throw Error('UPDATE_MODEL_UNAVAILABLE');
+  const expected=await modelBroker.verifyCatalog(user.id,nativeService.runtimeVersion);
+  const bridge=workers.forUser(user.id);
+  const available=new Set<string>();let cursor:string|undefined;
+  for(let page=0;page<6;page++){
+    const catalog=await bridge.request('model/list',{limit:100,includeHidden:false,...(cursor?{cursor}:{})}) as {data?:Array<{id:string}>;nextCursor?:string|null};
+    if(!Array.isArray(catalog.data)||!catalog.data.length)throw Error('UPDATE_MODEL_LIST_INVALID');
+    for(const model of catalog.data)available.add(model.id);
+    if(!catalog.nextCursor){cursor=undefined;break;}
+    if(catalog.nextCursor===cursor)throw Error('UPDATE_MODEL_LIST_INVALID');
+    cursor=catalog.nextCursor;
+  }
+  if(cursor||!expected.length||expected.some(id=>!available.has(id)))throw Error('UPDATE_MODEL_LIST_STALE');
+  const result=await bridge.request('thread/list',{limit:1}) as {data?:Array<{id:string}>};
+  if(!Array.isArray(result.data))throw Error('UPDATE_HISTORY_INVALID');
+  if(result.data?.[0]?.id)await bridge.request('thread/read',{threadId:result.data[0].id,includeTurns:false});
+});

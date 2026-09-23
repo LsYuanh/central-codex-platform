@@ -49,7 +49,7 @@ if(process.platform==='win32') {
   const restoreWindows=()=>windowsFiles.forEach((item,index)=>writeFileSync(join(source,item.path),windowsPrepared[index]));
   check('Windows overlay integrated and independently pinned',()=> {
     const actual=preparePatch(source,true);
-    assert.equal(actual.verifiedFiles,25);
+    assert.equal(actual.verifiedFiles,26);
     assert.equal(actual.verifiedWindowsFiles,2);
     assert.equal(actual.windowsPatchSha256,pin.windowsPatch.sha256);
   });
@@ -128,7 +128,7 @@ check('Git command configuration and TLS overrides removed',()=> {
     Object.assign(process.env,overrides);
     const isolated=isolatedGitEnvironment(source);
     for(const key of Object.keys(overrides)) assert.equal(isolated[key],undefined,key);
-    assert.equal(preparePatch(source,true).verifiedFiles,25);
+    assert.equal(preparePatch(source,true).verifiedFiles,26);
   } finally {
     for(const [key,value] of Object.entries(previous))
       if(value===undefined) delete process.env[key]; else process.env[key]=value;
@@ -162,7 +162,7 @@ try {
   preparedPaths.forEach((path,index)=>writeFileSync(path,crlfBytes[index]));
   check('all CRLF files verify without mutation',()=> {
     const actual=preparePatch(source,true);
-    assert.equal(actual.verifiedFiles,25);
+    assert.equal(actual.verifiedFiles,26);
     if(process.platform==='win32') assert.equal(actual.verifiedWindowsFiles,2);
     if(process.platform==='win32') assert.equal(actual.verifiedWindowsModelFiles,5);
     preparedPaths.forEach((path,index)=>assert.equal(hash(readFileSync(path)),hash(crlfBytes[index]),path));

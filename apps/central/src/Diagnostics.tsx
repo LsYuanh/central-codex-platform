@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { useEffect, useRef, useState } from 'react';
 import { nativeAvailable } from './native';
+import { RuntimeUpdates } from './RuntimeUpdates';
 import { createDiagnosticsSession, diagnosticsMessage, initialDiagnosticsState } from './diagnostics-client';
 
 const serviceLabels = { stopped: '已停止', starting: '正在启动', running: '正在运行', stopping: '正在停止', failed: '运行失败' };
@@ -15,6 +16,7 @@ export function Diagnostics({ onConfigure }: { onConfigure: () => void }) {
   }, []);
   const report = state.report, config = report?.configuration, service = report?.service;
   return <div className="diagnostics">
+    <RuntimeUpdates />
     <section className="card inspection-panel">
       <div className="section-title"><h2>本机诊断报告</h2><div className="button-row">
         <button className="button secondary" disabled={!nativeAvailable || state.readPending} onClick={() => session.current?.refresh()}>{state.readPending ? '等待读取结束' : '刷新报告'}</button>

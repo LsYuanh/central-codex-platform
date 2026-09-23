@@ -129,6 +129,14 @@ replace('codex-rs/app-server/src/request_processors/initialize_processor.rs', ' 
             format!("{} {}", get_codex_user_agent(), codex_core::remote_workspace::MARKER)
         } else { get_codex_user_agent() };`);
 
+// The Mac broker supplies the official catalog without giving Workers login tokens.
+const catalogEnabled = 'std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker") && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")';
+at('models-manager/src/manager.rs', '    async fn should_refresh_models(&self) -> bool {', `        if ${catalogEnabled} { return true; }`);
+replace('codex-rs/models-manager/src/manager.rs', 'presets = ModelPreset::filter_by_auth(presets, uses_codex_backend);', `presets = ModelPreset::filter_by_auth(presets, uses_codex_backend || (${catalogEnabled}));`);
+replace('codex-rs/models-manager/src/manager.rs', '&& self.auth_manager.as_ref().is_some_and(|auth_manager| {\n                auth_manager\n                    .auth_mode()\n                    .is_some_and(AuthMode::has_chatgpt_account)\n            });', `&& ((${catalogEnabled}) || self.auth_manager.as_ref().is_some_and(|auth_manager| {
+                auth_manager.auth_mode().is_some_and(AuthMode::has_chatgpt_account)
+            }));`);
+
 const baseDir = join(here, '.cache/patch-base');
 const expectedFiles = new Map(JSON.parse(readFileSync(join(here, 'source-files.json'), 'utf8')).map(item => [item.path, item.upstreamSha256]));
 for (const [path, item] of edits) {

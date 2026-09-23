@@ -1,3 +1,5 @@
 # Generated patches are byte-pinned; preserve LF and allow blank context lines.
 harness/remote-workspace.patch -text whitespace=-blank-at-eol
 *.sh text eol=lf
+# Synthetic signed payloads must retain their exact bytes on every checkout.
+tests/fixtures/runtime-update-signature/* -text

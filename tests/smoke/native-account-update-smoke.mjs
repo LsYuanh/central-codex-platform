@@ -44,6 +44,21 @@ try {
   ])assert.throws(()=>host.accept({...update,...patch}),/SERVICE_/);
   assert.equal(await request(),200);assert.equal(seen.at(-1),'Bearer '+updated);
   assert(!JSON.stringify(frames).includes(updated));assert(!JSON.stringify(frames).includes('refresh_token'));
-  lease.release();
+  let busy=true;
+  host.bindIdleStop(()=>!busy);
+  const control=command=>({method:'central/service',protocol:'central-service-host/v1',instanceId:instance,command,updateId:'4'.repeat(32)});
+  host.accept(control('stop/idle'));assert.equal(frames.at(-1).accepted,false);assert.equal(host.updateBlocked,false);
+  busy=false;host.accept(control('stop/idle'));assert.equal(frames.at(-1).accepted,true);assert.equal(host.updateBlocked,true);
+  const validating=new NativeServiceHost(instance,{config:host.config,tls:{cert:'synthetic',key:'synthetic'},account:{tokens:{access_token:updated,account_id:'same-fixture-account'}},updateValidation:true});
+  assert.equal(validating.updateBlocked,true);
+  assert.throws(()=>validating.accept(control('update/accept')),/SERVICE_CONTROL_INVALID/);
+  validating.bindVerification(async()=>{throw Error('synthetic private failure');});
+  validating.accept(control('update/verify'));await new Promise(resolve=>setImmediate(resolve));assert.equal(frames.at(-1).accepted,false);assert.equal(validating.updateBlocked,true);
+  validating.bindVerification(async()=>{});
+  validating.accept(control('update/verify'));await new Promise(resolve=>setImmediate(resolve));assert.equal(frames.at(-1).accepted,true);assert.equal(validating.updateBlocked,true);
+  validating.accept(control('update/accept'));assert.equal(validating.updateBlocked,false);
+  validating.accept(control('update/accept'));assert.equal(frames.at(-1).accepted,true);
+  assert(!JSON.stringify(frames).includes('synthetic private failure'));
+  validating.clear();lease.release();
 } finally {process.stdout.write=originalWrite;await broker?.close();await new Promise(resolve=>upstream.close(resolve));}
-console.log(JSON.stringify({passed:true,checks:['same-lease-uses-new-token','duplicate-ack-safe','stale-instance-and-revision-rejected','account-switch-expired-token-and-refresh-token-rejected','no-credential-in-ack'],realCredentialsUsed:false}));
+console.log(JSON.stringify({passed:true,checks:['same-lease-uses-new-token','duplicate-ack-safe','stale-instance-and-revision-rejected','account-switch-expired-token-and-refresh-token-rejected','no-credential-in-ack','idle-admission','verify-before-accept','failed-validation-keeps-admission-closed','accept-retry'],realCredentialsUsed:false}));

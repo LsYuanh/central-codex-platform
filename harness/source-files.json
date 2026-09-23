@@ -118,5 +118,10 @@
     "path": "codex-rs/app-server/src/request_processors/initialize_processor.rs",
     "upstreamSha256": "6e73dce0275c7264b23ee0a312f215fead241ce55dc1a86fa1dbd109ad4278e0",
     "patchedSha256": "ef948df56a6b75373d0894a986613db1e4b53cfa33eea4c80a984bb79d74ab2f"
+  },
+  {
+    "path": "codex-rs/models-manager/src/manager.rs",
+    "upstreamSha256": "00a120284c6b1c6549fa39ae938a72cb6cfd40f683878fabdcc22f9216799f9c",
+    "patchedSha256": "12e06d64a6b88376194609a5dcea0762687c27a13ec9fffae84ae14c29eb9997"
   }
 ]

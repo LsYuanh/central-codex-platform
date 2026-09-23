@@ -1949,6 +1949,58 @@ index 442b71f..45008dd 100644
          let response = InitializeResponse {
              user_agent,
              codex_home,
+diff --git a/codex-rs/models-manager/src/manager.rs b/codex-rs/models-manager/src/manager.rs
+index 45835c3..cccff2a 100644
+--- a/codex-rs/models-manager/src/manager.rs
++++ b/codex-rs/models-manager/src/manager.rs
+@@ -130,7 +130,13 @@ pub trait ModelsManager: fmt::Debug + Send + Sync {
+         let uses_codex_backend = self
+             .auth_manager()
+             .is_some_and(AuthManager::current_auth_uses_codex_backend);
+-        presets = ModelPreset::filter_by_auth(presets, uses_codex_backend);
++        presets = ModelPreset::filter_by_auth(
++            presets,
++            uses_codex_backend
++                || (std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++                    && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++                    && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")),
++        );
+ 
+         ModelPreset::mark_default_by_picker_visibility(&mut presets);
+ 
+@@ -435,6 +441,12 @@ impl OpenAiModelsManager {
+     }
+ 
+     async fn should_refresh_models(&self) -> bool {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++            && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++            && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")
++        {
++            return true;
++        }
+         self.endpoint_client.uses_codex_backend().await || self.endpoint_client.has_command_auth()
+     }
+ 
+@@ -450,11 +462,14 @@ impl OpenAiModelsManager {
+             && models
+                 .iter()
+                 .any(|model| model.visibility == ModelVisibility::List)
+-            && self.auth_manager.as_ref().is_some_and(|auth_manager| {
+-                auth_manager
+-                    .auth_mode()
+-                    .is_some_and(AuthMode::has_chatgpt_account)
+-            });
++            && ((std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++                && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++                && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1"))
++                || self.auth_manager.as_ref().is_some_and(|auth_manager| {
++                    auth_manager
++                        .auth_mode()
++                        .is_some_and(AuthMode::has_chatgpt_account)
++                }));
+         if should_use_remote_models_only {
+             *self.remote_models.write().await = models;
+             return;
 diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_workspace.rs
 new file mode 100644
 --- /dev/null

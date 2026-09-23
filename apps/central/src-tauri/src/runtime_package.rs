@@ -689,6 +689,18 @@ pub fn prepare_service(
         .map(|(prepared, _)| prepared)
         .map_err(|error| error.code)
 }
+
+/// The caller has already authenticated this descriptor with the compiled update key.
+pub(crate) fn prepare_authenticated_update(
+    resources: &Path,
+    descriptor: serde_json::Value,
+) -> Result<PreparedServicePackage, &'static str> {
+    let package: ServicePackage =
+        serde_json::from_value(descriptor).map_err(|_| "RUNTIME_MANIFEST_INVALID")?;
+    prepare_service_inner(resources, &package)
+        .map(|(prepared, _)| prepared)
+        .map_err(|error| error.code)
+}
 fn inspect_service(resource_dir: &Path, package_id: &str) -> PackageInspection {
     let package = service_catalog()
         .packages

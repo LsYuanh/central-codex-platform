@@ -19,11 +19,19 @@ export class NativeServiceHost {
   private admin:{username:string;password:string}|undefined;
   private stopHandler:(()=>void)|undefined;
   private stopRequested=false;
+  private idleStopHandler:(()=>boolean)|undefined;
+  private verificationHandler:(()=>Promise<void>)|undefined;
+  private validating=false;
+  private updateVerified=false;
+  private quiesced=false;
+  readonly runtimeVersion:string;
   private metricsEmitter:ServiceMetricsEmitter|undefined;
   private metricsStopped=false;
   private accountRevision=0;
   constructor(private instanceId:string,bootstrap:Record<string,unknown>){
-    if(!fields(bootstrap,['config','tls','account','admin']))throw Error('SERVICE_BOOTSTRAP_INVALID');
+    if(!fields(bootstrap,['config','tls','account','admin','updateValidation']))throw Error('SERVICE_BOOTSTRAP_INVALID');
+    if(bootstrap.updateValidation!==undefined&&typeof bootstrap.updateValidation!=='boolean')throw Error('SERVICE_BOOTSTRAP_INVALID');
+    this.validating=bootstrap.updateValidation===true;
     if(process.platform!=='win32'&&process.platform!=='darwin')throw Error('SERVICE_PLATFORM_UNSUPPORTED');
     const validated=validateCentralConfig(bootstrap.config,process.platform);
     if(!validated.ok)throw Error('SERVICE_CONFIG_INVALID');
@@ -42,6 +50,7 @@ export class NativeServiceHost {
     for(const key of Object.keys(process.env))if(/^(PLATFORM_|TEST_GATEWAY_|CODEX_|NODE_OPTIONS|NODE_PATH)/.test(key))delete process.env[key];
     const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
     const manifest=JSON.parse(readFileSync(join(root,'manifest.json'),'utf8'));
+    this.runtimeVersion=manifest.upstream?.version??'0.153.4';
     const mac=process.platform==='darwin';
     if(manifest.kind!=='central-gateway-candidate'||manifest.nativeWorker?.protocol!==(mac?'macos-seatbelt/v1':'windows-worker-host/v1'))throw Error('SERVICE_PACKAGE_INVALID');
     const binary=(name:string)=>join(root,'bin',name);
@@ -67,7 +76,8 @@ export class NativeServiceHost {
   emit(event:'ready'|'stopped'|'failed',code?:string){
     const frame=JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event,...(event==='ready'?{listening:true}:{}),...(code?{code}:{})})+'\n';
     const capability=event==='ready'?JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'accountUpdatesReady'})+'\n':'';
-    return new Promise<void>((done,reject)=>process.stdout.write(frame+capability,error=>error?reject(Error('SERVICE_CONTROLLER_CLOSED')):done()));
+    const updates=event==='ready'?JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'runtimeUpdatesReady'})+'\n':'';
+    return new Promise<void>((done,reject)=>process.stdout.write(frame+capability+updates,error=>error?reject(Error('SERVICE_CONTROLLER_CLOSED')):done()));
   }
   startMetrics(read:()=>ServiceMetrics){
     if(this.stopRequested||this.metricsStopped||this.metricsEmitter)return;
@@ -96,11 +106,32 @@ export class NativeServiceHost {
     };
   }
   bindStop(handler:()=>void){this.stopHandler=handler;if(this.stopRequested)handler();}
+  bindIdleStop(handler:()=>boolean){this.idleStopHandler=handler;}
+  bindVerification(handler:()=>Promise<void>){this.verificationHandler=handler;}
+  get updateBlocked(){return this.validating||this.quiesced;}
   get isStopping(){return this.stopRequested;}
   get serviceInstanceId(){return this.instanceId;}
   stop(){this.stopRequested=true;this.stopMetrics();this.stopHandler?.();}
   accept(value:unknown){
     if(!record(value)||value.method!=='central/service'||value.protocol!==protocol||value.instanceId!==this.instanceId)throw Error('SERVICE_CONTROL_INVALID');
+    if(value.command==='stop/idle'){
+      if(!fields(value,['method','protocol','instanceId','command','updateId'])||typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId))throw Error('SERVICE_CONTROL_INVALID');
+      const accepted=!this.stopRequested&&(this.idleStopHandler?.()??false);
+      if(accepted)this.quiesced=true;
+      process.stdout.write(JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'idleStopResult',updateId:value.updateId,accepted})+'\n');
+      // Admission stays closed until the native owner sends the normal stop frame.
+      return;
+    }
+    if(value.command==='update/verify'){
+      if(!fields(value,['method','protocol','instanceId','command','updateId'])||typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId)||!this.validating||!this.verificationHandler)throw Error('SERVICE_CONTROL_INVALID');
+      const reply=(accepted:boolean)=>process.stdout.write(JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'runtimeVerified',updateId:value.updateId,accepted})+'\n');
+      void this.verificationHandler().then(()=>{this.updateVerified=true;reply(true);},()=>reply(false));return;
+    }
+    if(value.command==='update/accept'){
+      if(!fields(value,['method','protocol','instanceId','command','updateId'])||typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId)||!this.updateVerified)throw Error('SERVICE_CONTROL_INVALID');
+      this.validating=false;
+      process.stdout.write(JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'runtimeVerified',updateId:value.updateId,accepted:true})+'\n');return;
+    }
     if(value.command==='account/update'){
       if(this.stopRequested||!fields(value,['method','protocol','instanceId','command','updateId','revision','account'])||
         typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId)||!Number.isSafeInteger(value.revision)||

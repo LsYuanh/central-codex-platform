@@ -100,7 +100,7 @@ export async function verifyCandidate(directory) {
   return manifest;
 }
 
-export async function stageGateway({ sourceRoot, nodeExe, nodeLicense, workerHost, appServer, nativeHelper, seatbeltProfile }) {
+export async function stageGateway({ sourceRoot, nodeExe, nodeLicense, workerHost, appServer, nativeHelper, seatbeltProfile, upstream }) {
   const mac=process.platform==='darwin';
   if(mac&&(workerHost||nativeHelper))throw Error('MACOS_NATIVE_ARTIFACTS_INVALID');
   const nativePaths=mac?[appServer,seatbeltProfile]:[workerHost,appServer,nativeHelper];
@@ -184,6 +184,7 @@ export async function stageGateway({ sourceRoot, nodeExe, nodeLicense, workerHos
     files.sort((a, b) => a.path.localeCompare(b.path));
     const manifest = {
       schemaVersion: 1, kind: 'central-gateway-candidate', ready: false, qualified: false,
+      upstream: upstream ?? JSON.parse(await readFile(path.join(source,'harness/upstream.json'),'utf8')),
       node: { ...node, ...files.find(file => file.path === nodePath) },
       ...(mac&&appServer?{nativeWorker:{protocol:'macos-seatbelt/v1',mode:'macos-seatbelt-v1',
         appServer:files.find(file=>file.path==='bin/codex-app-server'),

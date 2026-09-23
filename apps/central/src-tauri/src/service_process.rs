@@ -93,6 +93,7 @@ pub enum State {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub runtime_updates_supported: bool,
     pub account_updates_supported: bool,
     pub state: State,
     pub generation: u64,
@@ -124,6 +125,7 @@ enum Command {
         u64,
         String,
         Zeroizing<Vec<u8>>,
+        Duration,
         mpsc::Sender<Result<(), &'static str>>,
     ),
     Shutdown,
@@ -143,6 +145,59 @@ impl Default for ServiceProcess {
 }
 
 impl ServiceProcess {
+    pub fn verify_runtime(&self, accept: bool) -> Result<(), &'static str> {
+        let state = self.snapshot();
+        if state.state != State::Running {
+            return Err("SERVICE_UPDATE_NOT_RUNNING");
+        }
+        let instance = state.instance_id.ok_or("SERVICE_INSTANCE_MISMATCH")?;
+        let id = native::random_id()?;
+        let command = if accept {
+            "update/accept"
+        } else {
+            "update/verify"
+        };
+        let frame=Zeroizing::new(format!("{{\"method\":\"central/service\",\"protocol\":\"{PROTOCOL}\",\"instanceId\":\"{instance}\",\"command\":\"{command}\",\"updateId\":\"{id}\"}}\n").into_bytes());
+        let (send, receive) = mpsc::channel();
+        self.commands
+            .send(Command::Account(
+                state.generation,
+                id,
+                frame,
+                Duration::from_secs(50),
+                send,
+            ))
+            .map_err(|_| "SERVICE_ACTOR_UNAVAILABLE")?;
+        receive
+            .recv_timeout(Duration::from_secs(55))
+            .map_err(|_| "SERVICE_UPDATE_VERIFY_TIMEOUT")?
+    }
+    /// Gateway atomically checks activity and closes admission before acknowledging.
+    pub fn stop_if_idle(&self) -> Result<(), &'static str> {
+        let state = self.snapshot();
+        if !state.runtime_updates_supported {
+            return Err("SERVICE_UPDATE_UNSUPPORTED");
+        }
+        if state.state != State::Running {
+            return Err("SERVICE_UPDATE_NOT_RUNNING");
+        }
+        let instance = state.instance_id.ok_or("SERVICE_INSTANCE_MISMATCH")?;
+        let id = native::random_id()?;
+        let frame = Zeroizing::new(format!("{{\"method\":\"central/service\",\"protocol\":\"{PROTOCOL}\",\"instanceId\":\"{instance}\",\"command\":\"stop/idle\",\"updateId\":\"{id}\"}}\n").into_bytes());
+        let (send, receive) = mpsc::channel();
+        self.commands
+            .send(Command::Account(
+                state.generation,
+                id,
+                frame,
+                Duration::from_secs(8),
+                send,
+            ))
+            .map_err(|_| "SERVICE_ACTOR_UNAVAILABLE")?;
+        receive
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "SERVICE_UPDATE_IDLE_TIMEOUT")?
+    }
     /// Secret payload goes only to the owned instance, with a bounded acknowledgement.
     pub fn update_account(
         &self,
@@ -166,7 +221,13 @@ impl ServiceProcess {
         frame.extend_from_slice(b"}\n");
         let (send, receive) = mpsc::channel();
         self.commands
-            .send(Command::Account(state.generation, update, frame, send))
+            .send(Command::Account(
+                state.generation,
+                update,
+                frame,
+                Duration::from_secs(8),
+                send,
+            ))
             .map_err(|_| "SERVICE_ACTOR_UNAVAILABLE")?;
         receive
             .recv_timeout(Duration::from_secs(10))
@@ -186,6 +247,7 @@ impl ServiceProcess {
             forced_stop: false,
             failure_code: None,
             metrics: None,
+            runtime_updates_supported: false,
         }));
         let (commands, receiver) = mpsc::channel();
         let actor_state = Arc::clone(&state);
@@ -210,6 +272,7 @@ impl ServiceProcess {
             .ok_or("SERVICE_GENERATION_LIMIT")?;
         state.state = State::Starting;
         state.account_updates_supported = false;
+        state.runtime_updates_supported = false;
         state.instance_id = Some(instance_id.clone());
         state.cleanup_verified = false;
         state.forced_stop = false;
@@ -354,11 +417,14 @@ fn stop_frame(instance_id: &str) -> Zeroizing<Vec<u8>> {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
+    RuntimeUpdatesReady,
     AccountUpdatesReady,
     Ready,
     Stopped,
     Failed,
     AccountUpdated(String),
+    IdleStopResult(String, bool),
+    RuntimeVerified(String, bool),
     Metrics { sequence: u64, counts: MetricCounts },
 }
 
@@ -378,11 +444,32 @@ fn control_event(line: &[u8], instance_id: &str) -> Option<Event> {
         // Node's arbitrary failure text/code is deliberately not propagated.
         "failed" => Some(Event::Failed),
         "accountUpdatesReady" => Some(Event::AccountUpdatesReady),
+        "runtimeUpdatesReady" => Some(Event::RuntimeUpdatesReady),
         "accountUpdated" => value
             .get("updateId")
             .and_then(|v| v.as_str())
             .filter(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
             .map(|s| Event::AccountUpdated(s.into())),
+        "idleStopResult" => {
+            let id = value.get("updateId")?.as_str()?;
+            if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            Some(Event::IdleStopResult(
+                id.into(),
+                value.get("accepted")?.as_bool()?,
+            ))
+        }
+        "runtimeVerified" => {
+            let id = value.get("updateId")?.as_str()?;
+            if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            Some(Event::RuntimeVerified(
+                id.into(),
+                value.get("accepted")?.as_bool()?,
+            ))
+        }
         "metrics" => {
             let sequence = value.get("sequence")?.as_u64()?;
             if sequence == 0 || sequence > MAX_SAFE_INTEGER {
@@ -479,7 +566,7 @@ fn actor(state: Shared, commands: mpsc::Receiver<Command>) {
             }
             Command::Shutdown => return,
             Command::Stop(_) | Command::Force(_) => {}
-            Command::Account(_, _, _, reply) => {
+            Command::Account(_, _, _, _, reply) => {
                 let _ = reply.send(Err("SERVICE_INSTANCE_MISMATCH"));
             }
         }
@@ -507,7 +594,7 @@ fn supervise(
     loop {
         while let Ok(command) = commands.try_recv() {
             match command {
-                Command::Account(g, id, frame, reply) => {
+                Command::Account(g, id, frame, timeout, reply) => {
                     if g != generation
                         || !ready
                         || stopping.is_some()
@@ -518,7 +605,7 @@ fn supervise(
                     } else if let Err(code) = child.send_account(frame) {
                         let _ = reply.send(Err(code));
                     } else {
-                        account_update = Some((id, Instant::now() + Duration::from_secs(8), reply));
+                        account_update = Some((id, Instant::now() + timeout, reply));
                     }
                 }
                 Command::Stop(g) if g == generation => {
@@ -543,8 +630,42 @@ fn supervise(
             Ok(events) => {
                 for event in events {
                     match event {
+                        Event::RuntimeUpdatesReady if ready => {
+                            update(state, generation, |s| s.runtime_updates_supported = true);
+                        }
                         Event::AccountUpdatesReady if ready => {
                             update(state, generation, |s| s.account_updates_supported = true);
+                        }
+                        Event::RuntimeVerified(id, accepted) => {
+                            if account_update
+                                .as_ref()
+                                .is_some_and(|(expected, _, _)| expected == &id)
+                            {
+                                if let Some((_, _, reply)) = account_update.take() {
+                                    let _ = reply.send(if accepted {
+                                        Ok(())
+                                    } else {
+                                        Err("SERVICE_UPDATE_VERIFY_FAILED")
+                                    });
+                                }
+                            }
+                        }
+                        Event::IdleStopResult(id, accepted) => {
+                            if account_update
+                                .as_ref()
+                                .is_some_and(|(expected, _, _)| expected == &id)
+                            {
+                                if accepted {
+                                    stopping = Some(Instant::now() + stop_timeout);
+                                }
+                                if let Some((_, _, reply)) = account_update.take() {
+                                    let _ = reply.send(if accepted {
+                                        Ok(())
+                                    } else {
+                                        Err("SERVICE_UPDATE_BUSY")
+                                    });
+                                }
+                            }
                         }
                         Event::AccountUpdated(id) => {
                             if account_update
@@ -1450,9 +1571,15 @@ readline.createInterface({input:process.stdin}).on('line', line => {
     if(message.config.mode==='ignore-stop') descendant=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore',windowsHide:true});
     emit('ready');
     emit('accountUpdatesReady');
+    emit('runtimeUpdatesReady');
     metric(1,2); metric(1,99); metric(2,3); metric(3,99,'stale-instance');
   } else if(message.command==='account/update') {
     process.stdout.write(JSON.stringify({method:'central/service',protocol:'central-service-host/v1',instanceId:bootstrap.instanceId,event:'accountUpdated',updateId:message.updateId})+'\n');
+  } else if(['stop/idle','update/verify','update/accept'].includes(message.command)) {
+    const result={method:'central/service',protocol:'central-service-host/v1',instanceId:bootstrap.instanceId,event:message.command==='stop/idle'?'idleStopResult':'runtimeVerified',updateId:message.updateId,accepted:bootstrap.config.mode==='normal'};
+    process.stdout.write(JSON.stringify({...result,updateId:'0'.repeat(32),accepted:!result.accepted})+'\n');
+    process.stdout.write(JSON.stringify({...result,instanceId:'stale-instance',accepted:!result.accepted})+'\n');
+    process.stdout.write(JSON.stringify(result)+'\n');
   } else if(message.command==='stop' && bootstrap.config.mode==='normal') {
     clearInterval(keepAlive); emit('stopped',()=>process.exit(0));
   }
@@ -1511,6 +1638,9 @@ readline.createInterface({input:process.stdin}).on('line', line => {
         });
         assert_eq!(running.metrics.as_ref().unwrap().online_devices, 3);
         assert!(running.account_updates_supported);
+        assert!(running.runtime_updates_supported);
+        service.verify_runtime(false).unwrap();
+        service.verify_runtime(true).unwrap();
         service
             .update_account(
                 running.instance_id.as_deref().unwrap(),
@@ -1524,7 +1654,7 @@ readline.createInterface({input:process.stdin}).on('line', line => {
             service.start(spec("normal")).unwrap_err(),
             "SERVICE_ALREADY_ACTIVE"
         );
-        assert!(service.stop().unwrap().metrics.is_none());
+        service.stop_if_idle().unwrap();
         let stopped = wait(&|s| s.cleanup_verified);
         assert_eq!(stopped.state, State::Stopped);
         assert!(!stopped.forced_stop);
@@ -1533,6 +1663,9 @@ readline.createInterface({input:process.stdin}).on('line', line => {
         assert!(next.generation > first.generation);
         assert_ne!(next.instance_id, first.instance_id);
         wait(&|s| s.state == State::Running);
+        assert_eq!(service.stop_if_idle(), Err("SERVICE_UPDATE_BUSY"));
+        assert_eq!(service.snapshot().state, State::Running);
+        assert!(service.verify_runtime(false).is_err());
         service.stop().unwrap();
         let forced = wait(&|s| s.cleanup_verified);
         assert_eq!(forced.state, State::Failed);
