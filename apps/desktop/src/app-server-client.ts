@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { UiError } from "./i18n.ts";
+
 
 export type JsonRpcId = number | string;
 
@@ -67,14 +69,14 @@ export class AppServerClient {
     const socket = new WebSocket(this.url);
     this.socket = socket;
     await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(new Error("App Server WebSocket 连接超时")), 8_000);
+      const timeout = window.setTimeout(() => reject(new UiError("App Server WebSocket 连接超时")), 8_000);
       const onOpen = () => {
         window.clearTimeout(timeout);
         resolve();
       };
       const onError = () => {
         window.clearTimeout(timeout);
-        reject(new Error(`无法连接 App Server：${this.url}`));
+        reject(new UiError("无法连接 App Server：{{p0}}", { p0: this.url }));
       };
       socket.addEventListener("open", onOpen, { once: true });
       socket.addEventListener("error", onError, { once: true });
@@ -82,7 +84,7 @@ export class AppServerClient {
 
     socket.addEventListener("message", (event) => this.handleMessage(String(event.data)));
     socket.addEventListener("close", () => {
-      this.rejectPending(new Error("App Server 连接已关闭"));
+      this.rejectPending(new UiError("App Server 连接已关闭"));
       if (this.socket === socket) this.socket = undefined;
     });
     socket.addEventListener("error", () => {
@@ -100,13 +102,13 @@ export class AppServerClient {
 
   public async request(method: string, params: Record<string, unknown> = {}): Promise<AppServerMessage> {
     const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("App Server 尚未连接");
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw new UiError("App Server 尚未连接");
     const id = this.nextId++;
     const message = { method, id, params };
     return new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pending.delete(String(id));
-        reject(new Error(`${method} 请求超时`));
+        reject(new UiError("{{p0}} 请求超时", { p0: method }));
       }, 60_000);
       this.pending.set(String(id), { resolve, reject, timer });
       try {
@@ -121,19 +123,19 @@ export class AppServerClient {
 
   public notify(method: string, params: Record<string, unknown> = {}): void {
     const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("App Server 尚未连接");
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw new UiError("App Server 尚未连接");
     socket.send(JSON.stringify({ method, params }));
   }
 
   /** Reply to a server-initiated JSON-RPC request (for example an approval). */
   public respond(id: JsonRpcId, result: unknown): void {
     const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("App Server 尚未连接");
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw new UiError("App Server 尚未连接");
     socket.send(JSON.stringify({ id, result }));
   }
 
   public close(): void {
-    this.rejectPending(new Error("App Server 客户端已断开"));
+    this.rejectPending(new UiError("App Server 客户端已断开"));
     this.socket?.close();
     this.socket = undefined;
   }

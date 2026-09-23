@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, message as uiMessage } from "./i18n.ts";
+
 import type { ChatMessage, ExecutionActivity } from "./gateway-ui-events";
 import type { AppServerMessage } from "./app-server-client";
 
@@ -27,14 +29,17 @@ export function processItem(value: unknown, turnId?: string, completed = true): 
     return { ...base, kind: "reasoning", summaryParts, content: summaryParts.join("\n\n") };
   }
   if (item.type === "plan") return { ...base, kind: "plan", content: typeof item.text === "string" ? item.text : "" };
-  const labels: Record<string, string> = {
+  const labels: Record<string, import("./i18n").MessageKey> = {
     webSearch: "搜索网页", mcpToolCall: "调用工具", dynamicToolCall: "请求客户端工具",
     commandExecution: "命令执行记录", fileChange: "文件变更记录", collabToolCall: "子任务记录", imageView: "查看图片",
   };
   if (typeof item.type === "string" && labels[item.type]) {
     // Do not expose central cwd/commands as if they were client execution details.
     const name = typeof item.tool === "string" ? item.tool : undefined;
-    return { ...base, kind: "tool", toolName: item.type === "dynamicToolCall" ? name : undefined, content: name === "conversation_read" ? "读取对话历史 · 中央只读" : `${labels[item.type]}${name ? ` · ${name}` : ""}` };
+    return { ...base, kind: "tool", toolName: item.type === "dynamicToolCall" ? name : undefined,
+      content: name === "conversation_read" ? t("读取对话历史 · 中央只读") : `${t(labels[item.type])}${name ? ` · ${name}` : ""}`,
+      uiMessage: name === "conversation_read" ? uiMessage("读取对话历史 · 中央只读") : uiMessage("{{label}}{{suffix}}", {label: uiMessage(labels[item.type]), suffix: name ? ` · ${name}` : ""}),
+    };
   }
 }
 

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t } from "./i18n";
+
 import { useEffect, useRef, useState } from "react";
 
 export function useThreadIdCopy() {
@@ -30,8 +32,8 @@ export function useThreadIdCopy() {
     } finally { clearTimeout(deadline); }
   };
   return { copy: (id: string) => { void copy(id); }, feedback: notice && <div className="thread-copy-notice" role="status" aria-live="polite">
-    <span>{notice.state === "success" ? "已复制对话 ID" : notice.state === "copying" ? "正在复制对话 ID…" : "复制失败，可重试或手动复制："}</span>
-    {notice.state === "failed" && <><code>{notice.id}</code><button type="button" onClick={() => void copy(notice.id)}>重试</button></>}
-    <button type="button" aria-label="关闭复制提示" onClick={() => { generation.current++; clearTimeout(timer.current); setNotice(undefined); }}>关闭</button>
+    <span>{notice.state === "success" ? t("已复制对话 ID") : notice.state === "copying" ? t("正在复制对话 ID…") : t("复制失败，可重试或手动复制：")}</span>
+    {notice.state === "failed" && <><code>{notice.id}</code><button type="button" onClick={() => void copy(notice.id)}>{t("重试")}</button></>}
+    <button type="button" aria-label={t("关闭复制提示")} onClick={() => { generation.current++; clearTimeout(timer.current); setNotice(undefined); }}>{t("关闭")}</button>
   </div> };
 }

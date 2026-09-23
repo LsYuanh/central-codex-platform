@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { errorMessage, UiError, useMessageState } from "./i18n.ts";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "./platform-gateway-client";
 
@@ -13,7 +15,7 @@ export const folderName = (path: string) => path.replace(/[\\/]+$/, "").split(/[
 
 export function useProjects(scope: string, client: RpcClient | undefined, available: boolean) {
   const [state, setState] = useState<{scope:string; rows:ClientProject[]}>({scope,rows:[]});
-  const [error, setError] = useState("");
+  const [error, setError] = useMessageState("");
   const [loading, setLoading] = useState(false);
   const current = useRef({scope,client,available}); current.current = {scope,client,available};
   const generation = useRef(0);
@@ -24,9 +26,9 @@ export function useProjects(scope: string, client: RpcClient | undefined, availa
     try {
       const response = await client.request("project/list");
       const data = response.result as {projects?:unknown[]};
-      if (!Array.isArray(data?.projects) || data.projects.some(p => !readProject(p))) throw Error("项目列表响应不兼容，请重新连接");
+      if (!Array.isArray(data?.projects) || data.projects.some(p => !readProject(p))) throw new UiError("项目列表响应不兼容，请重新连接");
       if (current.current.scope === scope && current.current.client === client && token === generation.current) { setState({scope,rows:data.projects.map(p => readProject(p)!)}); setError(""); }
-    } catch (e) { if (token === generation.current && current.current.scope === scope) setError(String(e)); }
+    } catch (e) { if (token === generation.current && current.current.scope === scope) setError(errorMessage(e)); }
     finally { if (token === generation.current) setLoading(false); }
   }, [available,client,scope]);
   useEffect(() => {
@@ -36,15 +38,15 @@ export function useProjects(scope: string, client: RpcClient | undefined, availa
     return () => { generation.current++; off?.(); };
   }, [refresh,client]);
   const request = async (method: string, params: Record<string,unknown>) => {
-    if (!client || !available) throw Error("中央项目服务尚未连接，请连接后重试");
+    if (!client || !available) throw new UiError("中央项目服务尚未连接，请连接后重试");
     const response = await client.request(method,params);
-    if (current.current.scope !== scope || current.current.client !== client) throw Error("连接已切换，请在原连接中核对项目结果");
+    if (current.current.scope !== scope || current.current.client !== client) throw new UiError("连接已切换，请在原连接中核对项目结果");
     return response;
   };
   const save = async (draft: ProjectDraft) => {
     const result = (await request("project/save", {...draft})).result as {project?:unknown};
     const p = readProject(result?.project);
-    if (!p) throw Error("未收到有效项目，请刷新列表核对后重试");
+    if (!p) throw new UiError("未收到有效项目，请刷新列表核对后重试");
     generation.current++; setLoading(false);
     setState(s => ({scope,rows:[...(s.scope === scope ? s.rows : []).filter(row => row.id !== p.id),p]}));
     return p;

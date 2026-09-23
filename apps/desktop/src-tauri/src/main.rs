@@ -9,6 +9,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use tauri::Manager;
+mod language;
 mod platform;
 mod runtime;
 mod tray;
@@ -123,18 +124,28 @@ async fn apply_desktop_config(
 }
 
 #[tauri::command]
-async fn select_workspace_directory() -> Option<String> {
+async fn select_workspace_directory(app: tauri::AppHandle) -> Option<String> {
+    let language = app.state::<language::LanguageState>();
     rfd::AsyncFileDialog::new()
-        .set_title("选择默认输出目录")
+        .set_title(
+            language
+                .get()
+                .choose("选择默认输出目录", "Select default output folder"),
+        )
         .pick_folder()
         .await
         .map(|folder| folder.path().to_string_lossy().into_owned())
 }
 
 #[tauri::command]
-async fn select_attachment_paths() -> Vec<String> {
+async fn select_attachment_paths(app: tauri::AppHandle) -> Vec<String> {
+    let language = app.state::<language::LanguageState>();
     rfd::AsyncFileDialog::new()
-        .set_title("添加图片或文件")
+        .set_title(
+            language
+                .get()
+                .choose("添加图片或文件", "Add images or files"),
+        )
         .pick_files()
         .await
         .unwrap_or_default()
@@ -282,6 +293,9 @@ fn main() {
         .setup(|app| {
             let namespace = app.config().identifier.clone();
             let directory = app.path().app_config_dir()?;
+            app.manage(language::LanguageState::load(
+                directory.join("desktop-language-v1.txt"),
+            ));
             let _ = platform::LAUNCH_CONTEXT.set((namespace.clone(), directory.clone()));
             app.manage(platform::PlatformState::new(namespace, directory));
             tauri::async_runtime::block_on(updates::recover_attempt(app.handle()));
@@ -298,6 +312,8 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            language::desktop_language,
+            language::set_desktop_language,
             tray::set_tray_new_conversation_enabled,
             window_frame::set_window_caption_color,
             attachment_request,

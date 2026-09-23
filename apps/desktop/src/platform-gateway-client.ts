@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, UiError } from "./i18n.ts";
+
 
 import type { AppServerClientInfo, AppServerMessage, JsonRpcId } from "./app-server-client";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invoke } from "./native-invoke";
+import { isTauri } from "@tauri-apps/api/core";
 import { NativeGatewaySocket } from "./native-gateway-socket";
-import {gatewayAuthCode,gatewayAuthNotice} from "./gateway-auth-error";
-import {centralTransportNotice} from "./platform-pairing-state";
+import {gatewayAuthCode,gatewayAuthNotice,gatewayAuthMessage} from "./gateway-auth-error";
+import {centralTransportNotice,centralTransportMessage} from "./platform-pairing-state";
 
 type GatewayEnvelope = {
   type?: string;
@@ -36,9 +39,10 @@ type PendingRequest = {
 };
 
 type MessageListener = (message: AppServerMessage) => void;
-function connectionError(message:string):string {
+function connectionError(message:string):Error {
   const code=gatewayAuthCode(message);
-  return code?gatewayAuthNotice(code):centralTransportNotice(message)??message;
+  const value = code ? gatewayAuthMessage(code) : centralTransportMessage(message);
+  return value && typeof value !== "string" ? new UiError(value.key, value.values) : new Error(message);
 }
 function terminalIdentityError(message:string):boolean {
   return gatewayAuthCode(message)!==undefined||/请先登录|请应用/.test(message);
@@ -101,10 +105,10 @@ export class PlatformGatewayClient implements RpcClient {
     if (isTauri()) {
       const identity = await invoke<{deviceId:string}>("attachment_request", {method:"attachment/identity",params:{}});
       if (!target.searchParams.get("deviceId") || target.searchParams.get("deviceId") === "desktop-device") target.searchParams.set("deviceId",identity.deviceId);
-      if (target.searchParams.get("deviceId") !== identity.deviceId) throw new Error("中央连接设备 ID 与本机 Local Agent 不一致，请检查连接设置");
+      if (target.searchParams.get("deviceId") !== identity.deviceId) throw new UiError("中央连接设备 ID 与本机 Local Agent 不一致，请检查连接设置");
     }
-    if (this.closedByUser) throw new Error("中央连接已取消");
-    if(target.protocol==="wss:"&&!isTauri())throw Error("平台登录连接需要桌面客户端");
+    if (this.closedByUser) throw new UiError("中央连接已取消");
+    if(target.protocol==="wss:"&&!isTauri())throw new UiError("平台登录连接需要桌面客户端");
     const socket = target.protocol==="wss:" ? new NativeGatewaySocket() : new WebSocket(target);
     this.socket = socket;
     // Install all handlers before awaiting `open`: gateway.ready and device
@@ -117,7 +121,7 @@ export class PlatformGatewayClient implements RpcClient {
     try {
       await new Promise<void>((resolve, reject) => {
         const cleanup=()=>{window.clearTimeout(timeout);socket.removeEventListener("open",onOpen);socket.removeEventListener("error",onError);socket.removeEventListener("close",onClose);};
-        const timeout = window.setTimeout(() => {cleanup();reject(new Error("中央测试网关连接超时"));}, 8_000);
+        const timeout = window.setTimeout(() => {cleanup();reject(new UiError("中央测试网关连接超时"));}, 8_000);
         const onOpen = () => {
           cleanup();
           resolve();
@@ -125,9 +129,9 @@ export class PlatformGatewayClient implements RpcClient {
         const onError = () => {
           cleanup();
           if(socket instanceof NativeGatewaySocket && terminalIdentityError(socket.failureError))this.stopReconnect();
-          reject(new Error(socket instanceof NativeGatewaySocket && socket.failureError ? connectionError(socket.failureError) : `无法连接中央测试网关：${this.url}`));
+          reject((socket instanceof NativeGatewaySocket && socket.failureError ? connectionError(socket.failureError) : new UiError("无法连接中央测试网关：{{p0}}", { p0: this.url })));
         };
-        const onClose=()=>{cleanup();reject(new Error(socket instanceof NativeGatewaySocket&&socket.failureError?connectionError(socket.failureError):"中央连接在建立前关闭"));};
+        const onClose=()=>{cleanup();reject((socket instanceof NativeGatewaySocket&&socket.failureError?connectionError(socket.failureError):new UiError("中央连接在建立前关闭")));};
         socket.addEventListener("open", onOpen, { once: true });
         socket.addEventListener("error", onError, { once: true });
         socket.addEventListener("close", onClose, { once: true });
@@ -153,25 +157,25 @@ export class PlatformGatewayClient implements RpcClient {
 
   public async request(method: string, params: Record<string, unknown> = {}): Promise<AppServerMessage> {
     const operation = operationForMethod(method);
-    if (!operation) throw new Error(`中央测试网关不支持 ${method}`);
+    if (!operation) throw new UiError("中央测试网关不支持 {{p0}}", { p0: method });
     return this.requestOperation(operation, params);
   }
 
   /** Device Broker operations intentionally use a separate stable namespace from App Server methods. */
   public async requestDevice(method: DeviceMethod, params: Record<string, unknown> = {}): Promise<AppServerMessage> {
     const operation = deviceOperationForMethod(method);
-    if (!operation) throw new Error(`中央 Device Broker 不支持 ${method}`);
+    if (!operation) throw new UiError("中央 Device Broker 不支持 {{p0}}", { p0: method });
     return this.requestOperation(operation, params);
   }
 
   private requestOperation(operation: string, params: Record<string, unknown>): Promise<AppServerMessage> {
     const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("中央测试网关尚未连接");
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw new UiError("中央测试网关尚未连接");
     const requestId = String(this.nextId++);
     return new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`${operation} 请求超时`));
+        reject(new UiError("{{p0}} 请求超时", { p0: operation }));
       }, operation === "conversation.turn.create" ? 110_000 : 60_000);
       this.pending.set(requestId, { resolve, reject, timer });
       socket.send(JSON.stringify({ type: "request", requestId, operation, payload: params }));
@@ -180,13 +184,13 @@ export class PlatformGatewayClient implements RpcClient {
 
   public respond(id: JsonRpcId, result: unknown): void {
     const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("中央测试网关尚未连接");
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw new UiError("中央测试网关尚未连接");
     socket.send(JSON.stringify({ type: "approval.response", requestId: String(id), result }));
   }
 
   public close(): void {
     this.stopReconnect();
-    this.rejectPending(new Error("中央测试网关客户端已断开"));
+    this.rejectPending(new UiError("中央测试网关客户端已断开"));
     this.socket?.close();
     this.socket = undefined;
   }
@@ -203,7 +207,7 @@ export class PlatformGatewayClient implements RpcClient {
     if (this.socket !== socket) return;
     const code=socket instanceof NativeGatewaySocket?gatewayAuthCode(socket.failureError):undefined;
     if(code)this.stopReconnect();
-    this.rejectPending(new Error(code?gatewayAuthNotice(code):"中央测试网关连接已关闭"));
+    this.rejectPending((code?connectionError(code):new UiError("中央测试网关连接已关闭")));
     this.socket = undefined;
     this.emit({ method: "gateway/disconnected", params: { url: this.url,...(code?{code,error:gatewayAuthNotice(code),retryable:false}:{}) } });
     if (this.options.autoReconnect !== false && this.everConnected && !this.closedByUser) {
@@ -238,9 +242,9 @@ export class PlatformGatewayClient implements RpcClient {
       window.clearTimeout(pending.timer);
       this.pending.delete(message.requestId);
       if (message.ok === false) {
-        const error=message.error??"中央测试网关请求失败";
+        const error=message.error??t("中央测试网关请求失败");
         if(terminalIdentityError(error))this.stopReconnect();
-        pending.reject(new Error(connectionError(error)));
+        pending.reject(connectionError(error));
         const code=gatewayAuthCode(error);
         if(code&&this.socket instanceof NativeGatewaySocket){this.socket.failureError=code;this.socket.close();}
       }

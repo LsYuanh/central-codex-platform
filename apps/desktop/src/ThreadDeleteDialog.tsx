@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, useLocale, errorMessage, useMessageState } from "./i18n";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -11,6 +13,7 @@ export function ThreadDeleteDialog({ title, count, progress, trigger, fallbackFo
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
+  useLocale();
   const dialog = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const active = useRef(false);
@@ -19,7 +22,7 @@ export function ThreadDeleteDialog({ title, count, progress, trigger, fallbackFo
   const restoreFocus = useRef({ trigger, fallbackFocus });
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useMessageState("");
   const id = useId();
 
   useEffect(() => {
@@ -55,7 +58,7 @@ export function ThreadDeleteDialog({ title, count, progress, trigger, fallbackFo
         close();
       }
     } catch (reason) {
-      if (active.current) setError(reason instanceof Error ? reason.message : String(reason));
+      if (active.current) setError(errorMessage(reason));
     } finally {
       locked.current = false;
       if (active.current) setBusy(false);
@@ -72,17 +75,17 @@ export function ThreadDeleteDialog({ title, count, progress, trigger, fallbackFo
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}>
-    <h2 id={`${id}-heading`}>{count !== undefined ? "删除所有已归档聊天？" : "删除已归档聊天？"}</h2>
+    <h2 id={`${id}-heading`}>{count !== undefined ? t("删除所有已归档聊天？") : t("删除已归档聊天？")}</h2>
     {title && <p id={`${id}-name`} className="thread-delete-name" tabIndex={0}>{title}</p>}
-    <p id={`${id}-description`} className="thread-delete-description">{count !== undefined ? `将永久删除当前归档列表所有项目下的 ${count} 个聊天，不受搜索和筛选影响。此操作无法撤销。` : "此聊天将被永久删除，无法恢复。"}</p>
+    <p id={`${id}-description`} className="thread-delete-description">{count !== undefined ? t("将永久删除当前归档列表所有项目下的 {{p0}} 个聊天，不受搜索和筛选影响。此操作无法撤销。", { p0: count }) : t("此聊天将被永久删除，无法恢复。")}</p>
     {progress && <p className="thread-delete-progress" role="status">{progress}</p>}
     {error && <p className="thread-delete-error" role="alert">{error}</p>}
     <div className="thread-delete-actions">
-      <button ref={cancel} type="button" className="button-secondary" disabled={busy || closing} onClick={close}>取消</button>
+      <button ref={cancel} type="button" className="button-secondary" disabled={busy || closing} onClick={close}>{t("取消")}</button>
       <button type="button" className="thread-delete-confirm" disabled={busy || closing} onClick={() => void confirm()}>
-        {busy ? "删除中…" : error ? "重试删除" : "删除"}
+        {busy ? t("删除中…") : error ? t("重试删除") : t("删除")}
       </button>
     </div>
-    <span className="sr-only" role="status">{busy ? "正在删除对话，请稍候。" : ""}</span>
+    <span className="sr-only" role="status">{busy ? t("正在删除对话，请稍候。") : ""}</span>
   </dialog>, document.body);
 }

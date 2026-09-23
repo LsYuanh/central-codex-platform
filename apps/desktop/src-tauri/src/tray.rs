@@ -9,6 +9,16 @@ use crate::updates::UpdateState;
 
 pub struct TrayState {
     new_conversation: MenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+
+impl TrayState {
+    pub fn set_language(&self, language: crate::language::Language) -> tauri::Result<()> {
+        self.new_conversation
+            .set_text(language.choose("新对话", "New chat"))?;
+        self.quit
+            .set_text(language.choose("退出远舟", "Quit YuanZhou"))
+    }
 }
 
 pub fn show_main_window(app: &AppHandle) {
@@ -35,10 +45,22 @@ pub fn set_tray_new_conversation_enabled(
 }
 
 pub fn setup(app: &tauri::App) -> tauri::Result<()> {
+    let language = app.state::<crate::language::LanguageState>().get();
     // Enable only after the WebView has registered its listener and is ready.
-    let new_conversation =
-        MenuItem::with_id(app, "new-conversation", "新对话", false, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出远舟", true, None::<&str>)?;
+    let new_conversation = MenuItem::with_id(
+        app,
+        "new-conversation",
+        language.choose("新对话", "New chat"),
+        false,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        language.choose("退出远舟", "Quit YuanZhou"),
+        true,
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(app, &[&new_conversation, &quit])?;
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("远舟")
@@ -79,6 +101,9 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
-    app.manage(TrayState { new_conversation });
+    app.manage(TrayState {
+        new_conversation,
+        quit,
+    });
     Ok(())
 }

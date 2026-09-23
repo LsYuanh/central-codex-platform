@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, message as uiMessage, UiError } from "./i18n.ts";
+
 import type { AppServerMessage, JsonRpcId } from "./app-server-client";
 import type { OutputArtifact } from "../../../packages/agentrpc-types/src/index";
 import type { TurnTimingStatus } from "./turn-timing";
 import type { MessageAttachment } from "./attachments";
 import type { MessagePresentation } from "./conversation-content";
+import { gatewayAuthCode, gatewayAuthMessage } from "./gateway-auth-error.ts";
+import { text as formatMessage, type UiMessage } from "./i18n.ts";
 
 export interface ChatMessage extends MessagePresentation {
+  uiMessage?: import("./i18n").UiMessage;
   id: string; role: "user" | "assistant" | "system"; content: string;
   createdAt?: string; turnId?: string; timingOnly?: boolean;
   attachments?: MessageAttachment[]; outputs?: OutputArtifact[];
@@ -56,11 +61,12 @@ export function clientGitDiff(value: unknown): ClientGitDiff {
   if (p.source !== "client" || p.format !== "git-unified-diff" || p.exitCode !== 0
     || typeof p.path !== "string" || typeof p.repositoryRoot !== "string"
     || typeof p.stdout !== "string" || typeof p.stderr !== "string" || typeof p.truncated !== "boolean"
-    || typeof p.staged !== "boolean") throw new Error("客户端 diff 响应不兼容，未展示未经核验的变更");
+    || typeof p.staged !== "boolean") throw new UiError("客户端 diff 响应不兼容，未展示未经核验的变更");
   return p as unknown as ClientGitDiff;
 }
 export interface ExecutionLogChunk { sequence: number; stream: "stdout" | "stderr" | "progress"; chunk: string }
 export interface ExecutionActivity {
+  uiError?: UiMessage;
   requestId: string; threadId?: string; turnId?: string; deviceId?: string;
   tool: string; program?: string; cwd?: string; streaming: boolean;
   phase: "dispatched" | "executing" | "finished";
@@ -80,15 +86,21 @@ type EventPayload =
   | { kind: "execution-start"; execution: ExecutionActivity }
   | { kind: "execution-output"; requestId: string; log: ExecutionLogChunk; truncated: boolean }
   | { kind: "execution-end"; requestId: string; threadId?: string; turnId?: string; status: ExecutionStatus; durationMs?: number; exitCode?: number; error?: string; diff?: ClientGitDiff; patch?: ClientPatchResult; truncated: boolean };
-export type GatewayUiEvent = EventPayload & { message: AppServerMessage };
+export type GatewayUiEvent = EventPayload & { message: AppServerMessage; uiError?: UiMessage };
 
 /** The single translation boundary for platform-owned events. Native Codex
  * conversation notifications remain a compatibility path during P1 migration. */
 export function normalizeGatewayUiEvent(message: AppServerMessage, now = Date.now()): GatewayUiEvent {
   const p = record(message.params);
-  const event = (payload: EventPayload): GatewayUiEvent => ({ ...payload, message });
-  const invalid = () => event({kind: "invalid", error: `网关事件格式不兼容：${message.method}`});
-  if (message.method === "gateway/runtimeUnavailable") return event({kind:"runtime-unavailable", error:`中央 Agent 引擎不可用：${(string(p.error) ?? "App Server 已停止").slice(0, 2000)}。${p.recoverable === true ? "请稍后重新连接并恢复对话；系统不会自动重发当前任务，执行结果需核对。" : "请联系管理员重启网关后重新连接；当前任务结果需核对。"}`});
+  const event = (payload: EventPayload, uiError?: UiMessage): GatewayUiEvent => ({ ...payload, message, ...(uiError ? {uiError} : {}) });
+  const invalid = () => event({kind: "invalid", error: t("网关事件格式不兼容：{{p0}}", { p0: message.method })}, uiMessage("网关事件格式不兼容：{{p0}}", {p0: message.method}));
+  if (message.method === "gateway/runtimeUnavailable") {
+    const detail = uiMessage("中央 Agent 引擎不可用：{{p0}}。{{p1}}", {
+      p0: string(p.error)?.slice(0, 2000) ?? uiMessage("App Server 已停止"),
+      p1: p.recoverable === true ? uiMessage("请稍后重新连接并恢复对话；系统不会自动重发当前任务，执行结果需核对。") : uiMessage("请联系管理员重启网关后重新连接；当前任务结果需核对。"),
+    });
+    return event({kind:"runtime-unavailable", error:formatMessage(detail)}, detail);
+  }
   if (message.method === "gateway/capabilities") {
     const capabilities: PlatformCapabilities = {};
     for (const key of ["projects", "skills", "remoteWorkspace", "imageGeneration", "plugins", "subagents"] as const) {
@@ -107,7 +119,8 @@ export function normalizeGatewayUiEvent(message: AppServerMessage, now = Date.no
   if (message.method === "device/status") return event({kind:"device", state:p.agent === "online" ? "online" : "offline", deviceId:string(p.deviceId)});
   if (message.method?.startsWith("gateway/")) {
     const state = ({"gateway/disconnected":"offline", "gateway/reconnecting":"reconnecting", "gateway/reconnected":"online"} as const)[message.method as "gateway/disconnected"];
-    if (state) return event({kind:"connection", state, attempt:number(p.attempt),error:string(p.error),retryable:typeof p.retryable==="boolean"?p.retryable:undefined});
+    const code = gatewayAuthCode(p.code);
+    if (state) return event({kind:"connection", state, attempt:number(p.attempt),error:string(p.error),retryable:typeof p.retryable==="boolean"?p.retryable:undefined}, code ? gatewayAuthMessage(code) : undefined);
   }
   if (message.method === "output/state") {
     const output = record(p.output);
@@ -162,10 +175,10 @@ export function reduceExecutions(current: ExecutionActivity[], event: GatewayUiE
     // Completion may be the first observed event after reconnect. Retain it so
     // a delayed start never creates a permanently running card.
     const rows = current.some(row => row.requestId === event.requestId) ? current : [...current, {requestId:event.requestId, threadId:event.threadId, turnId:event.turnId, tool:"device_tool", streaming:false, phase:"dispatched" as const, status:"unknown" as const, startedAt:now, lastSequence:0, logs:[]}];
-    return rows.map(row => row.requestId !== event.requestId || !["running", "unknown"].includes(row.status) ? row : {...row, phase:event.status === "unknown" ? row.phase : "finished" as const, status:event.status, durationMs:event.durationMs ?? Math.max(0, now-row.startedAt), exitCode:event.exitCode, error:event.error, diff:event.diff, patch:event.patch, truncated:row.truncated || event.truncated}).slice(-24);
+    return rows.map(row => row.requestId !== event.requestId || !["running", "unknown"].includes(row.status) ? row : {...row, phase:event.status === "unknown" ? row.phase : "finished" as const, status:event.status, durationMs:event.durationMs ?? Math.max(0, now-row.startedAt), exitCode:event.exitCode, error:event.error, uiError:undefined, diff:event.diff, patch:event.patch, truncated:row.truncated || event.truncated}).slice(-24);
   }
   if (event.kind === "runtime-unavailable" || (event.kind === "connection" && event.state === "offline") || (event.kind === "device" && event.state === "offline")) {
-    return current.map(row => row.status !== "running" ? row : {...row, status:"unknown", durationMs:Math.max(0,now-row.startedAt), error:event.kind === "runtime-unavailable" ? event.error : "连接已断开，客户端操作结果未知；请核对后再重试"});
+    return current.map(row => row.status !== "running" ? row : {...row, status:"unknown", durationMs:Math.max(0,now-row.startedAt), error:event.kind === "runtime-unavailable" ? event.error : t("连接已断开，客户端操作结果未知；请核对后再重试"), uiError:event.kind === "runtime-unavailable" ? event.uiError : uiMessage("连接已断开，客户端操作结果未知；请核对后再重试")});
   }
   return current;
 }

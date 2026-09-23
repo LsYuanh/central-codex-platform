@@ -6,6 +6,8 @@
 
 | 直接依赖 | 版本 | 来源 | 许可证 | 用途 |
 |---|---:|---|---|---|
+| i18next | 26.4.2 | npm | MIT | 工作客户端内置中英文词条、插值和复数 |
+| react-i18next | 17.0.15 | npm | MIT | React 界面语言变化订阅 |
 | Tauri CLI | 2.11.4 | npm `@tauri-apps/cli` | Apache-2.0 OR MIT | 桌面开发与构建 |
 | Tauri JavaScript API | 2.11.1 | npm `@tauri-apps/api` | Apache-2.0 OR MIT | 桌面运行时信息 |
 | React / React DOM | 19.2.8 | npm | MIT | Spike UI |

@@ -1748,12 +1748,21 @@ a {
   transition: opacity 180ms ease;
 }
 .sidebar-update-button > span { opacity: 0; white-space: nowrap; font-size: 12px; font-weight: 500; }
-.sidebar-update-button:is(:hover,:focus-visible) { width: 52px; background: var(--send-accent-hover); }
+.sidebar-update-button:is(:hover,:focus-visible) { width: var(--update-label-width, 52px); background: var(--send-accent-hover); }
+:root:lang(en) { --update-label-width: 72px; }
+.language-setting { margin-top: 12px; }
+.language-setting label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.language-setting select { width: auto; min-width: 132px; flex-shrink: 0; }
+:root:lang(en) .settings-nav strong { white-space: normal; overflow-wrap: anywhere; }
+:root:lang(en) .connection-mode-picker { flex-wrap: wrap; }
+:root:lang(en) .settings-header { flex-wrap: wrap; }
+:root:lang(en) .settings-actions { flex-wrap: wrap; }
+:root:lang(en) .theme-picker span { white-space: normal; }
 .sidebar-update-button:is(:hover,:focus-visible) > .ui-icon { opacity: 0; }
 .sidebar-update-button:is(:hover,:focus-visible) > span { opacity: 1; }
 @media (hover: none), (pointer: coarse) {
   .sidebar-settings-row > .sidebar-settings-button { min-height: 44px; }
-  .sidebar-update-button { width: 52px; height: 44px; min-height: 44px; }
+  .sidebar-update-button { width: var(--update-label-width, 52px); height: 44px; min-height: 44px; }
   .sidebar-update-button > .ui-icon { opacity: 0; }
   .sidebar-update-button > span { opacity: 1; }
 }

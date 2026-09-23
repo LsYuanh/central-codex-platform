@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, useLocale } from "./i18n";
+
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { UiIcon } from "./UiIcon";
@@ -7,6 +9,7 @@ export function ThreadActions({ title, disabled, rename, archive, copyId }: {
   title: string; disabled: boolean; rename: () => void; archive: () => void;
   copyId?: () => void;
 }) {
+  useLocale();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const trigger = useRef<HTMLButtonElement>(null);
@@ -41,11 +44,11 @@ export function ThreadActions({ title, disabled, rename, archive, copyId }: {
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("focusin", outside); };
   }, [open]);
   return <>
-    <button ref={trigger} type="button" disabled={disabled && !copyId} aria-label={`更多操作：${title}`} title="更多操作" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+    <button ref={trigger} type="button" disabled={disabled && !copyId} aria-label={t("更多操作：{{p0}}", { p0: title })} title={t("更多操作")} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
       onClick={() => setOpen(value => !value)} onKeyDown={event => {
         if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); }
       }}><UiIcon name="more" /></button>
-    {open && createPortal(<div ref={menu} id={id} className="thread-actions-menu" style={position} role="menu" aria-label={`${title}的操作`} onKeyDown={event => {
+    {open && createPortal(<div ref={menu} id={id} className="thread-actions-menu" style={position} role="menu" aria-label={t("{{p0}}的操作", { p0: title })} onKeyDown={event => {
       if (event.key === "Escape") { event.preventDefault(); close(true); }
       if (event.key === "Tab") close(true);
       const buttons = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
@@ -53,9 +56,9 @@ export function ThreadActions({ title, disabled, rename, archive, copyId }: {
       const next = event.key === "ArrowDown" ? (current + 1) % buttons.length : event.key === "ArrowUp" ? (current + buttons.length - 1) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : undefined;
       if (next !== undefined) { event.preventDefault(); buttons[next]?.focus(); }
     }}>
-      {copyId && <button type="button" role="menuitem" onClick={() => { close(true); copyId(); }}><UiIcon name="copy" />复制对话 ID</button>}
-      <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); rename(); }}><UiIcon name="edit" />重命名</button>
-      <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); archive(); }}><UiIcon name="archive" />归档对话</button>
+      {copyId && <button type="button" role="menuitem" onClick={() => { close(true); copyId(); }}><UiIcon name="copy" />{t("复制对话 ID")}</button>}
+      <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); rename(); }}><UiIcon name="edit" />{t("重命名")}</button>
+      <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); archive(); }}><UiIcon name="archive" />{t("归档对话")}</button>
     </div>, document.body)}
   </>;
 }

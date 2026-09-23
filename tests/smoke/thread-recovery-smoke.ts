@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import assert from "node:assert/strict";
 import {recoverInitialThread, threadRecoveryError, unavailableThreadNotice} from "../../apps/desktop/src/thread-recovery.ts";
+import { text, i18n } from "../../apps/desktop/src/i18n.ts";
 
 const calls: string[] = [];
 const rejected = await recoverInitialThread({
   async threadResume(id: string) { calls.push(`resume:${id}`); throw Error("REMOTE_WORKSPACE_CHANGED: thread belongs to another device"); },
   async threadRead(id: string) { calls.push(`read:${id}`); return {}; },
 }, "previous-device-thread", () => true);
-assert.deepEqual(rejected, {state: "unavailable", notice: unavailableThreadNotice});
+assert.equal(rejected.state, "unavailable");
+if (rejected.state === "unavailable") {
+  assert.equal(text(rejected.notice), unavailableThreadNotice);
+  await i18n.changeLanguage("en");
+  assert.match(text(rejected.notice), /device or workspace has changed/);
+  await i18n.changeLanguage("zh-CN");
+}
 assert.deepEqual(calls, ["resume:previous-device-thread"], "Do not read or automatically retry another device's Thread");
 
 const normal = await recoverInitialThread({

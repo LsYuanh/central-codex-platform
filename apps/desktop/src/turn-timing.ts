@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t } from "./i18n.ts";
+
 export type TurnTimingStatus = "running" | "completed" | "failed" | "interrupted" | "unknown";
 export interface TurnTiming {
   threadId: string;
@@ -127,7 +129,7 @@ export class TurnTimingStore {
 export function formatTurnDuration(milliseconds: number): string {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
   const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
-  return `${hours ? `${hours}小时 ` : ""}${minutes || hours ? `${minutes}分 ` : ""}${seconds % 60}秒`;
+  return t("{{p0}}{{p1}}{{p2}}秒", { p0: hours ? t("{{p0}}小时 ", { p0: hours }) : "", p1: minutes || hours ? t("{{p0}}分 ", { p0: minutes }) : "", p2: seconds % 60 });
 }
 
 export interface TimedMessage { id: string; role: string; content: string; turnId?: string; timingOnly?: boolean }

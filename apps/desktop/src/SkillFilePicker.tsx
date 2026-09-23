@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, useLocale } from "./i18n";
+
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { UiIcon } from "./UiIcon";
 
 export function SkillFilePicker({files,value,disabled,onChange}:{
   files:{path:string;bytes:number}[]; value:string; disabled:boolean; onChange:(file:string)=>void;
 }) {
+  useLocale();
   const [open,setOpen]=useState(false),[active,setActive]=useState(0);
   const [placement,setPlacement]=useState({above:false,maxHeight:240});
   const root=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null);
@@ -47,7 +50,7 @@ export function SkillFilePicker({files,value,disabled,onChange}:{
   return <div className="skill-file-select" ref={root} onBlur={event=>{
     if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setOpen(false);
   }}>
-    <button ref={trigger} type="button" role="combobox" aria-label="技能文件" aria-haspopup="listbox" aria-expanded={expanded}
+    <button ref={trigger} type="button" role="combobox" aria-label={t("技能文件")} aria-haspopup="listbox" aria-expanded={expanded}
       aria-controls={expanded?listId:undefined} aria-activedescendant={expanded?`${listId}-${activeIndex}`:undefined}
       className="skill-file-trigger" disabled={disabled||!files.length} title={current?.path}
       onClick={()=>expanded?setOpen(false):show()} onKeyDown={event=>{
@@ -64,7 +67,7 @@ export function SkillFilePicker({files,value,disabled,onChange}:{
           if(!expanded)show();search.current={text,time:now};const index=files.findIndex(file=>file.path.toLocaleLowerCase().startsWith(text));if(index>=0)setActive(index);
         }
       }}><UiIcon name="file"/><span>{current?.path??value}</span>{current&&<small>{current.bytes} B</small>}<UiIcon name="chevronDown"/></button>
-    {expanded&&<div className={`skill-file-menu${placement.above?' above':''}`} id={listId} role="listbox" aria-label="技能文件列表" style={{maxHeight:placement.maxHeight}}>
+    {expanded&&<div className={`skill-file-menu${placement.above?' above':''}`} id={listId} role="listbox" aria-label={t("技能文件列表")} style={{maxHeight:placement.maxHeight}}>
       {files.map((file,index)=><button type="button" role="option" aria-label={file.path} aria-selected={file.path===value} tabIndex={-1}
         id={`${listId}-${index}`} key={file.path} className={`skill-file-option${activeIndex===index?' highlighted':''}`} title={file.path}
         onPointerMove={()=>setActive(index)} onMouseDown={event=>event.preventDefault()} onClick={()=>choose(index)}>

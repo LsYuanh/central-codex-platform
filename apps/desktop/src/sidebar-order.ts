@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, UiError } from "./i18n.ts";
+
 import type { ThreadSummary } from "./gateway-ui-events";
 export interface SidebarLayout { order:string[]; groups:Record<string,string|null>; seen:string[] }
 export const emptyLayout = ():SidebarLayout => ({order:[],groups:{},seen:[]});
 export function readLayout(raw:string|null):SidebarLayout {
   if (!raw) return emptyLayout();
   const p=JSON.parse(raw);
-  if(p?.version!==1 || !Array.isArray(p.order) || !p.order.every((v:unknown)=>typeof v==="string") || !p.groups || typeof p.groups!=="object" || Array.isArray(p.groups) || !Object.values(p.groups).every(v=>v===null||typeof v==="string") || !Array.isArray(p.seen) || !p.seen.every((v:unknown)=>typeof v==="string")) throw Error("列表偏好格式不兼容");
+  if(p?.version!==1 || !Array.isArray(p.order) || !p.order.every((v:unknown)=>typeof v==="string") || !p.groups || typeof p.groups!=="object" || Array.isArray(p.groups) || !Object.values(p.groups).every(v=>v===null||typeof v==="string") || !Array.isArray(p.seen) || !p.seen.every((v:unknown)=>typeof v==="string")) throw new UiError("列表偏好格式不兼容");
   return {order:[...new Set<string>(p.order)],groups:p.groups,seen:p.seen};
 }
 export function sidebarGroup(t:ThreadSummary, layout:SidebarLayout, projects:ReadonlySet<string>):string|null {
@@ -23,11 +25,11 @@ export function orderedThreads(threads:ThreadSummary[], layout:SidebarLayout):Th
   });
 }
 export function moveThread(layout:SidebarLayout, rows:ThreadSummary[], id:string, group:string|null, anchor?:string, after=false):SidebarLayout {
-  if(!rows.some(t=>t.id===id))throw Error("对话已不在列表中，请刷新后重试");
+  if(!rows.some(t=>t.id===id))throw new UiError("对话已不在列表中，请刷新后重试");
   if(anchor===id)return layout;
   const order=[...new Set([...rows.map(t=>t.id),...layout.order])].filter(v=>v!==id);
   const index=anchor?order.indexOf(anchor):-1;
-  if(anchor&&index<0)throw Error("目标位置已变化，请重试");
+  if(anchor&&index<0)throw new UiError("目标位置已变化，请重试");
   order.splice(index<0?0:index+(after?1:0),0,id);
   return {...layout,order,groups:{...layout.groups,[id]:group}};
 }

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { t } from "./i18n.ts";
+
+import { invoke } from "./native-invoke";
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type ThemeMode = "dark" | "light" | "system";
@@ -22,7 +25,7 @@ export function applyTheme(theme: ThemeMode) {
       await getCurrentWindow().setTheme(theme === "system" ? null : theme);
       await invoke("set_window_caption_color", { color });
     }).catch(error => {
-      console.warn("无法同步窗口标题栏主题", error);
+      console.warn(t("无法同步窗口标题栏主题"), error);
     });
   }
 }

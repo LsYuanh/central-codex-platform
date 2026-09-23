@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, useLocale } from "./i18n";
+
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { skillLabel, type Skill, type SkillService } from "./skills";
@@ -60,7 +62,7 @@ function chip(mention:Pick<SkillMention,'id'|'revision'|'name'|'displayName'>){
   const el=document.createElement('span');el.className='composer-skill-mention';el.contentEditable='false';
   el.dataset.skillId=mention.id;el.dataset.skillRevision=String(mention.revision);el.dataset.skillName=mention.name;
   if(mention.displayName)el.dataset.skillDisplayName=mention.displayName;
-  el.textContent=skillLabel(mention);el.title=`${mention.name} · v${mention.revision}`;el.setAttribute('aria-label',`技能 ${mention.name}`);
+  el.textContent=skillLabel(mention);el.title=`${mention.name} · v${mention.revision}`;el.setAttribute('aria-label',t("技能 {{p0}}", { p0: mention.name }));
   return el;
 }
 function renderDocument(root:HTMLElement,value:ComposerDocument){
@@ -78,6 +80,7 @@ interface Props {
   placeholder:string; scope:string; onSend:()=>void; onPaste:(event:ClipboardEvent)=>void; manage:()=>void;
 }
 export function SkillComposer({value,onChange,editorRef,service,disabled,skillsDisabled,placeholder,scope,onSend,onPaste,manage}:Props){
+  const locale = useLocale();
   const [trigger,setTrigger]=useState<{start:number;end:number;query:string}|null>(null);
   const [active,setActive]=useState(0),[focused,setFocused]=useState(false);
   const composing=useRef(false),savedSelection=useRef<{start:number;end:number}|null>(null),dismissed=useRef<string|null>(null);
@@ -115,11 +118,16 @@ export function SkillComposer({value,onChange,editorRef,service,disabled,skillsD
       setTrigger(null);
     }
   },[value,editorRef]);
+  useEffect(() => {
+    editorRef.current?.querySelectorAll<HTMLElement>(".composer-skill-mention").forEach(chip => {
+      chip.setAttribute("aria-label", t("技能 {{p0}}", { p0: chip.dataset.skillName ?? "" }));
+    });
+  }, [locale, editorRef]);
   useEffect(()=>{setTrigger(null);dismissed.current=null;savedSelection.current=null;},[scope]);
   useEffect(()=>{const changed=()=>{if(document.activeElement===editorRef.current)detect();};document.addEventListener('selectionchange',changed);return()=>document.removeEventListener('selectionchange',changed);});
   useEffect(()=>{if(open)popupRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'});},[open,selected]);
   const host=editorRef.current?.closest('.composer-shell');
-  return <><div ref={editorRef} className="composer-editor" role="textbox" aria-label="发送消息" aria-multiline="true" aria-disabled={disabled}
+  return <><div ref={editorRef} className="composer-editor" role="textbox" aria-label={t("发送消息")} aria-multiline="true" aria-disabled={disabled}
     aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={open} aria-controls={open?listId:undefined} aria-activedescendant={open&&selectable&&rows.length?`${listId}-${selected}`:undefined}
     contentEditable={!disabled} suppressContentEditableWarning tabIndex={disabled?-1:0} data-placeholder={placeholder} data-empty={!value.text}
     onFocus={()=>{setFocused(true);detect();}} onBlur={e=>{if(!popupRef.current?.contains(e.relatedTarget as Node))setFocused(false);}}
@@ -146,13 +154,13 @@ export function SkillComposer({value,onChange,editorRef,service,disabled,skillsD
       }
     }} />
     {open&&host&&createPortal(<div ref={popupRef} className="skill-suggestions" onMouseDown={e=>e.preventDefault()}>
-      <div id={listId} role="listbox" aria-label="可用技能" className="skill-suggestion-list">
+      <div id={listId} role="listbox" aria-label={t("可用技能")} className="skill-suggestion-list">
         {selectable&&rows.map((s,i)=><div key={s.id} id={`${listId}-${i}`} role="option" aria-selected={selected===i} className="skill-suggestion" onMouseMove={()=>setActive(i)} onClick={()=>choose(s)} title={s.description}>
-          <UiIcon name="skill"/><span className="skill-suggestion-name">{skillLabel(s)}</span><span className="skill-suggestion-description">{s.description}</span><small>{s.source==='builtin'?'远舟内置':'个人技能'}</small>
+          <UiIcon name="skill"/><span className="skill-suggestion-name">{skillLabel(s)}</span><span className="skill-suggestion-description">{s.description}</span><small>{s.source==='builtin'?t("远舟内置"):t("个人技能")}</small>
         </div>)}
       </div>
-      {skillsDisabled?<p role="status">当前轮次结束后可选择技能</p>:!service.available?<p role="status">连接支持技能的中央服务后可用</p>:service.loading?<p role="status">正在加载技能…</p>:service.error?<div role="alert"><p>技能加载失败</p><button type="button" onClick={()=>void service.refresh()}>重试</button></div>:!rows.length?<p role="status">{service.rows.some(s=>s.enabled)?'没有匹配的技能':'还没有启用的技能'}</p>:null}
-      {(!rows.length||!service.available)&&<button type="button" className="skill-suggestion-manage" onClick={manage}>管理我的技能</button>}
+      {skillsDisabled?<p role="status">{t("当前轮次结束后可选择技能")}</p>:!service.available?<p role="status">{t("连接支持技能的中央服务后可用")}</p>:service.loading?<p role="status">{t("正在加载技能…")}</p>:service.error?<div role="alert"><p>{t("技能加载失败")}</p><button type="button" onClick={()=>void service.refresh()}>{t("重试")}</button></div>:!rows.length?<p role="status">{service.rows.some(s=>s.enabled)?t("没有匹配的技能"):t("还没有启用的技能")}</p>:null}
+      {(!rows.length||!service.available)&&<button type="button" className="skill-suggestion-manage" onClick={manage}>{t("管理我的技能")}</button>}
     </div>,host)}
   </>;
 }

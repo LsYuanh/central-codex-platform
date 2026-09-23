@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import { t, message as uiMessage, useMessageState } from "./i18n";
+
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ThreadSummary } from "./gateway-ui-events";
@@ -8,11 +10,11 @@ import { emptyLayout, readLayout, orderedThreads, sidebarGroup, moveThread, prom
 export function useSidebarOrganization(scope:string, threads:ThreadSummary[], projects:ClientProject[]) {
   const key=`yuanzhou-thread-layout-v1:${scope}`;
   const [snapshot,setSnapshot]=useState<{key:string;layout:SidebarLayout}>({key,layout:emptyLayout()});
-  const [error,setError]=useState("");
+  const [error,setError]=useMessageState("");
   const current=useRef({key,threads,projects,layout:emptyLayout()});
   current.current={key,threads,projects,layout:snapshot.key===key?snapshot.layout:emptyLayout()};
   useEffect(()=>{
-    const read=()=>{try{const layout=readLayout(localStorage.getItem(key));current.current.layout=layout;setSnapshot({key,layout});setError("");}catch{setError("无法读取列表偏好，请检查本机存储后重试");}};
+    const read=()=>{try{const layout=readLayout(localStorage.getItem(key));current.current.layout=layout;setSnapshot({key,layout});setError("");}catch{setError(uiMessage("无法读取列表偏好，请检查本机存储后重试"));}};
     read();const listener=(e:StorageEvent)=>{if(e.key===key||e.key===null)read();};window.addEventListener("storage",listener);
     return()=>window.removeEventListener("storage",listener);
   },[key]);
@@ -25,10 +27,10 @@ export function useSidebarOrganization(scope:string, threads:ThreadSummary[], pr
       if(next===base)return;
       localStorage.setItem(c.key,JSON.stringify({version:1,...next}));
       c.layout=next;setSnapshot({key:c.key,layout:next});setError("");
-    }catch {setError("列表偏好保存失败，已保留原位置。请检查本机存储后重试。");}
+    }catch {setError(uiMessage("列表偏好保存失败，已保留原位置。请检查本机存储后重试。"));}
   },[]);
   const move=useCallback((id:string,group:string|null,anchor?:string,after=false)=>{
-    if(group&&!current.current.projects.some(p=>p.id===group)){setError("目标项目已移除，请重新拖拽");return;}
+    if(group&&!current.current.projects.some(p=>p.id===group)){setError(uiMessage("目标项目已移除，请重新拖拽"));return;}
     write((layout,rows)=>moveThread(layout,rows,id,group,anchor,after));
   },[write]);
   const activity=useCallback((id:string,token:string)=>{
@@ -54,7 +56,7 @@ export function useThreadDrag(scope:string,move:(id:string,group:string|null,anc
     const button=e.target.closest<HTMLButtonElement>(".conversation-select");
     const row=button?.closest<HTMLElement>("[data-thread-id]");
     if(!row||button?.disabled)return;
-    session.current={id:row.dataset.threadId!,title:button?.textContent??"对话",pointer:e.pointerId,x:e.clientX,y:e.clientY,active:false,root:e.currentTarget};
+    session.current={id:row.dataset.threadId!,title:button?.textContent??t("对话"),pointer:e.pointerId,x:e.clientX,y:e.clientY,active:false,root:e.currentTarget};
   };
   const motion=(e:PointerEvent<HTMLElement>)=>{
     const s=session.current;if(!s||s.pointer!==e.pointerId)return;
