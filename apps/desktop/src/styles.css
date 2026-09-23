@@ -1221,7 +1221,9 @@ a {
   align-items: center;
   gap: 6px;
   min-height: 32px;
-  padding: 4px 6px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 16px;
   border-radius: 8px;
   cursor: pointer;
   list-style: none;
@@ -1248,17 +1250,14 @@ a {
   color: var(--ink-muted);
 }
 
-.model-picker-fast { display:flex; align-items:center; flex:none; color:var(--ink); }
-.model-picker-fast .ui-icon { width:12px; height:12px; fill:currentColor; stroke-width:1; }
+.model-picker-name,.model-picker-meta { line-height:16px; }
+.model-picker-fast,.model-picker-chevron { display:flex; align-items:center; justify-content:center; width:16px; height:16px; flex:none; }
+.model-picker-fast { color:var(--ink); }
+.model-picker-fast .ui-icon,.model-picker-chevron .ui-icon { display:block; width:12px; height:12px; }
+.model-picker-fast .ui-icon { fill:currentColor; stroke-width:1; }
 
 .model-picker-chevron {
-  width: 7px;
-  height: 7px;
-  margin: 0 4px 4px;
-  border-right: 1.5px solid var(--ink-muted);
-  border-bottom: 1.5px solid var(--ink-muted);
-  transform: rotate(45deg);
-  flex: none;
+  color: var(--ink-muted);
 }
 
 .model-picker-popover {
