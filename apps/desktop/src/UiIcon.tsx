@@ -17,7 +17,6 @@ const paths = {
   file: "M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6",
   terminal: "m5 7 5 5-5 5M13 17h6",
   arrow: "M21 12H3m7-7-7 7 7 7",
-  activity: "M3 12h4l3-8 4 16 3-8h4",
   review: "M8 4v16M16 4v7a5 5 0 0 1-5 5H8M5 4h6M5 20h6M13 4h6",
   skill: "m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8",
   build: "m4 20 10-10m-2-6 3-2 7 7-2 3-4-4-3 3-4-4z",

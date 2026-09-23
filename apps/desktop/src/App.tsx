@@ -40,8 +40,7 @@ import { ClientUpdatePanel, SidebarSettingsRow, useClientUpdates } from "./clien
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
 type AppPage = "conversation" | "settings";
-type SettingsSection = "skills" | "connection" | "conversations" | "diagnostics" | "updates";
-type EventFilter = "all" | "turn" | "tool" | "error";
+type SettingsSection = "skills" | "connection" | "conversations" | "updates";
 type ModelPickerSubmenu = "model" | "effort" | "speed";
 
 interface ModelReasoningOption {
@@ -232,8 +231,6 @@ export default function App() {
   const followMessagesRef = useRef(true);
   const scrollThreadRef = useRef<string | undefined>(undefined);
   const [showLatest, setShowLatest] = useState(false);
-  const [events, setEvents] = useState<string[]>([]);
-  const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [backgroundNotices, setBackgroundNotices] = useState<BackgroundNotice[]>([]);
   const [approvalResponse, setApprovalResponse] = useState('{"decision":"accept"}');
@@ -255,7 +252,6 @@ export default function App() {
   const [uncertainSubmissions, setUncertainSubmissions] = useState<Map<string, {id:string;threadId:string}>>(() => new Map());
   const uncertainSubmission = threadId ? uncertainSubmissions.get(threadId) : undefined;
   const attachments = useAttachments(sending || configApplying || Boolean(uncertainSubmission), mode === "central-gateway");
-  const [gatewayOutput, setGatewayOutput] = useState("等待 Device Broker 连接……");
   const turnId = threadId ? turnIdsByThread.get(threadId) : undefined;
   const turnRunning = Boolean(threadId && runningThreadIds.has(threadId));
   const approval = approvals.find((item) => !item.threadId || item.threadId === threadId);
@@ -484,18 +480,15 @@ export default function App() {
             gateway?: ConnectionState;
             agent?: ConnectionState;
             worker?: GatewayStatus["worker"];
-            response?: unknown;
             error?: string;
           };
           if (message.type === "gateway.status") {
             setGateway({ gateway: message.gateway ?? "online", agent: message.agent ?? "offline", worker: message.worker });
-          } else if (message.type === "agent.response") {
-            setGatewayOutput(JSON.stringify(message.response, null, 2));
           } else if (message.type === "gateway.error") {
-            setGatewayOutput(message.error ?? "Fake Central 返回未知错误");
+            setAppError(message.error ?? "Fake Central 返回未知错误");
           }
         } catch {
-          setGatewayOutput("Fake Central 返回了无法解析的消息");
+          setAppError("Fake Central 返回了无法解析的消息");
         }
       });
       socket.addEventListener("close", () => {
@@ -513,11 +506,6 @@ export default function App() {
       gatewaySocketRef.current = undefined;
     };
   }, [mode]);
-
-  const addEvent = useCallback((message: AppServerMessage) => {
-    const method = message.method ?? (message.error ? "error" : "response");
-    setEvents((current) => [`${new Date().toLocaleTimeString()}  ${method}`, ...current].slice(0, 80));
-  }, []);
 
   const appendAssistantDelta = useCallback((delta: string, targetThreadId: string, itemId?: string, targetTurnId?: string) => {
     if (!delta) return;
@@ -546,7 +534,6 @@ export default function App() {
     try {
       const response = await client.requestDevice(method, args);
       const result = response.result ?? {};
-      setGatewayOutput(JSON.stringify(result, null, 2));
       codexia.respond(message.id, {
         success: asRecord(result)?.ok !== false,
         contentItems: [{ type: "inputText", text: JSON.stringify(result) }],
@@ -554,7 +541,6 @@ export default function App() {
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       codexia.respond(message.id, { success: false, contentItems: [{ type: "inputText", text }] });
-      setGatewayOutput(text);
     }
   }, []);
 
@@ -580,7 +566,6 @@ export default function App() {
   const handleAppServerMessage = useCallback(
     (event: GatewayUiEvent) => {
       const message = event.message;
-      addEvent(message);
       if (event.kind === "invalid") { setAppError(event.error); return; }
       setExecutions(current => reduceExecutions(current, event));
       if (event.kind === "capabilities") { setPlatformCapabilities(event.capabilities); setEngineState("ready"); return; }
@@ -822,7 +807,7 @@ export default function App() {
         ]);
       }
     },
-    [addEvent, appendAssistantDelta, handleDynamicToolCall, refreshModels, syncRuntimeHistory, updateThreadMessages, updateThreadRunning, updateThreadTurnId, refreshTimings],
+    [appendAssistantDelta, handleDynamicToolCall, refreshModels, syncRuntimeHistory, updateThreadMessages, updateThreadRunning, updateThreadTurnId, refreshTimings],
   );
 
   const disconnectAppServer = useCallback(() => {
@@ -1151,7 +1136,6 @@ export default function App() {
       disconnectAppServer();
       const view = await invoke<ConfigView>("apply_desktop_config", { config: selectedConfig ?? configDraft });
       setRuntimeConfig(view); setConfigDraft(view.saved); setAppUrl(view.uiGatewayUrl); setConfigReady(true);
-      setGatewayOutput("配置已更新，等待新的设备执行结果。");
       if (previousUrl !== view.uiGatewayUrl) {
         archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); runtimeWorkRef.current.clear(); setRuntimeWorkCount(0); setRunningThreadIds(new Set()); setMessages([]);
       }
@@ -1384,7 +1368,6 @@ export default function App() {
       attachments.setDrafts([]);
     } else restoreThreadDraft(undefined);
     setMessages([]);
-    setEvents([]);
   }, [appState, persistCurrentDraft, restoreThreadDraft, threadBusy, attachments]);
 
   const resumeThread = useCallback(async (nextThreadId: string) => {
@@ -1420,7 +1403,6 @@ export default function App() {
       const restored = [{ id: crypto.randomUUID(), role: "system" as const, content: autoUnarchived ? `检测到归档 Thread，已自动恢复 ${nextThreadId}` : `已恢复 Thread ${nextThreadId}` }, ...messagesFromThreadRead(history.result)];
       threadMessageCacheRef.current.set(nextThreadId, restored);
       setMessages(restored);
-      setEvents([]);
     } catch (error) {
       setAppError(threadRecoveryError(error));
     } finally {
@@ -1479,14 +1461,6 @@ export default function App() {
                     <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : null}<ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy) || running || needsApproval || needsReconcile} copyId={() => threadIdCopy.copy(thread.id)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} /></div>
                   </div>;
   };
-  const visibleEvents = events.filter((event) => {
-    if (eventFilter === "all") return true;
-    const normalized = event.toLowerCase();
-    if (eventFilter === "error") return normalized.includes("error") || normalized.includes("fail") || normalized.includes("reject");
-    if (eventFilter === "tool") return normalized.includes("tool") || normalized.includes("device") || normalized.includes("approval");
-    return normalized.includes("turn") || normalized.includes("message") || normalized.includes("thread");
-  });
-
   const primaryConnectionState = mode === "fake-central" ? gateway.gateway : appState;
   const connectionTitle = mode === "central-gateway" ? "中央网关" : mode === "local-app-server" ? "本机 App Server" : "Fake Central";
   const connectionStateLabel = primaryConnectionState === "online" ? "已连接" : primaryConnectionState === "connecting" ? "连接中" : primaryConnectionState === "reconnecting" ? "重连中" : primaryConnectionState === "error" ? "连接错误" : "未连接";
@@ -1600,7 +1574,6 @@ export default function App() {
               <button className={settingsSection === "connection" ? "active" : ""} onClick={() => openSettings("connection")}><UiIcon name="sliders" /><strong>常规与连接</strong></button>
               <button className={settingsSection === "skills" ? "active" : ""} onClick={() => openSettings("skills")}><UiIcon name="skill" /><strong>我的技能</strong></button>
               <button className={settingsSection === "conversations" ? "active" : ""} onClick={() => openSettings("conversations")}><UiIcon name="archive" /><strong>已归档聊天</strong></button>
-              <button className={settingsSection === "diagnostics" ? "active" : ""} onClick={() => openSettings("diagnostics")}><UiIcon name="activity" /><strong>诊断</strong></button>
               <button className={settingsSection === "updates" ? "active" : ""} onClick={() => openSettings("updates")}><UiIcon name="update" /><strong>版本更新{clientUpdate.release.version ? " · 有更新" : ""}</strong></button>
             </nav>
             <div className="settings-connection-summary"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "offline" ? "离线" : "状态待核对"}</span></div>
@@ -1730,8 +1703,8 @@ export default function App() {
             </section>
           </div>
         ) : (
-          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : settingsSection === "diagnostics" ? " diagnostics-page" : ""}`}>
-            {settingsSection !== "skills" && settingsSection !== "updates" && settingsSection !== "conversations" && <header className="settings-header"><div><h1>{settingsSection === "connection" ? "常规与连接" : "诊断"}</h1><p>{settingsSection === "connection" ? "外观、设备连接与文件保存位置。" : "查看连接与运行信息，定位问题。"}</p></div></header>}
+          <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : ""}`}>
+            {settingsSection === "connection" && <header className="settings-header"><div><h1>常规与连接</h1><p>外观、设备连接与文件保存位置。</p></div></header>}
             <div className="settings-scroll">
               {settingsSection === "skills" && <SkillsPanel key={projectScope} service={skillService} disabled={sending || Boolean(threadBusy) || deviceState !== "online" || !canStartConversation} useSkill={(skill, prompt) => { if (!canStartConversation || threadBusy || sendGuard.current || !skill.enabled) return; startNewConversation(undefined, skill, prompt); navigatePage("conversation"); requestAnimationFrame(() => { const editor=composerInputRef.current; if(editor){editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);} }); }} startDraft={prompt => { startNewConversation(); setComposer(prompt); navigatePage("conversation"); requestAnimationFrame(() => composerInputRef.current?.focus()); }} />}
               {settingsSection === "connection" && (
@@ -1742,7 +1715,7 @@ export default function App() {
                       <div className="settings-field"><span><strong>主题</strong><small>立即应用，下次启动时保留。</small></span><ThemePicker value={theme} onChange={setTheme} /></div>
                     </div>
                   </section>
-                  {desktopRuntime && mode === "central-gateway" ? <RuntimeSettings connectionStatus={connectionOverview} connectionAction={connectionAction} connectionError={appError} view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setEvents([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} /> : <section className="settings-section"><div className="settings-section-heading settings-section-heading-with-action"><h2>连接与设备</h2>{mode !== "fake-central" && connectionAction}</div><div className="connection-group">{connectionOverview}{mode === "fake-central" && <StatusLine label="Worker" value={gateway.worker?.state ?? "unknown"} />}</div>{appError && <p className="settings-error" role="alert">{appError}</p>}</section>}
+                  {desktopRuntime && mode === "central-gateway" ? <RuntimeSettings connectionStatus={connectionOverview} connectionAction={connectionAction} connectionError={appError} view={runtimeConfig} draft={configDraft} setDraft={setConfigDraft} applying={configApplying || configLoading} busy={configBusy} error={configError} notice={configNotice} apply={applyRuntimeConfig} reload={() => void loadRuntimeConfig()} onAuthBoundary={() => { disconnectAppServer(); setConfigReady(false); threadMessageCacheRef.current.clear(); threadDraftsRef.current.clear(); setMessages([]); setComposer(""); attachments.setDrafts([]); setBackgroundNotices([]); archivedThreadIdsRef.current.clear(); restoredThreadIdsRef.current.clear(); }} /> : <section className="settings-section"><div className="settings-section-heading settings-section-heading-with-action"><h2>连接与设备</h2>{mode !== "fake-central" && connectionAction}</div><div className="connection-group">{connectionOverview}{mode === "fake-central" && <StatusLine label="Worker" value={gateway.worker?.state ?? "unknown"} />}</div>{appError && <p className="settings-error" role="alert">{appError}</p>}</section>}
 
                   {import.meta.env.DEV && <details className="connection-dev-options">
                     <summary>开发选项<span>开发版</span></summary>
@@ -1766,26 +1739,6 @@ export default function App() {
               )}
 
               {settingsSection === "updates" && <ClientUpdatePanel update={clientUpdate} version={runtimeVersion} busy={updateBusy} enabled={updateEnabled} />}
-              {settingsSection === "diagnostics" && (
-                <div className="settings-content diagnostics-content">
-                  <section className="settings-section">
-                    <div className="settings-section-heading"><h2>运行信息</h2></div>
-                    <dl className="diagnostics-summary">
-                      <div><dt title="当前客户端连接目标">{connectionTitle}</dt><dd><StatusPill value={primaryConnectionState} /></dd></div>
-                      <div><dt title="Local Agent 客户端设备通道">本机设备</dt><dd><StatusPill value={deviceState} onlineLabel="在线" /></dd></div>
-                      <div><dt>客户端版本</dt><dd><code>{runtimeVersion}</code></dd></div>
-                      <div><dt title="当前窗口仍在运行的对话">运行中对话</dt><dd>{runningThreadIds.size}</dd></div>
-                      <div className="diagnostics-thread"><dt>当前对话 ID</dt><dd><code>{threadId || "—"}</code></dd></div>
-                    </dl>
-                  </section>
-                  <section className="settings-section">
-                    <div className="diagnostics-toolbar"><div className="diagnostics-events-heading"><h2>最近事件</h2><span aria-label={`显示 ${visibleEvents.length} 条，共 ${events.length} 条`}>{visibleEvents.length}/{events.length}</span></div><div className="diagnostics-filter-group" role="group" aria-label="事件筛选"><button aria-pressed={eventFilter === "all"} onClick={() => setEventFilter("all")}>全部</button><button aria-pressed={eventFilter === "turn"} onClick={() => setEventFilter("turn")}>对话</button><button aria-pressed={eventFilter === "tool"} onClick={() => setEventFilter("tool")}>工具</button><button aria-pressed={eventFilter === "error"} onClick={() => setEventFilter("error")}>错误</button></div></div>
-                    <p className="diagnostics-event-hint">本次会话的 App Server 与网关事件，最多保留 80 条。</p>
-                    <div className="diagnostics-events" role="region" aria-label="最近事件列表" tabIndex={0}>{visibleEvents.length === 0 ? <span className="muted">{events.length === 0 ? "连接后会显示协议事件" : "当前筛选条件下没有事件"}</span> : visibleEvents.map((event, index) => <code key={`${event}-${index}`}>{event}</code>)}</div>
-                  </section>
-                  <details className="diagnostics-device-result"><summary>最近设备结果</summary><pre tabIndex={0} role="region" aria-label="最近设备结果完整输出">{gatewayOutput}</pre></details>
-                </div>
-              )}
             </div>
           </div>
         )}
