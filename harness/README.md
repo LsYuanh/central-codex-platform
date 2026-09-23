@@ -15,6 +15,27 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+The remote request policy now includes `thread/delete` (2026-09-23 source fix).
+It delegates to the pinned App Server's history deletion implementation, accepts
+only a Thread ID in the policy validator, and retains the gateway's ownership check.
+It does not expose client filesystem deletion or local command execution. Deploying
+only the desktop client cannot fix an older central binary's allowlist rejection.
+
+Run the deletion regression against a newly built binary:
+
+```powershell
+node harness/thread-delete-smoke.mjs /absolute/path/to/codex-app-server.exe
+```
+
+The script creates isolated synthetic histories and an independent `CODEX_HOME`,
+uses the real remote-mode App Server, archives/deletes a test Thread, restarts it,
+and verifies history removal and preservation of other histories and file canaries.
+It does not call a model, read real credentials, or delete user conversations.
+It runs the application policy directly; OS sandbox qualification and deployment
+acceptance remain separate. Gateway authorization and client error behavior use
+`tests/smoke/worker-routing-smoke.mjs`, `thread-delete-client-smoke.mjs`, and
+`thread-delete-ui-smoke.mjs`.
+
 Windows P0 build (PowerShell 7, Node 24, Git/tar, Rust/MSVC build tools):
 
 ```powershell

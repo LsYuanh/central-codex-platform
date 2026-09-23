@@ -47,6 +47,7 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
             | "thread/loaded/list"
             | "thread/name/set"
             | "thread/archive"
+            | "thread/delete"
             | "thread/unarchive"
             | "thread/unsubscribe"
             | "turn/start"
@@ -58,6 +59,22 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
             | "skills/list"
     ) {
         return Err(format!("REMOTE_WORKSPACE_UNSUPPORTED: {method}"));
+    }
+    // Deletion is limited to the Worker's own persisted conversation history.
+    // Never accept a caller-supplied file path or execution-policy override.
+    if method == "thread/delete"
+        && !request
+            .get("params")
+            .and_then(Value::as_object)
+            .is_some_and(|params| {
+                params.len() == 1
+                    && params
+                        .get("threadId")
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| !id.is_empty())
+            })
+    {
+        return Err("REMOTE_THREAD_DELETE_INVALID: expected threadId only".into());
     }
     let Some(params) = request.get("params").and_then(Value::as_object) else {
         return Ok(());
@@ -175,6 +192,38 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn thread_delete_accepts_only_a_thread_id() {
+        assert!(validate_request(&json!({"method":"thread/delete","params":{"threadId":"019b0000-0000-7000-8000-000000000001"}})).is_ok());
+        for params in [
+            json!(null),
+            json!({}),
+            json!({"threadId":""}),
+            json!({"threadId":123}),
+            json!({"threadIds":["thread"]}),
+        ] {
+            assert!(validate_request(&json!({"method":"thread/delete","params":params})).is_err());
+        }
+        for key in ["path", "cwd", "config", "sandbox", "force"] {
+            assert!(
+                validate_request(
+                    &json!({"method":"thread/delete","params":{"threadId":"thread",key:"/private"}})
+                )
+                .is_err()
+            );
+        }
+        for method in [
+            "thread/deleteAll",
+            "thread/delete/extra",
+            "fs/delete",
+            "command/exec",
+        ] {
+            assert!(
+                validate_request(&json!({"method":method,"params":{"threadId":"thread"}})).is_err()
+            );
+        }
+    }
 
     #[test]
     fn rejects_workspace_rpc_and_overrides() {

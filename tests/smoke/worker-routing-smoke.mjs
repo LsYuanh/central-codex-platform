@@ -3,7 +3,7 @@
 // No central host, native credential vault, model calls, or client commands are used.
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
-import {mkdtemp,mkdir,writeFile,readFile,rename,access} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rename,access,unlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {randomBytes,randomUUID,createHash,generateKeyPairSync,sign} from 'node:crypto';
@@ -24,7 +24,7 @@ const ca=await readFile(cert);
 const auth=new PlatformAuth(authFile);
 const users=[await auth.createUser('alice',password,'admin'),await auth.createUser('bob',password)];auth.close();
 const fixtureCode=String.raw`
-const fs=require('node:fs'),rl=require('node:readline');let responses=[],next=0,reads=0,lastTools=[];
+const fs=require('node:fs'),rl=require('node:readline');let responses=[],next=0,reads=0,lastTools=[],deletes=[];
 fs.writeFileSync('pid',String(process.pid));
 const out=messages=>process.stdout.write(messages.map(m=>JSON.stringify(m)+'\n').join(''));
 rl.createInterface({input:process.stdin}).on('line',line=>{
@@ -32,7 +32,11 @@ rl.createInterface({input:process.stdin}).on('line',line=>{
  if(q.method==='model/list'&&q.params.fixture==='crash')process.exit(27);
  let result={};
  if(q.method==='initialize')result={userAgent:'routing-protocol-fixture yuan-zhou-remote-workspace/1'+(q.params.clientInfo?.name==='legacy-runtime'?'':' yuan-zhou-conversation-read/1')};
- if(q.method==='model/list')result={pid:process.pid,responses,reads,lastTools};
+ if(q.method==='model/list')result={pid:process.pid,responses,reads,lastTools,deletes};
+ if(q.method==='thread/delete'){
+   deletes.push(q.params.threadId);
+   if(fs.existsSync('deny-delete')){out([{id:q.id,error:{code:-32602,message:'REMOTE_WORKSPACE_UNSUPPORTED: thread/delete'}}]);return;}
+ }
  if(q.method==='thread/start'){lastTools=(q.params.dynamicTools??[]).map(t=>t.name);result={thread:{id:'routing-'+process.pid+'-'+ ++next}};}
  if(q.method==='thread/read'||q.method==='thread/resume'){reads++;result={thread:{id:q.params.threadId,turns:[{id:'history-turn',status:'completed',items:[{id:'history-user',type:'userMessage',content:[{type:'text',text:'SAME_USER_HISTORY'}]}]}]}};}
  out([{id:q.id,result}]);
@@ -88,10 +92,22 @@ try{
  const beforeDeniedReads=(await a.request('model.list')).reads;
  for(const [id,target]of [['foreign-history',foreignId],['missing-history','absent']]){const result=await readTool(id,target);assert.equal(result.success,false);assert.match(result.contentItems[0].text,/CONVERSATION_UNAVAILABLE/);}
  assert.equal((await a.request('model.list')).reads,beforeDeniedReads);
+ await assert.rejects(b.request('conversation.delete',{threadId:targetId}),/does not belong/);
+ assert.deepEqual((await a.request('model.list')).deletes,[]);
+ assert.deepEqual((await b.request('model.list')).deletes,[]);
+ const denyDelete=join(runtimeDirs[0],'deny-delete');await writeFile(denyDelete,'legacy Harness denies deletion');
+ await assert.rejects(a.request('conversation.delete',{threadId:targetId}),/REMOTE_WORKSPACE_UNSUPPORTED: thread\/delete/);
+ assert.equal((await a.request('conversation.read',{threadId:targetId})).thread.id,targetId,'Rejected delete must retain ownership and history');
+ const retained=JSON.parse(await readFile(stateFile,'utf8'));assert(retained.users[users[0].id].some(row=>row.id===targetId));
+ await unlink(denyDelete);
  await a.request('conversation.delete',{threadId:targetId});
+ assert.deepEqual((await a.request('model.list')).deletes,[targetId,targetId]);
+ const saved=JSON.parse(await readFile(stateFile,'utf8'));assert(!saved.users[users[0].id].some(row=>row.id===targetId));
+ pass('delete enforces user ownership, retains metadata on runtime rejection, and only removes metadata after success');
  const deletedRead=await readTool('deleted-history',targetId);assert.equal(deletedRead.success,false);
  assert.equal(agentRequests.length,beforeHistoryAgentCalls,'central history performs no device RPC');
  assert(!b.events.some(e=>JSON.stringify(e).includes('SAME_USER_HISTORY')));
+ assert.equal((await b.request('conversation.read',{threadId:foreignId})).thread.id,foreignId);
  pass('conversation_read reads same-user archived cross-device history, rejects foreign/missing/deleted IDs before Worker read, and never dispatches to Agent');
  await b.request('model.list'); // Make Bob the last active UI, while Alice owns this Thread.
  a.socket.close();await until(()=>a.socket.readyState===WebSocket.CLOSED,'Alice UI disconnected');

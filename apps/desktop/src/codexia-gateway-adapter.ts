@@ -54,7 +54,15 @@ export class CodexiaGatewayAdapter {
   }
 
   public async threadDelete(threadId: string): Promise<AppServerMessage> {
-    return this.transport.request("thread/delete", { threadId });
+    try {
+      return await this.transport.request("thread/delete", { threadId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/\bREMOTE_WORKSPACE_UNSUPPORTED: thread\/delete(?:["\s}]|$)/.test(message)) {
+        throw new Error("当前中央运行时尚未支持删除对话，请联系管理员升级中央服务后重试。本次未删除对话。", { cause: error });
+      }
+      throw error;
+    }
   }
 
   public async turnStart(params: Record<string, unknown>): Promise<AppServerMessage> {
