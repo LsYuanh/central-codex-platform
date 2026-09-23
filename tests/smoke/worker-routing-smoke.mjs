@@ -24,17 +24,17 @@ const ca=await readFile(cert);
 const auth=new PlatformAuth(authFile);
 const users=[await auth.createUser('alice',password,'admin'),await auth.createUser('bob',password)];auth.close();
 const fixtureCode=String.raw`
-const fs=require('node:fs'),rl=require('node:readline');let responses=[],next=0;
+const fs=require('node:fs'),rl=require('node:readline');let responses=[],next=0,reads=0,lastTools=[];
 fs.writeFileSync('pid',String(process.pid));
 const out=messages=>process.stdout.write(messages.map(m=>JSON.stringify(m)+'\n').join(''));
 rl.createInterface({input:process.stdin}).on('line',line=>{
  const q=JSON.parse(line);if(!q.method){responses.push(q);fs.writeFileSync('responses.json',JSON.stringify(responses));return;}
  if(q.method==='model/list'&&q.params.fixture==='crash')process.exit(27);
  let result={};
- if(q.method==='initialize')result={userAgent:'routing-protocol-fixture yuan-zhou-remote-workspace/1'};
- if(q.method==='model/list')result={pid:process.pid,responses};
- if(q.method==='thread/start')result={thread:{id:'routing-'+process.pid+'-'+ ++next}};
- if(q.method==='thread/read'||q.method==='thread/resume')result={thread:{id:q.params.threadId,turns:[]}};
+ if(q.method==='initialize')result={userAgent:'routing-protocol-fixture yuan-zhou-remote-workspace/1'+(q.params.clientInfo?.name==='legacy-runtime'?'':' yuan-zhou-conversation-read/1')};
+ if(q.method==='model/list')result={pid:process.pid,responses,reads,lastTools};
+ if(q.method==='thread/start'){lastTools=(q.params.dynamicTools??[]).map(t=>t.name);result={thread:{id:'routing-'+process.pid+'-'+ ++next}};}
+ if(q.method==='thread/read'||q.method==='thread/resume'){reads++;result={thread:{id:q.params.threadId,turns:[{id:'history-turn',status:'completed',items:[{id:'history-user',type:'userMessage',content:[{type:'text',text:'SAME_USER_HISTORY'}]}]}]}};}
  out([{id:q.id,result}]);
 });
 setInterval(()=>{if(!fs.existsSync('inbox.json'))return;const batch=JSON.parse(fs.readFileSync('inbox.json','utf8'));fs.unlinkSync('inbox.json');out(batch);},20);
@@ -59,14 +59,40 @@ async function device(login){const keys=generateKeyPairSync('ed25519'),raw=keys.
  socket.send(JSON.stringify(envelope('agent.hello',{deviceId:paired.deviceId,agent:{version:'routing-fixture',os:'windows',arch:'x64',deviceKey:paired.deviceKey,workspaceRoot:'C:/routing-fixture',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context','workspace/read_text']}})));await until(()=>ready,'Agent fixture hello');return paired;}
 async function emit(index,messages){const path=join(runtimeDirs[index],'inbox.json'),temp=path+'.tmp';await writeFile(temp,JSON.stringify(messages));await rename(temp,path);await until(async()=>{try{await access(path);return false;}catch{return true;}},'fixture reads message batch');}
 const approval=threadId=>({id:'reused-upstream-approval',method:'item/tool/requestUserInput',params:{threadId,questions:[{id:'secret',question:'ALICE_PRIVATE_PROMPT'}]}});
-async function init(ui){await ui.request('session.initialize',{clientInfo:{name:'worker-routing-protocol-fixture',version:'1'}});const info=await ui.request('model.list');workerPids.add(info.pid);return info.pid;}
+async function init(ui,name='worker-routing-protocol-fixture'){await ui.request('session.initialize',{clientInfo:{name,version:'1'}});const info=await ui.request('model.list');workerPids.add(info.pid);return info.pid;}
 
 try{
  const server=start();await until(()=>log.includes('listening'),'TLS gateway ready');
  const la=await post('/auth/login',{username:'alice',password}),lb=await post('/auth/login',{username:'bob',password});
  const da=await device(la),db=await device(lb);let a=await client(la,da);const b=await client(lb,db);
- const pidA=await init(a),pidB=await init(b);assert.notEqual(pidA,pidB);
+ const pidA=await init(a),pidB=await init(b,'legacy-runtime');assert.notEqual(pidA,pidB);
  const threadId=(await a.request('conversation.create')).thread.id;
+ const otherDevice=await device(la),other=await client(la,otherDevice);await init(other);
+ const targetId=(await other.request('conversation.create')).thread.id;
+ await other.request('conversation.archive',{threadId:targetId});
+ other.socket.close();
+ const foreignId=(await b.request('conversation.create')).thread.id;
+ assert((await a.request('model.list')).lastTools.includes('conversation_read'));
+ assert(!(await b.request('model.list')).lastTools.includes('conversation_read'));
+ await emit(1,[{id:'legacy-history-read',method:'item/tool/call',params:{threadId:foreignId,tool:'conversation_read',arguments:{threadId:foreignId}}}]);
+ let legacyRead;await until(async()=>{legacyRead=(await b.request('model.list')).responses.find(r=>r.id==='legacy-history-read');return !!legacyRead;},'legacy history capability rejection');
+ assert.equal(legacyRead.result.success,false);assert.match(legacyRead.result.contentItems[0].text,/NEW_THREAD_REQUIRED/);
+ assert.equal((await b.request('model.list')).reads,0);
+ const beforeHistoryAgentCalls=agentRequests.length;
+ async function readTool(id,target,ownerThread=threadId){
+   await emit(0,[{id,method:'item/tool/call',params:{threadId:ownerThread,turnId:'read-turn',tool:'conversation_read',arguments:{threadId:target}}}]);
+   let response;await until(async()=>{response=(await a.request('model.list')).responses.find(r=>r.id===id);return !!response;},'history tool response');return response.result;
+ }
+ const ownedRead=await readTool('owned-history',targetId);assert.equal(ownedRead.success,true);
+ const ownedData=JSON.parse(ownedRead.contentItems[0].text);assert.equal(ownedData.archived,true);assert.match(JSON.stringify(ownedData.fragments),/SAME_USER_HISTORY/);
+ const beforeDeniedReads=(await a.request('model.list')).reads;
+ for(const [id,target]of [['foreign-history',foreignId],['missing-history','absent']]){const result=await readTool(id,target);assert.equal(result.success,false);assert.match(result.contentItems[0].text,/CONVERSATION_UNAVAILABLE/);}
+ assert.equal((await a.request('model.list')).reads,beforeDeniedReads);
+ await a.request('conversation.delete',{threadId:targetId});
+ const deletedRead=await readTool('deleted-history',targetId);assert.equal(deletedRead.success,false);
+ assert.equal(agentRequests.length,beforeHistoryAgentCalls,'central history performs no device RPC');
+ assert(!b.events.some(e=>JSON.stringify(e).includes('SAME_USER_HISTORY')));
+ pass('conversation_read reads same-user archived cross-device history, rejects foreign/missing/deleted IDs before Worker read, and never dispatches to Agent');
  await b.request('model.list'); // Make Bob the last active UI, while Alice owns this Thread.
  a.socket.close();await until(()=>a.socket.readyState===WebSocket.CLOSED,'Alice UI disconnected');
  const bobBoundary=b.events.length;await emit(0,[approval(threadId)]);

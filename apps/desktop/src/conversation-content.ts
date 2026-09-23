@@ -34,7 +34,7 @@ export function processItem(value: unknown, turnId?: string, completed = true): 
   if (typeof item.type === "string" && labels[item.type]) {
     // Do not expose central cwd/commands as if they were client execution details.
     const name = typeof item.tool === "string" ? item.tool : undefined;
-    return { ...base, kind: "tool", toolName: item.type === "dynamicToolCall" ? name : undefined, content: `${labels[item.type]}${name ? ` · ${name}` : ""}` };
+    return { ...base, kind: "tool", toolName: item.type === "dynamicToolCall" ? name : undefined, content: name === "conversation_read" ? "读取对话历史 · 中央只读" : `${labels[item.type]}${name ? ` · ${name}` : ""}` };
   }
 }
 

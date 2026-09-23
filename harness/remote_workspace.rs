@@ -3,7 +3,8 @@
 use serde_json::Value;
 use std::sync::OnceLock;
 
-pub const MARKER: &str = "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1";
+pub const MARKER: &str =
+    "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1";
 
 pub fn enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
@@ -30,6 +31,7 @@ pub fn device_tool(name: &str) -> bool {
             | "device_workspace_apply_patch"
             | "device_skill_load"
             | "device_skill_draft"
+            | "conversation_read"
     )
 }
 
@@ -212,6 +214,7 @@ mod tests {
     fn allowlist_is_exact() {
         assert!(device_tool("device_exec"));
         assert!(device_tool("device_skill_draft"));
+        assert!(device_tool("conversation_read"));
         for name in [
             "exec_command",
             "apply_patch",

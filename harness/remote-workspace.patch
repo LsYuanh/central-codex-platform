@@ -1953,13 +1953,14 @@ diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_wo
 new file mode 100644
 --- /dev/null
 +++ b/codex-rs/core/src/remote_workspace.rs
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,247 @@
 +//! Yuan Zhou's process-wide, fail-closed workspace boundary.
 +//! This module is added to the pinned upstream codex-core by the patch generator.
 +use serde_json::Value;
 +use std::sync::OnceLock;
 +
-+pub const MARKER: &str = "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1";
++pub const MARKER: &str =
++    "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1";
 +
 +pub fn enabled() -> bool {
 +    static ENABLED: OnceLock<bool> = OnceLock::new();
@@ -1986,6 +1987,7 @@ new file mode 100644
 +            | "device_workspace_apply_patch"
 +            | "device_skill_load"
 +            | "device_skill_draft"
++            | "conversation_read"
 +    )
 +}
 +
@@ -2168,6 +2170,7 @@ new file mode 100644
 +    fn allowlist_is_exact() {
 +        assert!(device_tool("device_exec"));
 +        assert!(device_tool("device_skill_draft"));
++        assert!(device_tool("conversation_read"));
 +        for name in [
 +            "exec_command",
 +            "apply_patch",

@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { reduceConversationEvent, isProcessMessage, groupConversation, compactConversationRows } from "../../apps/desktop/src/conversation-content.ts";
 import { messagesFromThreadRead } from "../../apps/desktop/src/thread-history.ts";
 import { appendStreamDelta } from "../../apps/desktop/src/chat-stream.ts";
+import { processItem } from "../../apps/desktop/src/conversation-content.ts";
 import type { ChatMessage } from "../../apps/desktop/src/gateway-ui-events.ts";
 
 let rows: ChatMessage[] = [{ id: "u", role: "user", content: "任务", turnId: "t" }];
+assert.equal(processItem({id:"history-tool",type:"dynamicToolCall",tool:"conversation_read"})?.content,"读取对话历史 · 中央只读");
 let sequence = 0;
 function emit(method: string, params: object) {
   rows = reduceConversationEvent(rows, { method, params, sequence: ++sequence }, "t") ?? rows;

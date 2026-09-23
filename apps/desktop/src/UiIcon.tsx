@@ -30,6 +30,7 @@ const paths = {
   chevronDown: "m6 9 6 6 6-6",
   arrowDown: "M12 4v16m-7-7 7 7 7-7",
   archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
+  copy: "M8 8h13v13H8zM16 8V3H3v13h5",
   trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
 } as const;
 

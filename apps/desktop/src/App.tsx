@@ -29,6 +29,7 @@ import { UiIcon } from "./UiIcon";
 import { ThemePicker } from "./ThemePicker";
 import { ConnectionModePicker, type TestMode } from "./ConnectionModePicker";
 import { ThreadActions } from "./ThreadActions";
+import { useThreadIdCopy } from "./useThreadIdCopy";
 import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
 import { TurnConversation } from "./TurnConversation";
@@ -1424,6 +1425,7 @@ export default function App() {
   }, [approvalResponse, sendApprovalResponse]);
 
   const visibleThreads = sidebarOrder.rows;
+  const threadIdCopy = useThreadIdCopy();
   const recentThreads = visibleThreads.filter(t => sidebarOrder.group(t) === null);
   const currentProject = threadId ? threads.find(t => t.id === threadId)?.clientProject : projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject;
   const renderThread = (thread: ThreadSummary) => {
@@ -1439,7 +1441,7 @@ export default function App() {
                     <button className="conversation-select" aria-current={thread.id === threadId ? "page" : undefined} onClick={() => { void resumeThread(thread.id); setSidebarOpen(false); }} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
                       <span className="conversation-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong></span>
                     </button>
-                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : <ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} organize={() => setOrganizingThread(thread)} moveUp={index > 0 ? () => sidebarOrder.move(thread.id, group, siblings[index-1].id) : undefined} moveDown={index < siblings.length-1 ? () => sidebarOrder.move(thread.id, group, siblings[index+1].id, true) : undefined} />}</div>
+                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : null}<ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy) || running || needsApproval || needsReconcile} copyId={() => threadIdCopy.copy(thread.id)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} organize={() => setOrganizingThread(thread)} moveUp={index > 0 ? () => sidebarOrder.move(thread.id, group, siblings[index-1].id) : undefined} moveDown={index < siblings.length-1 ? () => sidebarOrder.move(thread.id, group, siblings[index+1].id, true) : undefined} /></div>
                   </div>;
   };
   const visibleEvents = events.filter((event) => {
@@ -1504,6 +1506,7 @@ export default function App() {
 
   return (
     <main className={`desktop-shell ${sidebarOpen ? "sidebar-open" : ""}`}>
+      {threadIdCopy.feedback}
       {threadDrag.overlay}
       {organizingThread && <OrganizeThreadDialog key={`${projectScope}:${organizingThread.id}`} thread={organizingThread} group={sidebarOrder.group(organizingThread)} projects={projectService.projects} close={() => setOrganizingThread(undefined)} move={group => sidebarOrder.move(organizingThread.id,group)} />}
       {clientUpdate.phase === "installing" && <div className="update-install-overlay" role="status" aria-live="assertive"><strong>正在安装更新</strong><p>远舟即将关闭并重新启动，请稍候。</p></div>}
@@ -1733,7 +1736,7 @@ export default function App() {
                         const title = threadDisplayTitle(thread);
                         return <div className="archived-thread-row" role="listitem" key={thread.id}>
                           <div className="archived-thread-copy"><strong title={title}>{title}</strong>{thread.preview?.trim() && thread.preview.trim() !== title && <small title={thread.preview}>{thread.preview}</small>}</div>
-                          <div className="archived-thread-actions">{busy ? <span className="archived-thread-progress" role="status">处理中…</span> : <><button className="button-secondary" aria-label={`恢复对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void restoreThread(thread)}>恢复</button><button className="button-quiet archived-thread-delete" title="永久删除" aria-label={`永久删除对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void deleteThread(thread)}><UiIcon name="trash" /></button></>}</div>
+                          <div className="archived-thread-actions"><button className="button-quiet archived-thread-copy-id" title="复制对话 ID" aria-label={`复制对话 ID：${title}`} onClick={() => threadIdCopy.copy(thread.id)}><UiIcon name="copy" /></button>{busy ? <span className="archived-thread-progress" role="status">处理中…</span> : <><button className="button-secondary" aria-label={`恢复对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void restoreThread(thread)}>恢复</button><button className="button-quiet archived-thread-delete" title="永久删除" aria-label={`永久删除对话：${title}`} disabled={Boolean(threadBusy)} onClick={() => void deleteThread(thread)}><UiIcon name="trash" /></button></>}</div>
                         </div>;
                       })}
                     </div>

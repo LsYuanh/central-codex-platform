@@ -620,7 +620,30 @@ a {
   padding-right: 40px;
 }
 
-.conversation-item:has([role="status"]) .conversation-select { padding-right: 76px; }
+.conversation-item:has([role="status"]) .conversation-select { padding-right: 108px; }
+
+.thread-copy-notice {
+  position: fixed;
+  z-index: 1000;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  width: max-content;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 4px 16px #0002;
+}
+.thread-copy-notice code { user-select: text; overflow-wrap: anywhere; }
+.thread-copy-notice button { min-height: var(--control-compact); padding: 3px 10px; border-radius: var(--control-radius); font-size: 13px; line-height: 20px; }
+@media (pointer: coarse) { .thread-copy-notice { --control-compact: 44px; } }
 
 .conversation-actions button {
   display: grid;
@@ -1339,6 +1362,7 @@ a {
 .conversation-item.active .conversation-copy strong,.settings-nav button.active strong { font-weight: 500; }
 .conversation-item:has([aria-expanded="true"]) .conversation-actions { opacity: 1; pointer-events: auto; }
 .conversation-item:has([aria-expanded="true"]) .conversation-select { padding-right: 40px; }
+.conversation-item:has([role="status"]):has([aria-expanded="true"]) .conversation-select { padding-right: 108px; }
 .settings-connection-summary { display: grid; gap: 8px; margin-top: auto; padding: 20px 12px 8px; font-size: 12px; color: var(--ink-muted); }
 .settings-connection-summary > span { display: flex; align-items: center; gap: 8px; }
 
@@ -1683,7 +1707,7 @@ a {
 .archived-thread-list { border-top:1px solid var(--line); }
 .archived-thread-copy strong { font-size:14px; font-weight:500; line-height:20px; }
 .archived-thread-copy small { line-height:18px; }
-.archived-settings-page .archived-thread-delete { display:grid; place-items:center; width:var(--control-compact); padding:0; border-color:transparent; }
+.archived-settings-page :is(.archived-thread-delete,.archived-thread-copy-id) { display:grid; place-items:center; width:var(--control-compact); padding:0; border-color:transparent; }
 .archived-settings-page .archived-thread-delete:hover:not(:disabled) { color:var(--danger); background:var(--danger-bg); }
 .archived-thread-progress { color:var(--ink-muted); font-size:12px; line-height:28px; }
 .archived-settings-content .settings-empty-state { padding:24px 0; text-align:left; font-size:13px; }

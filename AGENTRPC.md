@@ -2,6 +2,14 @@
 
 # Local AgentRPC
 
+## Conversation history tool (2026-09-22, source only; not deployed)
+
+`conversation_read({threadId,cursor?,includeTools?})` is a **central platform metadata tool**, not an Agent RPC. The gateway reads the calling user's App Server history after checking source/target ownership and live authorization, and rechecks before returning. Archived/other-device same-user history is readable without the target Agent; source/target device bindings are unchanged. No resume, command, file read, output collection or Agent dispatch is performed. Foreign, deleted and absent IDs share `CONVERSATION_UNAVAILABLE`.
+
+The response includes `threadId,title,archived,inProgress,readAt,version,includeTools,omittedItems,fragments,nextCursor`. Fragments contain `turnId,itemId,role,status,phase?,text,offset,continued`. Pages contain at most 16,000 UTF-16 text units and 40 fragments; a version-bound cursor detects changed history/options. Only public message text, attachment names and optionally saved tool text are returned; reasoning/system instructions, raw attachments and host metadata are excluded. Results are reference data, never instructions or authorization. Failure codes include `CONVERSATION_ARGUMENTS_INVALID`, `CONVERSATION_CURSOR_INVALID`, `CONVERSATION_CHANGED`, `CONVERSATION_HISTORY_UNAVAILABLE`, `CONVERSATION_READ_TIMEOUT` and `CANCELLED`.
+
+Harness must attest `yuan-zhou-conversation-read/1` and explicitly allowlist the tool. Gateway advertises `platformCapabilities.conversationRead` and registers it only for newly created Threads, persisting a `conversationRead` capability flag. Old reading Threads return `CONVERSATION_READ_NEW_THREAD_REQUIRED`; old Threads remain valid targets. No existing Agent capability or wire method changes. Full native Harness/model qualification remains pending; see the validation guide.
+
 Current maintenance baseline: 2026-09-20. WSS plus `device-token-v1` is the deployed default. Sections explicitly marked historical describe legacy compatibility and protocol fixtures, not the current product startup path. See the [maintenance index](docs/README.md) for deployment and acceptance limits.
 
 ## Client projects (2026-09-20, central deployed; desktop installer pending)
