@@ -15,6 +15,8 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+2026-09-23: the central Mac now runs `macos-arm64-node24-qa1-f6dee505ea41b6b6` (revision 12). The new Mac build passed the native boundary and deletion probes plus a real central-model/Windows-Agent history-read and archive-delete acceptance run. Old deployment/build copies and rollback backups were removed at the operator's request; only the latest installed service and DMG remain. See the release manual for retained paths and limits.
+
 The remote request policy now includes `thread/delete` (2026-09-23 source fix).
 It delegates to the pinned App Server's history deletion implementation, accepts
 only a Thread ID in the policy validator, and retains the gateway's ownership check.
@@ -231,7 +233,7 @@ The fixed upstream version remains 0.153.4. `yuan-zhou-managed-skills/1` is an a
 
 The authenticated gateway owns full packages outside worker directories. It projects normalized name/description and instruction body only; scripts, templates and references never enter the native discovery directory. Explicit selections are converted from platform IDs/revisions or known `$name` mentions to genuine native skill inputs. `device_skill_load` prepares and hashes resources through the bound Local Agent before the model uses them. `device_skill_draft` registers a draft on that client and must appear in the exact native tool allowlist as well as the gateway's dynamic tools. Instructions direct the model to client resource paths. Native executors and all other existing restrictions remain enforced.
 
-Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. The authorized LAN Mac deployment now uses `macos-arm64-node24-qa1-1c0bd7472f7b0cc9` (config revision 11, 2026-09-22). Real central-model/Windows-Agent skill execution and history verification passed; the Windows AppContainer build, Mac client, and multi-machine matrix remain unqualified. Client installers were not republished.
+Reproduce the patch from clean pinned upstream with `node harness/apply-fork.mjs <source>`, and update the patch SHA-256 in `upstream.json`. The patch is byte-pinned with a Git attribute preserving line endings. The authorized LAN Mac deployment now uses `macos-arm64-node24-qa1-f6dee505ea41b6b6` (config revision 12, 2026-09-23). Real central-model/Windows-Agent skill execution and history verification passed; the Windows AppContainer build, Mac client, and multi-machine matrix remain unqualified. Client installers were not republished.
 
 ## Verification and rollback
 
