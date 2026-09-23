@@ -37,12 +37,15 @@ try {
  await page.getByRole('button',{name:'设置',exact:true}).click();
  const picker=page.locator('#desktop-language');await picker.waitFor();
  const before=connections,requests=calls.length;
- await picker.selectOption('en');await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
+ await picker.getByText('English',{exact:true}).click();await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
  assert.equal(await page.locator('html').getAttribute('lang'),'en');assert.equal(connections,before);assert.equal(calls.length,requests,'Language switch must not issue RPCs');
  for(const theme of ['light','dark']){
   await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
   await page.screenshot({path:join(output,`general-en-${theme}.png`)});
  }
+ await picker.getByRole('radio',{name:'English',exact:true}).focus();
+ await page.keyboard.press('ArrowLeft');await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
+ await page.keyboard.press('ArrowRight');await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
  await page.getByRole('button',{name:'Archived chats',exact:true}).click();
  await page.getByText('用户自己的标题',{exact:true}).waitFor();await page.getByText('1 chat',{exact:true}).waitFor();
  assert.match(await page.locator('time').innerText(),/September/);
@@ -61,18 +64,18 @@ try {
  await page.setViewportSize({width:400,height:700});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.screenshot({path:join(output,'general-en-narrow.png')});
  await page.setViewportSize({width:1224,height:816});await page.reload();await page.getByRole('button',{name:'Settings',exact:true}).click();
- assert.equal(await picker.inputValue(),'en');
+ assert.equal(await picker.locator('input:checked').inputValue(),'en');
  // Failure is visible and must preserve the previously selected language.
  await page.evaluate(()=>{window.originalSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='yuanzhou.desktop.language.v1')throw new Error('blocked');return window.originalSetItem.call(this,key,value);};});
- await picker.selectOption('zh-CN');await page.getByRole('alert').filter({hasText:'Language preference could not be confirmed'}).waitFor();assert.equal(await picker.inputValue(),'en');
- await page.evaluate(()=>Storage.prototype.setItem=window.originalSetItem);await picker.selectOption('zh-CN');await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
+ await picker.getByText('简体中文',{exact:true}).click();await page.getByRole('alert').filter({hasText:'Language preference could not be confirmed'}).waitFor();assert.equal(await picker.locator('input:checked').inputValue(),'en');
+ await page.evaluate(()=>Storage.prototype.setItem=window.originalSetItem);await picker.getByText('简体中文',{exact:true}).click();await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
  await page.reload();assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
  // Independent components also react to language changes; no root remount required.
  await writeFile(join(output,'components.html'),`<html><body><div id="root"></div><script type="module" src="/@fs/${resolve('tests/fixtures/language-qa.tsx').replaceAll('\\','/')}"></script></body></html>`);
  qaServer=await createServer({root:output,configFile:false,plugins:[react()],cacheDir:join(output,'.vite-components'),server:{host:'127.0.0.1',port:0,fs:{allow:[resolve('.')]}}});await qaServer.listen();
  await page.goto(`${qaServer.resolvedUrls.local[0]}components.html`);
  await page.getByText('Trigger notices',{exact:true}).click();await page.getByTestId('notice').filter({hasText:'技能 我的技能'}).waitFor();
- await picker.selectOption('en');await page.getByTestId('notice').filter({hasText:'Skill 我的技能 changed'}).waitFor();
+ await picker.getByText('English',{exact:true}).click();await page.getByTestId('notice').filter({hasText:'Skill 我的技能 changed'}).waitFor();
  assert.equal(await page.getByTestId('native').innerText(),'Local Agent channel unavailable: 磁盘错误. Apply settings again');
  assert.equal(await page.getByTestId('raw').innerText(),'未知远端错误：原文保留');
  assert.equal(await page.getByTestId('one').innerText(),'1 chat');assert.equal(await page.getByTestId('many').innerText(),'2 chats');
@@ -80,6 +83,6 @@ try {
  await page.getByText('用户原文：设置',{exact:true}).waitFor();await page.getByText('打印中文',{exact:true}).waitFor();
  const unresolved=await page.locator('[data-catalogue]').evaluateAll(rows=>rows.filter(row=>row.textContent.includes('{{')).map(row=>row.getAttribute('data-catalogue')));assert.deepEqual(unresolved,[]);
  const update=page.getByRole('button',{name:'Update: version 9.0.0'});await update.hover();await page.waitForTimeout(250);assert.equal(Math.round((await update.boundingBox()).width),72);
- await picker.selectOption('zh-CN');await page.getByTestId('notice').filter({hasText:'技能 我的技能'}).waitFor();
+ await picker.getByText('简体中文',{exact:true}).click();await page.getByTestId('notice').filter({hasText:'技能 我的技能'}).waitFor();
  assert.deepEqual(errors,[]);console.log(JSON.stringify({status:'LANGUAGE_UI_OK',output,checks:['switch without RPC/reconnect','draft retained','Chinese user content untouched','restart persistence','storage failure retry','existing notices and native errors switch','raw remote errors untouched','plural/date formats','memoized JSON locale refresh','catalogue interpolation','light/dark/narrow layouts']}));
 } finally {await browser.close();for(const socket of gateway.clients)socket.terminate();await new Promise(r=>gateway.close(r));await server.close();await qaServer?.close();}

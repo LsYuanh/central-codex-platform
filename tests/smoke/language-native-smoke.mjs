@@ -32,14 +32,14 @@ async function stop(){await browser?.close();browser=undefined;if(child&&child.e
 try{
  let page=await start();
  assert.equal(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:app|identifier')),'com.centralcodex.harnessqa.language');
- await page.locator('#desktop-language').selectOption('zh-CN');
+ await page.locator('#desktop-language').getByText('简体中文',{exact:true}).click();
  await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
- await page.locator('#desktop-language').selectOption('en');await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
+ await page.locator('#desktop-language').getByText('English',{exact:true}).click();await page.getByRole('heading',{name:'General & connection',exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('desktop_language')),'en');
  await page.screenshot({path:join(output,'native-en-light.png')});
  await page.getByRole('radio',{name:'Dark',exact:true}).check();await page.screenshot({path:join(output,'native-en-dark.png')});
- await stop();page=await start();assert.equal(await page.locator('#desktop-language').inputValue(),'en');
- await page.locator('#desktop-language').selectOption('zh-CN');await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
+ await stop();page=await start();assert.equal(await page.locator('#desktop-language input:checked').inputValue(),'en');
+ await page.locator('#desktop-language').getByText('简体中文',{exact:true}).click();await page.getByRole('heading',{name:'常规与连接',exact:true}).waitFor();
  await page.getByRole('radio',{name:'浅色',exact:true}).check();await page.screenshot({path:join(output,'native-zh-light.png')});
  await writeFile(join(output,'result.json'),JSON.stringify({passed:true,checks:['actual Tauri IPC','Chinese/English UI','native preference survives process restart','light/dark screenshots'],limits:['system picker and tray menu require native visual inspection']},null,2));
  console.log(`LANGUAGE_NATIVE_OK ${output}`);
