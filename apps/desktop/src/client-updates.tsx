@@ -50,6 +50,19 @@ export function useClientUpdates(scope: string, enabled: boolean) {
   };
   return {phase,release,error,progress,check,download,install};
 }
+export function SidebarSettingsRow({release, openSettings, openUpdates}: {
+  release: Release; openSettings: () => void; openUpdates: () => void;
+}) {
+  const available = !release.current && Boolean(release.version || release.ready);
+  return <div className={`sidebar-settings-row${available ? " has-update" : ""}`}>
+    <button type="button" className="sidebar-settings-button" onClick={openSettings}><UiIcon name="settings" /><span>设置</span></button>
+    {available && <button type="button" className="sidebar-update-button" onClick={openUpdates}
+      aria-label={release.version ? `更新：新版本 ${release.version}` : "更新：更新包已就绪"} title="查看版本更新">
+      <UiIcon name="download" /><span aria-hidden="true">更新</span>
+    </button>}
+  </div>;
+}
+
 export function ClientUpdatePanel({update, version, busy, enabled}: {
   update: ReturnType<typeof useClientUpdates>; version: string; busy: boolean; enabled: boolean;
 }) {

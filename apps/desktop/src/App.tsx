@@ -33,7 +33,7 @@ import { useThreadIdCopy } from "./useThreadIdCopy";
 import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
 import { TurnConversation } from "./TurnConversation";
-import { ClientUpdatePanel, useClientUpdates } from "./client-updates";
+import { ClientUpdatePanel, SidebarSettingsRow, useClientUpdates } from "./client-updates";
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
 type AppPage = "conversation" | "settings";
@@ -1548,9 +1548,8 @@ export default function App() {
               <div className="connection-summary" role="status" aria-label="连接状态">
                 <span className="connection-summary-lines"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />本机设备 · {deviceState === "online" ? "在线" : deviceState === "connecting" || deviceState === "reconnecting" ? "连接中" : "离线"}</span></span>
               </div>
-              {clientUpdate.release.version && <button className="sidebar-settings-button" onClick={() => openSettings("updates")}><UiIcon name="update" /><span>新版本 {clientUpdate.release.version}</span></button>}
               <button className="sidebar-settings-button" onClick={() => openSettings("skills")}><UiIcon name="skill" /><span>我的技能</span></button>
-              <button className="sidebar-settings-button" onClick={() => openSettings()}><UiIcon name="settings" /><span>设置</span></button>
+              <SidebarSettingsRow release={clientUpdate.release} openSettings={() => openSettings()} openUpdates={() => openSettings("updates")} />
             </div>
           </>
         ) : (

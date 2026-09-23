@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import {useState} from "react";
 import {createRoot} from "react-dom/client";
-import {ClientUpdatePanel,useClientUpdates} from "../../apps/desktop/src/client-updates";
+import {ClientUpdatePanel,SidebarSettingsRow,useClientUpdates} from "../../apps/desktop/src/client-updates";
 import "../../apps/desktop/src/styles.css";
 const test=window as any;
 test.isTauri=true;
@@ -20,6 +20,7 @@ test.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invo
   if(command==="desktop_update_install")throw Error("还有对话或本机操作正在进行，请结束后再安装");
 }};
 function Fixture(){const[enabled,setEnabled]=useState(true);const update=useClientUpdates("test",enabled);const[busy,setBusy]=useState(false);test.setUpdateBusy=setBusy;test.setUpdateEnabled=setEnabled;
-  return <main className="settings-page" style={{background:"var(--canvas)"}}><ClientUpdatePanel update={update} version="0.1.0" busy={busy} enabled={enabled}/></main>;
+  const [sidebar,setSidebar]=useState(false);test.setUpdateSidebar=setSidebar;
+  return <main className="settings-page" style={{background:"var(--canvas)"}}>{sidebar && <div style={{width:280,padding:8,background:"var(--shell)"}}><SidebarSettingsRow release={update.release} openSettings={()=>test.updateFixture.navigation="settings"} openUpdates={()=>test.updateFixture.navigation="updates"}/></div>}<ClientUpdatePanel update={update} version="0.1.0" busy={busy} enabled={enabled}/></main>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture/>);

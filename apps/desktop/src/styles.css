@@ -1698,6 +1698,43 @@ a {
   background: var(--surface);
 }
 
+.sidebar-settings-row { position: relative; }
+.sidebar-settings-row.has-update > .sidebar-settings-button { padding-right: 72px; }
+.sidebar-update-button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: var(--on-send-accent);
+  background: var(--send-accent);
+  transition: width 180ms ease, background-color 180ms ease;
+}
+.sidebar-update-button > .ui-icon,.sidebar-update-button > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.sidebar-update-button > span { opacity: 0; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.sidebar-update-button:is(:hover,:focus-visible) { width: 52px; background: var(--send-accent-hover); }
+.sidebar-update-button:is(:hover,:focus-visible) > .ui-icon { opacity: 0; }
+.sidebar-update-button:is(:hover,:focus-visible) > span { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .sidebar-settings-row > .sidebar-settings-button { min-height: 44px; }
+  .sidebar-update-button { width: 52px; height: 44px; min-height: 44px; }
+  .sidebar-update-button > .ui-icon { opacity: 0; }
+  .sidebar-update-button > span { opacity: 1; }
+}
+
 .archived-settings-page .settings-header { padding-top:24px; padding-bottom:24px; align-items:flex-start; }
 .archived-settings-page .settings-header p { margin-top:6px; }
 .archived-settings-page button { min-height:var(--control-compact); padding:3px 10px; border-radius:var(--control-radius); font-size:13px; line-height:20px; }

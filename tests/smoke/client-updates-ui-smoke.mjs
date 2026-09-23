@@ -14,6 +14,31 @@ try{
   await page.addStyleTag({content:built.outputFiles.find(f=>f.path.endsWith(".css")).text});
   await page.addScriptTag({content:built.outputFiles.find(f=>f.path.endsWith(".js")).text});
   await page.getByText("发现新版本",{exact:true}).waitFor();
+  await page.evaluate(()=>window.setUpdateSidebar(true));
+  const updateEntry=page.getByRole('button',{name:'更新：新版本 0.2.0',exact:true});
+  await updateEntry.waitFor();
+  for(const theme of ['light','dark']) {
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    await page.mouse.move(500,500);await page.waitForTimeout(220);
+    const resting=await updateEntry.boundingBox();assert.equal(resting.width,28);assert.equal(resting.height,28);
+    await page.screenshot({path:path.join(output,`sidebar-icon-${theme}.png`)});
+    await updateEntry.hover();await page.waitForTimeout(220);
+    const expanded=await updateEntry.boundingBox();assert.equal(expanded.width,52);assert.equal(expanded.x+expanded.width,resting.x+resting.width);
+    assert.equal(await updateEntry.locator('span').evaluate(el=>getComputedStyle(el).opacity),'1');
+    assert.equal(await updateEntry.locator('svg').evaluate(el=>getComputedStyle(el).opacity),'0');
+    assert.match(await updateEntry.evaluate(el=>getComputedStyle(el).transitionProperty),/width/);
+    await page.screenshot({path:path.join(output,`sidebar-hover-${theme}.png`)});
+  }
+  await updateEntry.click();assert.equal(await page.evaluate(()=>window.updateFixture.navigation),'updates');
+  await page.getByRole('button',{name:'设置',exact:true}).click();assert.equal(await page.evaluate(()=>window.updateFixture.navigation),'settings');
+  await page.mouse.move(500,500);await page.keyboard.press('Tab');await page.waitForTimeout(220);
+  assert(await updateEntry.evaluate(el=>el===document.activeElement&&el.matches(':focus-visible')));
+  assert.equal((await updateEntry.boundingBox()).width,52);
+  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await updateEntry.evaluate(el=>getComputedStyle(el).transitionDuration),'0s');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.setViewportSize({width:400,height:700});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.evaluate(()=>{window.setUpdateSidebar(false);document.documentElement.dataset.theme='light';});
+  await page.setViewportSize({width:1040,height:760});
   assert.equal(await page.getByRole("heading",{name:"版本更新",exact:true}).count(),1);
   assert.equal((await page.getByRole("button",{name:"检查更新",exact:true}).boundingBox()).height,28);
   await page.screenshot({path:path.join(output,"available.png")});
@@ -37,6 +62,7 @@ try{
   await page.getByRole("button",{name:"稍后",exact:true}).click();assert.equal((await page.evaluate(()=>window.updateFixture.calls)).filter(c=>c==="desktop_update_install").length,0);
   await install.click();await page.getByRole("button",{name:"确认安装并重启"}).click();await page.getByRole("alert").filter({hasText:"还有对话"}).waitFor();
   await page.evaluate(()=>window.updateFixture.current=true);await page.getByRole("button",{name:"检查更新",exact:true}).click();await page.getByText("已是最新版本",{exact:true}).waitFor();
+  await page.evaluate(()=>window.setUpdateSidebar(true));assert.equal(await page.locator('.sidebar-update-button').count(),0);await page.evaluate(()=>window.setUpdateSidebar(false));
   for(const theme of ["light","dark"]){await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await page.setViewportSize({width:760,height:600});await page.waitForTimeout(180);await page.screenshot({path:path.join(output,`current-${theme}.png`)});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
   await page.evaluate(()=>window.updateFixture.checkFail=true);await page.getByRole("button",{name:"检查更新",exact:true}).click();await page.getByRole("alert").filter({hasText:"检查更新超时"}).waitFor();
   await page.evaluate(()=>window.setUpdateEnabled(false));await page.getByText("连接后检查更新",{exact:true}).waitFor();assert(await page.getByRole("button",{name:"检查更新",exact:true}).isDisabled());
