@@ -4,7 +4,7 @@ import { useSkills, SkillsPanel, type Skill } from "./skills";
 import { SkillComposer, type ComposerDocument, type SkillMention } from "./SkillComposer";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
-import { useSidebarOrganization, useThreadDrag, OrganizeThreadDialog } from "./SidebarOrganization";
+import { useSidebarOrganization, useThreadDrag } from "./SidebarOrganization";
 import { useProjects, readProject, type ClientProject } from "./projects";
 import { getVersion } from "@tauri-apps/api/app";
 import { useTrayNewConversation } from "./use-tray-new-conversation";
@@ -189,8 +189,6 @@ export default function App() {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const sidebarOrder = useSidebarOrganization(projectScope, threads, projectService.projects);
   const threadDrag = useThreadDrag(projectScope, sidebarOrder.move);
-  const [organizingThread, setOrganizingThread] = useState<ThreadSummary>();
-  useEffect(() => setOrganizingThread(undefined), [projectScope]);
   const [archivedThreads, setArchivedThreads] = useState<ThreadSummary[]>([]);
   const [threadBusy, setThreadBusy] = useState<string | undefined>();
   const [renameTarget, setRenameTarget] = useState<ThreadSummary | undefined>();
@@ -1429,9 +1427,6 @@ export default function App() {
   const recentThreads = visibleThreads.filter(t => sidebarOrder.group(t) === null);
   const currentProject = threadId ? threads.find(t => t.id === threadId)?.clientProject : projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject;
   const renderThread = (thread: ThreadSummary) => {
-                  const group = sidebarOrder.group(thread);
-                  const siblings = visibleThreads.filter(t => sidebarOrder.group(t) === group);
-                  const index = siblings.findIndex(t => t.id === thread.id);
                   const busy = threadBusy?.startsWith(`${thread.id}:`);
                   const running = runningThreadIds.has(thread.id);
                   const needsApproval = approvals.some((item) => item.threadId === thread.id);
@@ -1441,7 +1436,7 @@ export default function App() {
                     <button className="conversation-select" aria-current={thread.id === threadId ? "page" : undefined} onClick={() => { void resumeThread(thread.id); setSidebarOpen(false); }} disabled={sending || Boolean(busy) || Boolean(threadBusy)}>
                       <span className="conversation-copy"><strong title={threadDisplayTitle(thread)}>{threadDisplayTitle(thread)}</strong></span>
                     </button>
-                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : null}<ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy) || running || needsApproval || needsReconcile} copyId={() => threadIdCopy.copy(thread.id)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} organize={() => setOrganizingThread(thread)} moveUp={index > 0 ? () => sidebarOrder.move(thread.id, group, siblings[index-1].id) : undefined} moveDown={index < siblings.length-1 ? () => sidebarOrder.move(thread.id, group, siblings[index+1].id, true) : undefined} /></div>
+                    <div className="conversation-actions">{busy ? <span className="thread-spinner" aria-label="处理中">…</span> : needsApproval || needsReconcile ? <span className="conversation-attention" role="status" aria-label={needsApproval ? "对话等待确认" : "对话等待核对"} title={needsApproval ? "这个对话需要你的确认" : "这个对话的提交结果需要核对"}><span aria-hidden="true">!</span><span>{needsApproval ? "待确认" : "待核对"}</span></span> : running ? <span className="conversation-loading" role="status" aria-label="对话进行中" title="Codex 正在处理这个对话"><span className="conversation-loading-spinner" aria-hidden="true" /><span>进行中</span></span> : null}<ThreadActions title={threadDisplayTitle(thread)} disabled={Boolean(threadBusy) || running || needsApproval || needsReconcile} copyId={() => threadIdCopy.copy(thread.id)} rename={() => void renameThread(thread)} archive={() => void archiveThread(thread)} /></div>
                   </div>;
   };
   const visibleEvents = events.filter((event) => {
@@ -1508,7 +1503,6 @@ export default function App() {
     <main className={`desktop-shell ${sidebarOpen ? "sidebar-open" : ""}`}>
       {threadIdCopy.feedback}
       {threadDrag.overlay}
-      {organizingThread && <OrganizeThreadDialog key={`${projectScope}:${organizingThread.id}`} thread={organizingThread} group={sidebarOrder.group(organizingThread)} projects={projectService.projects} close={() => setOrganizingThread(undefined)} move={group => sidebarOrder.move(organizingThread.id,group)} />}
       {clientUpdate.phase === "installing" && <div className="update-install-overlay" role="status" aria-live="assertive"><strong>正在安装更新</strong><p>远舟即将关闭并重新启动，请稍候。</p></div>}
       {sidebarOpen && compactLayout && <button className="sidebar-backdrop" aria-label="关闭导航" onClick={closeSidebar} />}
       <aside ref={sidebarRef} id="app-sidebar" className="codex-sidebar" inert={compactLayout && !sidebarOpen} aria-label="应用导航" onKeyDown={(event) => {

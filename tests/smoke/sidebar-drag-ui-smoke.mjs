@@ -39,9 +39,12 @@ export async function runSidebarUi({port,paths,request}) {
   // Failed storage writes preserve the last saved order and surface an error.
   await page.evaluate(()=>{const original=Storage.prototype.setItem;window.__restoreStorage=()=>Storage.prototype.setItem=original;Storage.prototype.setItem=function(k,v){if(k.startsWith('yuanzhou-thread-layout-v1:'))throw Error('quota');return original.call(this,k,v);};});
   await drag(ids[1],row(ids[2]),.1);assert.equal((await order())[0],ids[2]);await page.getByRole('alert').filter({hasText:'列表偏好保存失败'}).waitFor();await page.evaluate(()=>window.__restoreStorage());
-  await page.getByRole('button',{name:'更多操作：拖拽一'}).focus();await page.getByRole('button',{name:'更多操作：拖拽一'}).click();await page.getByRole('menuitem',{name:'移动到项目或最近'}).click();await page.getByRole('combobox').selectOption(other.id);await page.getByRole('button',{name:'移动',exact:true}).click();
-  assert.equal(await group(other.id).locator(`[data-thread-id="${ids[0]}"]`).count(),1);
+  const more=page.getByRole('button',{name:'更多操作：拖拽一'});
+  await more.focus();await page.keyboard.press('ArrowDown');
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(),['复制对话 ID','重命名','归档对话']);
+  await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement?.textContent),'归档对话');
+  await page.keyboard.press('Escape');assert.equal(await more.evaluate(el=>el===document.activeElement),true);
   await page.screenshot({path:join(out,'organized.png')});assert.deepEqual(errors,[]);
-  console.log('SIDEBAR_DRAG_UI_OK: pointer reorder, Escape, cross-project/recent, reload, unchanged cwd, background activity, streaming dedup, storage failure, accessible move');
+  console.log('SIDEBAR_DRAG_UI_OK: pointer reorder, Escape, cross-project/recent, reload, unchanged cwd, background activity, streaming dedup, storage failure, reduced menu and keyboard focus');
  }catch(e){if(page){await page.screenshot({path:join(out,'failure.png')});console.error((await page.locator('body').innerText()).slice(0,1600));}throw e;}finally{await browser.close();}
 }

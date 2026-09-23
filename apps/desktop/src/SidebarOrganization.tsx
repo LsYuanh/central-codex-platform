@@ -73,12 +73,3 @@ export function useThreadDrag(scope:string,move:(id:string,group:string|null,anc
   return {drag,handlers:{onPointerDown:down,onPointerMove:motion,onPointerUp:up,onPointerCancel:stop,onLostPointerCapture:stop,onClickCapture:click,onDragStart:(e:React.DragEvent)=>e.preventDefault()},
     overlay:drag?createPortal(<div className="thread-drag-preview" style={{left:Math.max(8,Math.min(drag.x+12,innerWidth-252)),top:Math.max(8,Math.min(drag.y+12,innerHeight-48))}}>{drag.title}</div>,document.body):null};
 }
-
-export function OrganizeThreadDialog({thread,group,projects,close,move}:{thread:ThreadSummary;group:string|null;projects:ClientProject[];close:()=>void;move:(group:string|null)=>void}) {
-  const ref=useRef<HTMLDialogElement>(null);const [selected,setSelected]=useState(group??"");
-  useEffect(()=>{const prior=document.activeElement;ref.current?.showModal();return()=>{ref.current?.close();if(prior instanceof HTMLElement&&prior.isConnected)prior.focus();};},[]);
-  return createPortal(<dialog ref={ref} className="project-dialog" aria-labelledby="organize-title" onCancel={e=>{e.preventDefault();close();}}><form onSubmit={e=>{e.preventDefault();move(selected||null);close();}}>
-    <header><h2 id="organize-title">移动对话</h2></header><label>目标分组<select autoFocus value={selected} onChange={e=>setSelected(e.target.value)}><option value="">最近</option>{projects.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label>
-    <p className="project-dialog-hint">将“{thread.name||thread.preview||"对话"}”移到目标分组顶部，保留原工作目录和历史。</p><footer><span/><button type="button" className="button-quiet" onClick={close}>取消</button><button type="submit">移动</button></footer>
-  </form></dialog>,document.body);
-}

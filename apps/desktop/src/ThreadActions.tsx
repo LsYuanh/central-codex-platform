@@ -3,9 +3,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { UiIcon } from "./UiIcon";
 
-export function ThreadActions({ title, disabled, rename, archive, organize, moveUp, moveDown, copyId }: {
+export function ThreadActions({ title, disabled, rename, archive, copyId }: {
   title: string; disabled: boolean; rename: () => void; archive: () => void;
-  organize?:()=>void; moveUp?:()=>void; moveDown?:()=>void;
   copyId?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -56,7 +55,6 @@ export function ThreadActions({ title, disabled, rename, archive, organize, move
     }}>
       {copyId && <button type="button" role="menuitem" onClick={() => { close(true); copyId(); }}><UiIcon name="copy" />复制对话 ID</button>}
       <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); rename(); }}><UiIcon name="edit" />重命名</button>
-      {organize && <><button type="button" role="menuitem" disabled={disabled||!moveUp} onClick={()=>{close(true);moveUp?.();}}>上移</button><button type="button" role="menuitem" disabled={disabled||!moveDown} onClick={()=>{close(true);moveDown?.();}}>下移</button><button type="button" role="menuitem" disabled={disabled} onClick={()=>{close(true);organize();}}>移动到项目或最近</button></>}
       <button type="button" role="menuitem" disabled={disabled} onClick={() => { close(true); archive(); }}><UiIcon name="archive" />归档对话</button>
     </div>, document.body)}
   </>;
