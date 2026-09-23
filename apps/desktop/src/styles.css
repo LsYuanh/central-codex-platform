@@ -1758,7 +1758,7 @@ a {
   .sidebar-update-button > span { opacity: 1; }
 }
 
-.archived-settings-page .settings-header { padding-top:64px; padding-bottom:48px; align-items:center; }
+.archived-settings-page .settings-header { padding-top:24px; padding-bottom:24px; align-items:center; }
 .archived-settings-page .settings-header h1 { font-weight:500; }
 .archived-settings-page button { min-height:var(--control-compact); padding:3px 10px; border-radius:var(--control-radius); font-size:13px; line-height:20px; }
 .archived-header-actions { display:flex; align-items:center; gap:8px; flex:none; }
@@ -1797,7 +1797,7 @@ html[data-input-focus="keyboard"] .archived-search:focus-within { outline:2px so
 .archived-settings-page .archived-thread-delete:hover:not(:disabled) { color:var(--danger); background:var(--danger-bg); }
 .archived-settings-content .settings-empty-state { display:grid; justify-items:center; gap:12px; padding:48px 0; font-size:13px; }
 @media(max-width:600px) {
-  .archived-settings-page .settings-header { padding:28px 20px; gap:16px; flex-wrap:wrap; }
+  .archived-settings-page .settings-header { padding:24px 20px; gap:16px; flex-wrap:wrap; }
   .archived-settings-content { padding:0 20px 32px; }
   .archived-toolbar { flex-wrap:wrap; gap:10px; margin-bottom:24px; }
   .archived-search { flex-basis:100%; }
