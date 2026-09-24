@@ -139,8 +139,10 @@
   --shell: #edf3f8;
   --canvas: #fff;
   --surface: #f3f3f3;
-  --user-bubble-bg: #fcecf4;
+  --user-bubble-bg: #fdedf4;
   --user-bubble-ink: #684354;
+  --message-action-bg: #f077af;
+  --message-action-ink: #261b21;
   --send-accent: #c44482;
   --send-accent-hover: #aa326d;
   --on-send-accent: #fff;
@@ -197,7 +199,7 @@
   --shell: #20262e;
   --canvas: #1e1e1e;
   --surface: #292929;
-  --user-bubble-bg: #3d2935;
+  --user-bubble-bg: #873e60;
   --user-bubble-ink: #efcada;
   --send-accent: #e58ab5;
   --send-accent-hover: #eda4c6;
@@ -1180,8 +1182,8 @@ a {
   flex: none;
   padding: 0;
   border-radius: 50%;
-  background: var(--send-accent);
-  color: var(--on-send-accent);
+  background: var(--message-action-bg);
+  color: var(--message-action-ink);
 }
 
 .welcome-brand-logo {
@@ -1191,7 +1193,7 @@ a {
   margin: 0 auto 20px;
 }
 
-.send-button:not(.send-button-stop):hover:not(:disabled) { background: var(--send-accent-hover); }
+.send-button:not(.send-button-stop):hover:not(:disabled) { background: var(--message-action-bg); }
 
 .send-button .ui-icon {
   width: 16px;
@@ -1752,8 +1754,8 @@ a {
   overflow: hidden;
   border: 0;
   border-radius: 999px;
-  color: var(--on-send-accent);
-  background: var(--send-accent);
+  color: var(--message-action-ink);
+  background: var(--message-action-bg);
   transition: width 180ms ease, background-color 180ms ease;
 }
 .sidebar-update-button > .ui-icon,.sidebar-update-button > span {
@@ -1766,7 +1768,7 @@ a {
 }
 .sidebar-update-button > span { opacity: 0; white-space: nowrap; font-size: 12px; font-weight: 500; }
 .sidebar-update-button > .ui-icon { width: 12px; height: 12px; }
-.sidebar-update-button:is(:hover,:focus-visible) { width: var(--update-label-width, 52px); background: var(--send-accent-hover); }
+.sidebar-update-button:is(:hover,:focus-visible) { width: var(--update-label-width, 52px); background: var(--message-action-bg); }
 :root:lang(en) { --update-label-width: 72px; }
 .language-picker { position:relative; flex:none; width:160px; max-width:100%; }
 .language-picker-trigger[aria-disabled="true"] { cursor:wait; opacity:.6; }
