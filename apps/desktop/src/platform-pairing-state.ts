@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-import { t, message as uiMessage, text as formatMessage, type MessageKey, type UiMessage } from "./i18n.ts";
+import { t, UiError, message as uiMessage, text as formatMessage, type MessageKey, type UiMessage } from "./i18n.ts";
 
 const notices = {
+  CENTRAL_CONNECTION_LIMIT: "客户端残留连接过多，请完整退出远舟后重新打开。",
+  CENTRAL_PAGE_CHANGED: "页面已刷新，原连接已取消，请重试连接。",
+  CENTRAL_IDENTITY_MISMATCH: "本机配对与运行配置不一致，请在连接设置中重新读取并应用配置。",
+  CENTRAL_CLIENT_CONNECTION_FAILED: "客户端未能建立连接，请重试；若持续失败，请完整退出远舟后重新打开。",
   CENTRAL_CA_INVALID: "本机保存的中央 CA 格式无效，请重新读取配置或使用管理员的新配对码。",
   CENTRAL_CA_UNAVAILABLE: "找不到可用的中央信任证书，请使用管理员提供的一体配对码。",
   CENTRAL_TLS_INIT_FAILED: "客户端加密连接初始化失败，请重启客户端后重试。",
@@ -17,7 +21,11 @@ const notices = {
 } as const;
 export type CentralTransportCode = keyof typeof notices;
 export function centralTransportCode(value: unknown): CentralTransportCode | undefined {
-  const raw = (value instanceof Error ? value.message : typeof value === "string" ? value : "").replace(/^Error:\s*/, "");
+  const raw = (value instanceof UiError ? value.localized.key : value instanceof Error ? value.message : typeof value === "string" ? value : "").replace(/^Error:\s*/, "");
+  // Preserve actionable errors from older native builds without reflecting raw diagnostics.
+  if(raw === "已有中央连接，请先关闭")return "CENTRAL_CONNECTION_LIMIT";
+  if(raw === "页面通道已关闭")return "CENTRAL_PAGE_CHANGED";
+  if(raw === "请应用中央配对获得的用户与设备配置")return "CENTRAL_IDENTITY_MISMATCH";
   return Object.hasOwn(notices, raw) ? raw as CentralTransportCode : undefined;
 }
 export function centralTransportNotice(value: unknown): string | undefined {

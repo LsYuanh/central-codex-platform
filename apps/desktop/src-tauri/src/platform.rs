@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
 use tauri::{Manager, ipc::Channel};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
@@ -33,8 +37,10 @@ pub struct PlatformState {
     pub directory: PathBuf,
     pub(crate) guard: Mutex<()>,
     sockets: Mutex<HashMap<String, NativeSocket>>,
+    page: AtomicU64,
 }
 struct NativeSocket {
+    page: u64,
     sender: mpsc::Sender<Option<String>>,
     task: tokio::task::JoinHandle<()>,
 }
@@ -45,6 +51,40 @@ impl PlatformState {
             directory,
             guard: Mutex::new(()),
             sockets: Mutex::new(HashMap::new()),
+            page: AtomicU64::new(0),
+        }
+    }
+    // A WebView reload discards JS callbacks without closing Rust-owned sockets.
+    // Advance synchronously so even a handshake in flight cannot outlive its page.
+    pub fn begin_page(&self) -> u64 {
+        self.page.fetch_add(1, Ordering::SeqCst) + 1
+    }
+    fn require_page(&self, page: u64) -> Result<(), String> {
+        if self.page.load(Ordering::SeqCst) == page {
+            Ok(())
+        } else {
+            Err("CENTRAL_PAGE_CHANGED".into())
+        }
+    }
+    pub async fn close_before_page(&self, page: u64) {
+        let _guard = self.guard.lock().await;
+        self.close_stale_sockets(page).await;
+    }
+    async fn close_stale_sockets(&self, page: u64) {
+        let stale = {
+            let mut sockets = self.sockets.lock().await;
+            let ids: Vec<_> = sockets
+                .iter()
+                .filter(|(_, socket)| socket.page < page)
+                .map(|(id, _)| id.clone())
+                .collect();
+            ids.into_iter()
+                .filter_map(|id| sockets.remove(&id))
+                .collect::<Vec<_>>()
+        };
+        for socket in stale {
+            socket.task.abort();
+            let _ = socket.task.await;
         }
     }
     pub fn ca(&self, gateway: &str) -> Result<String, String> {
@@ -202,7 +242,16 @@ pub async fn platform_ws_open(
     if connection_id.len() > 128 {
         return Err("连接标识无效".into());
     }
+    let page = state.page.load(Ordering::SeqCst);
     let _guard = state.guard.lock().await;
+    state.require_page(page)?;
+    state.close_stale_sockets(page).await;
+    {
+        let sockets = state.sockets.lock().await;
+        if sockets.len() >= 4 || sockets.contains_key(&connection_id) {
+            return Err("CENTRAL_CONNECTION_LIMIT".into());
+        }
+    }
     let config = runtime.view().await.effective;
     let ca = state.ca(&config.gateway_url)?;
     let c = platform_security::device_token::load(
@@ -211,18 +260,16 @@ pub async fn platform_ws_open(
         &config.gateway_url,
     )?;
     if c.device_id != config.device_id || c.user.id != config.user_id {
-        return Err("请应用中央配对获得的用户与设备配置".into());
+        return Err("CENTRAL_IDENTITY_MISMATCH".into());
     }
     let url = crate::runtime::ui_url(&config);
     let socket = platform_security::socket(&url, &ca, c.bearer()).await?;
+    state.require_page(page)?;
     let mut sockets = state.sockets.lock().await;
-    if sockets.len() >= 4 || sockets.contains_key(&connection_id) {
-        return Err("已有中央连接，请先关闭".into());
-    }
     let (tx, mut rx) = mpsc::channel::<Option<String>>(64);
     on_event
         .send(json!({"type":"open"}))
-        .map_err(|_| "页面通道已关闭")?;
+        .map_err(|_| "CENTRAL_PAGE_CHANGED")?;
     let task_connection_id = connection_id.clone();
     let task = tokio::spawn(async move {
         let (mut sink, mut source) = socket.split();
@@ -252,13 +299,68 @@ pub async fn platform_ws_open(
         let _ = on_event.send(close_event(close_code));
         let _ = tokio::time::timeout(std::time::Duration::from_secs(2), sink.close()).await;
     });
-    sockets.insert(connection_id, NativeSocket { sender: tx, task });
+    sockets.insert(
+        connection_id,
+        NativeSocket {
+            page,
+            sender: tx,
+            task,
+        },
+    );
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn page_reload_cleans_old_sockets_and_rejects_inflight_handshakes() {
+        let state = PlatformState::new("test".into(), PathBuf::new());
+        let old_page = state.page.load(Ordering::SeqCst);
+        let mut receivers = Vec::new();
+        for i in 0..4 {
+            let (sender, receiver) = mpsc::channel(1);
+            receivers.push(receiver);
+            state.sockets.lock().await.insert(
+                i.to_string(),
+                NativeSocket {
+                    page: old_page,
+                    sender,
+                    task: tokio::spawn(std::future::pending()),
+                },
+            );
+        }
+        let page = state.begin_page();
+        assert_eq!(
+            state.require_page(old_page).unwrap_err(),
+            "CENTRAL_PAGE_CHANGED"
+        );
+        let (sender, mut current_receiver) = mpsc::channel(1);
+        state.sockets.lock().await.insert(
+            "current".into(),
+            NativeSocket {
+                page,
+                sender,
+                task: tokio::spawn(std::future::pending()),
+            },
+        );
+        // A delayed page-load cleanup must not remove a new page's connection.
+        state.close_before_page(page).await;
+        assert_eq!(state.sockets.lock().await.len(), 1);
+        for mut receiver in receivers {
+            assert!(receiver.recv().await.is_none());
+        }
+        assert!(state.require_page(page).is_ok());
+        assert!(matches!(
+            current_receiver.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        state.close_before_page(page).await;
+        assert_eq!(state.sockets.lock().await.len(), 1);
+        state.close_before_page(state.begin_page()).await;
+        assert!(current_receiver.recv().await.is_none());
+        assert!(state.sockets.lock().await.is_empty());
+    }
     #[test]
     fn terminal_close_preserves_only_exact_safe_codes() {
         assert_eq!(

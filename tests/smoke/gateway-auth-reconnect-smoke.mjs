@@ -3,20 +3,22 @@
 // No native process, network, credential store, or GUI is used.
 import assert from 'node:assert/strict';
 import {readFile,mkdir,mkdtemp,writeFile} from 'node:fs/promises';
-import {resolve,join} from 'node:path';
+import {resolve,join,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {stripTypeScriptTypes} from 'node:module';
 await mkdir(resolve('target'),{recursive:true});
 const root=await mkdtemp(resolve('target/gateway-auth-reconnect-'));
-for(const name of ['gateway-auth-error','platform-pairing-state','native-gateway-socket','platform-gateway-client','gateway-ui-events']){
+for(const name of ['gateway-auth-error','platform-pairing-state','native-gateway-socket','platform-gateway-client','gateway-ui-events','i18n','native-invoke','locales/en','locales/native-en']){
   const source=await readFile(resolve(`apps/desktop/src/${name}.ts`),'utf8');
-  const code=stripTypeScriptTypes(source,{mode:'transform'}).replace(/from "\.\/([\w-]+)"/g,'from "./$1.js"');
+  const code=stripTypeScriptTypes(source,{mode:'transform'}).replace(/from "\.\/([\w/.-]+)"/g,(_,path)=>`from "./${path.replace(/\.ts$/,'')}.js"`);
+  await mkdir(dirname(join(root,`${name}.js`)),{recursive:true});
   await writeFile(join(root,`${name}.js`),code);
 }
 await writeFile(join(root,'package.json'),'\{"type":"module"\}\n');
-const timers=new Map(),connections=[];let nextTimer=0,nextCallback=0,nextOpenError,nextCloseBeforeOpen;
+const timers=new Map(),connections=[],pageEvents=new EventTarget();let nextTimer=0,nextCallback=0,nextOpenError,nextCloseBeforeOpen,deferNextOpen;
 globalThis.isTauri=true;
 globalThis.window={
+  addEventListener:pageEvents.addEventListener.bind(pageEvents),removeEventListener:pageEvents.removeEventListener.bind(pageEvents),
   setTimeout(callback,delay){const id=++nextTimer;timers.set(id,{callback,delay});return id;},
   clearTimeout(id){timers.delete(id);},
   __TAURI_INTERNALS__:{
@@ -27,11 +29,12 @@ globalThis.window={
         const entry={id:args.connectionId,channel:args.onEvent};connections.push(entry);
         if(nextOpenError){const error=nextOpenError;nextOpenError=undefined;throw Error(error);}
         const close=nextCloseBeforeOpen;nextCloseBeforeOpen=undefined;
+        if(deferNextOpen){deferNextOpen=false;return;}
         queueMicrotask(()=>entry.channel.onmessage(close?{type:'close',code:close}:{type:'open'}));return;
       }
       if(command==='platform_ws_send'){
         const entry=connections.find(c=>c.id===args.connectionId);assert(entry);
-        if(args.data===null)return;
+        if(args.data===null){entry.closed=true;return;}
         const message=JSON.parse(args.data);
         if(message.operation==='session.initialize')queueMicrotask(()=>entry.channel.onmessage({type:'message',data:JSON.stringify({type:'response',requestId:message.requestId,ok:true,data:{platformCapabilities:{remoteWorkspace:true}}})}));
         else entry.lastRequest=message;
@@ -94,5 +97,31 @@ for(const code of ['CENTRAL_CERT_NAME_MISMATCH','CENTRAL_CERT_UNTRUSTED','CENTRA
   const {client}=fixture();nextOpenError=code;await assert.rejects(client.connect(),new RegExp(code));client.close();assert.equal(timers.size,0);
 }
 checks.push('typed TLS and network failures remain actionable through the actual native socket boundary');
+for(const code of ['CENTRAL_CONNECTION_LIMIT','CENTRAL_PAGE_CHANGED','CENTRAL_IDENTITY_MISMATCH']){
+  const {client}=fixture();nextOpenError=code;await assert.rejects(client.connect(),new RegExp(code));client.close();assert.equal(timers.size,0);
+}
+{
+  const {i18n}=await import(pathToFileURL(join(root,'i18n.js')).href);
+  await i18n.changeLanguage('en');
+  const {client}=fixture();nextOpenError='已有中央连接，请先关闭';
+  await assert.rejects(client.connect(),/leftover client connections.*CENTRAL_CONNECTION_LIMIT/);client.close();
+  nextOpenError='Unknown private diagnostic';const next=fixture();
+  await assert.rejects(next.client.connect(),error=>/CENTRAL_CLIENT_CONNECTION_FAILED/.test(error.message)&&!/(TLS|certificate|private)/.test(error.message));next.client.close();
+  await i18n.changeLanguage('zh-CN');
+  checks.push('local failures and localized legacy errors stay distinct from TLS; unknown details stay private');
+}
+{
+  for(let i=0;i<6;i++){
+    const {client,events}=fixture();await client.connect();const entry=latest();
+    pageEvents.dispatchEvent(new Event('pagehide'));await flush();
+    assert(entry.closed);assert.equal(client.connected,false);noRetry(events);
+  }
+  const {client,events}=fixture();deferNextOpen=true;
+  const connecting=client.connect().catch(error=>error);await flush();const entry=latest();
+  pageEvents.dispatchEvent(new Event('pagehide'));await connecting;
+  entry.channel.onmessage({type:'open'});await flush();
+  assert(entry.closed,'late handshake is closed after its page was discarded');noRetry(events);
+  checks.push('six page reloads close native sockets without reconnect; a late open is closed too');
+}
 await writeFile(join(root,'result.json'),JSON.stringify({ok:true,checks,source:'actual TypeScript native socket and gateway client with in-memory IPC and deterministic timers'},null,2));
 console.log(JSON.stringify({ok:true,checks:checks.length,result:join(root,'result.json')}));

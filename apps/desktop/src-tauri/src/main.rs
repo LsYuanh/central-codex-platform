@@ -311,6 +311,21 @@ fn main() {
             tray::setup(app)?;
             Ok(())
         })
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                if let Some(state) = webview.try_state::<platform::PlatformState>() {
+                    let page = state.begin_page();
+                    let app = webview.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        app.state::<platform::PlatformState>()
+                            .close_before_page(page)
+                            .await;
+                    });
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             language::desktop_language,
             language::set_desktop_language,

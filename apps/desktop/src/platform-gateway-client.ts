@@ -205,6 +205,7 @@ export class PlatformGatewayClient implements RpcClient {
 
   private handleClose(socket: WebSocket | NativeGatewaySocket): void {
     if (this.socket !== socket) return;
+    if(socket instanceof NativeGatewaySocket && socket.pageUnloaded)this.stopReconnect();
     const code=socket instanceof NativeGatewaySocket?gatewayAuthCode(socket.failureError):undefined;
     if(code)this.stopReconnect();
     this.rejectPending((code?connectionError(code):new UiError("中央测试网关连接已关闭")));
