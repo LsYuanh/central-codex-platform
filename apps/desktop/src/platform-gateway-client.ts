@@ -298,6 +298,10 @@ function operationForMethod(method: string): string | undefined {
   return {
     initialize: "session.initialize",
     "model/list": "model.list",
+    "collaborationMode/list": "collaboration.list",
+    "thread/goal/get": "conversation.goal.get",
+    "thread/goal/set": "conversation.goal.set",
+    "thread/goal/clear": "conversation.goal.clear",
     "project/list": "project.list",
     "skill/list": "skill.list",
     "skill/draft": "skill.draft",

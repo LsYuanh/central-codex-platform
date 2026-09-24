@@ -12,7 +12,7 @@
   {
     "path": "codex-rs/core/src/tools/registry.rs",
     "upstreamSha256": "7a871301f3f9add985a35a5a035b6106107452158f140b3bdf45471f52d63af6",
-    "patchedSha256": "b8cdbf6dc33ff2a7f31ad8c5d7ab0277b772b251ca9cb719efbe079924c77d2f"
+    "patchedSha256": "91cc2fec4e76d4c9d26580ecebb4c608b94165ebb85a1d2bbc9ce32214acb0ec"
   },
   {
     "path": "codex-rs/core/src/tools/handlers/dynamic.rs",
@@ -20,14 +20,29 @@
     "patchedSha256": "42d7528ba26c28e8a76a23b15fec8f38bb046b3f17f3b6763f09a23dad6f17b2"
   },
   {
+    "path": "codex-rs/core/src/tools/handlers/plan.rs",
+    "upstreamSha256": "f1e0acbe71dc6160ade7f4751f00c98f2d5e999d6c0954d015bf7709c382ce50",
+    "patchedSha256": "4bedc98c514e1ed39ce1a9824e8a1c97db4bbfee02d8b479291e54e2b73e9f5f"
+  },
+  {
+    "path": "codex-rs/core/src/tools/handlers/request_user_input.rs",
+    "upstreamSha256": "2fbfa85cbc1627f1569ce9d8cef7765b48a2438f5baad877bacae2fe6871ba23",
+    "patchedSha256": "d0915ea7495b8a8a11255b2252d79be43b3ac55ae9914a76e9d39df107389960"
+  },
+  {
+    "path": "codex-rs/core/src/tools/handlers/extension_tools.rs",
+    "upstreamSha256": "dcfc362856e32c844cb478aab93ede632a6f4c4c6061ea211c6b691ca08e7c4a",
+    "patchedSha256": "aa60b55697989931e14033ee29227ffbe6dace54516f7a2613c513f9dbc83ff8"
+  },
+  {
     "path": "codex-rs/core/src/tools/spec_plan.rs",
     "upstreamSha256": "27fa52215e716abe1e29fd2d1014995212e065324bed41e148fb3232d406d59b",
-    "patchedSha256": "228d52dc7b991cff38fa18e81ebc13f2985a2794a3e8afb3fb793b4e38aaff2b"
+    "patchedSha256": "acf4958e204d44845ea029fc98c55b23859a8cff78d7b3db37bd6fa2dc626678"
   },
   {
     "path": "codex-rs/features/src/lib.rs",
     "upstreamSha256": "d5f1bf1e16c3053df8a739d48e57d743ee76822e532219cee46cff5a9b1d8d78",
-    "patchedSha256": "110797379194a76b7912215e9948c34c304000ef7befd481c0b654ea00d05b79"
+    "patchedSha256": "0e7f6216ad96e429de59bf83164df98e4fc3b2fb1df30c0ea139d82282de7259"
   },
   {
     "path": "codex-rs/core/src/agents_md.rs",
@@ -107,7 +122,7 @@
   {
     "path": "codex-rs/app-server/src/extensions.rs",
     "upstreamSha256": "d747b1f157abcc773b7b9662a2b939f3f6b3ff9536fcc5334f6ef2f427acbca3",
-    "patchedSha256": "5d7dd827329ea592af4d3372a0e49e543c1ed5acb3f447ee61ac77657ffb8c0b"
+    "patchedSha256": "a0173e49bf8378c7d0230231cfbbcb054afd6ee2e9582277c69e6e09396a84a9"
   },
   {
     "path": "codex-rs/app-server/src/lib.rs",

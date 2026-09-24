@@ -40,6 +40,8 @@ import { useThreadIdCopy } from "./useThreadIdCopy";
 import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
 import { TurnConversation } from "./TurnConversation";
+import { UserInputQuestions } from "./UserInputQuestions";
+import { GoalPanel } from "./GoalPanel";
 import { ClientUpdatePanel, SidebarSettingsRow, useClientUpdates } from "./client-updates";
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
@@ -185,13 +187,18 @@ export default function App() {
   const [threadId, setThreadId] = useState<string | undefined>();
   const threadIdRef = useRef<string | undefined>(undefined);
   threadIdRef.current = threadId;
+  const [collaborationModes,setCollaborationModes] = useState<Record<string,"default"|"plan">>({});
+  const [goalOpenThread,setGoalOpenThread] = useState<string>();
+  const collaboration = collaborationModes[threadId ?? "__new__"] ?? "default";
+  const selectCollaboration = (value:"default"|"plan") => setCollaborationModes(current=>({...current,[threadId??"__new__"]:value}));
   const [draftProject, setDraftProject] = useState<ClientProject>();
   const projectScope = JSON.stringify([mode, appUrl, runtimeConfig?.effective.userId, deviceId]);
   const skillService = useSkills(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.skills === true);
   const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
   // The selector changes this draft's destination; sidebar navigation switches draft slots.
   const newDraftSlotRef = useRef("__new__:");
-  useEffect(() => { setDraftProject(undefined); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
+  useEffect(() => { setDraftProject(undefined); setCollaborationModes({}); setGoalOpenThread(undefined); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
+  useEffect(() => { if(threadId&&goalOpenThread===threadId)setGoalOpenThread(undefined); }, [threadId,goalOpenThread]);
   const newDraftKey = () => newDraftSlotRef.current;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const sidebarOrder = useSidebarOrganization(projectScope, threads, projectService.projects);
@@ -351,6 +358,8 @@ export default function App() {
   useEffect(() => { if (desktopRuntime) void loadRuntimeConfig(); }, [loadRuntimeConfig]);
 
   const syncRuntimeHistory = useCallback((id: string, result: unknown) => {
+    const restoredMode = asRecord(result)?.collaborationMode;
+    if(restoredMode === "default" || restoredMode === "plan") setCollaborationModes(current=>({...current,[id]:restoredMode}));
     const thread = asRecord(asRecord(result)?.thread);
     if (!thread) return;
     const turns = Array.isArray(thread.turns) ? thread.turns : [];
@@ -1247,10 +1256,11 @@ export default function App() {
     } finally { sendGuard.current = false; steeringRequestRef.current = false; setSending(false); setSendStage(""); }
   }, [threadId,turnId,composerDoc,composer,uncertainSubmission,appState,engineState,mode,attachments.drafts,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
 
-  const sendTurn = useCallback(async () => {
+  const sendTurn = useCallback(async (approvedPlan = false) => {
     if (configApplyingRef.current) return;
     if (turnRunning) { if (!threadBusy && !attachments.adding) await sendSteering(); return; }
-    const text = composer;
+    const text = approvedPlan ? [t("请按上述计划开始实施。"),composer].filter(Boolean).join("\n\n") : composer;
+    const selectedCollaboration = approvedPlan ? "default" : collaboration;
     const codexia = codexiaRef.current;
     if (engineState === "unavailable" || (!text.trim() && !attachments.drafts.length) || !codexia || appState !== "online" || turnRunning || threadBusy || sendGuard.current || attachments.adding || uncertainSubmission) return;
     const selectedSkills = new Map<string, {id:string;revision:number}>();
@@ -1297,6 +1307,7 @@ export default function App() {
       pendingMessageRef.current = {threadId:targetThreadId,clientMessageId};
       const response = await codexia.turnStart({
         threadId:targetThreadId, input:[{type:"text",text}],
+        ...(platformCapabilities.planMode ? {collaborationMode:{mode:selectedCollaboration,settings:{model:appModel.trim() || models.find(m=>m.isDefault)?.model || models[0]?.model || models[0]?.id, reasoning_effort:appEffort.trim()||null, developer_instructions:null}}} : {}),
         ...(mode === "central-gateway" ? {clientMessageId,attachments:refs,...(selectedSkills.size?{skills:[...selectedSkills.values()]}:{}),...(identity?{deviceKey:identity.deviceKey}:{})} : {}),
         ...(appModel.trim() ? {model:appModel.trim()} : {}),
         ...(appEffort.trim() ? {effort:appEffort.trim()} : {}),
@@ -1304,6 +1315,7 @@ export default function App() {
       });
       const result = asRecord(response.result);
       const turn = asRecord(result?.turn);
+      setCollaborationModes(current=>({...current,[targetThreadId!]:selectedCollaboration}));
       if (typeof turn?.id === "string") {
         timingStoreRef.current?.observe(targetThreadId, turn, "start");
         refreshTimings();
@@ -1336,7 +1348,7 @@ export default function App() {
       sendGuard.current=false;pendingMessageRef.current=undefined;setSending(false);setSendStage("");
       if (creatingThread) setThreadBusy(undefined);
     }
-  }, [draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composerDoc,composer,skillService.rows,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
+  }, [collaboration,models,platformCapabilities.planMode,draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composerDoc,composer,skillService.rows,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
 
   const reconcileSubmission = async () => {
     if (!uncertainSubmission || !codexiaRef.current) return;
@@ -1487,6 +1499,25 @@ export default function App() {
   const conversationGroups = groupConversation([...messages, ...visibleExecutions.filter(execution => !messages.some(row => row.executionId === execution.requestId)).map(execution => ({
     id: `execution-${execution.requestId}`, role: "assistant" as const, content: "", kind: "execution" as const, executionId: execution.requestId, turnId: execution.turnId,
   }))]);
+  const createGoalThread = async ():Promise<string> => {
+    if(threadIdRef.current)return threadIdRef.current;
+    const client=codexiaRef.current;
+    if(!client||appState!=="online"||sendGuard.current||threadBusy)throw new UiError("请先连接中央网关");
+    const generation=connectionGenerationRef.current;
+    sendGuard.current=true;setThreadBusy("__new__:goal");
+    try {
+      const project=draftProject?projectService.projects.find(p=>p.id===draftProject.id):undefined;
+      if(draftProject&&!project)throw new UiError("项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留");
+      const response=await client.threadStart({...(project?{projectId:project.id,projectRevision:project.revision}:{}),...(appModel?{model:appModel}:{}),...(appServiceTier?{serviceTier:appServiceTier}:{})});
+      const id=threadIdFromResult(response.result);
+      if(!id||generation!==connectionGenerationRef.current)throw new Error(t("目标对话创建结果待核对"));
+      setThreadId(id);threadIdRef.current=id;
+      setGoalOpenThread(id);
+      setCollaborationModes(current=>({...current,[id]:collaboration}));
+      setThreads(rows=>[{id,updatedAt:new Date().toISOString(),clientProject:project},...rows.filter(row=>row.id!==id)]);
+      return id;
+    }finally{sendGuard.current=false;setThreadBusy(undefined);}
+  };
 
   const configDirty = runtimeConfig && (Object.keys(configDraft) as (keyof DesktopConfig)[]).some(key => configDraft[key] !== runtimeConfig.saved[key]);
   const finishNavigation = (page: AppPage, section: SettingsSection, newConversation = false) => {
@@ -1649,8 +1680,9 @@ export default function App() {
 
               {approval && (
                 <div className="approval-card" role="alert" aria-live="assertive">
-                  <div className="approval-heading"><span className="approval-icon">!</span><div><strong>{t("需要你的确认")}</strong><p>{approval.kind === "user-input" ? t("Codex 需要补充输入") : t("Codex 请求执行一项操作")}</p><code className="approval-method">{approval.method}</code>{approval.method === "device/fileChange/requestApproval" && <p>{t("仅批准本次客户端补丁；Local Agent 将在执行前重新核对文件版本。目标设备、工作区及完整补丁如下。")}</p>}<pre>{JSON.stringify(approval.params, null, 2)}</pre></div></div>
-                  {approval.kind === "approval" ? (
+                  <div className="approval-heading"><span className="approval-icon">!</span><div><strong>{t("需要你的确认")}</strong><p>{approval.kind === "user-input" ? t("Codex 需要补充输入") : t("Codex 请求执行一项操作")}</p>{approval.kind!=="user-input"&&<><code className="approval-method">{approval.method}</code>{approval.method === "device/fileChange/requestApproval" && <p>{t("仅批准本次客户端补丁；Local Agent 将在执行前重新核对文件版本。目标设备、工作区及完整补丁如下。")}</p>}<pre>{JSON.stringify(approval.params, null, 2)}</pre></>}</div></div>
+                  {approval.kind === "user-input" ? <UserInputQuestions key={String(approval.id)} params={approval.params} disabled={appState!=="online"} submit={sendApprovalResponse}/> :
+                  approval.kind === "approval" ? (
                     <div className="button-row"><button onClick={() => decideApproval("accept")}>{t("允许一次")}</button>{approval.method !== "device/fileChange/requestApproval" && <button className="button-secondary" onClick={() => decideApproval("acceptForSession")}>{t("本会话允许")}</button>}<button className="button-secondary" onClick={() => decideApproval("decline")}>{t("拒绝")}</button><button className="button-quiet" onClick={() => decideApproval("cancel")}>{t("取消")}</button></div>
                   ) : (
                     <div className="custom-response"><p>{t("该请求需要自定义 JSON 响应。")}</p><textarea value={approvalResponse} onChange={(event) => setApprovalResponse(event.target.value)} rows={4} /><button onClick={sendCustomApprovalResponse}>{t("发送 JSON 响应")}</button></div>
@@ -1659,6 +1691,8 @@ export default function App() {
               )}
 
               <form ref={composerRef} className={`composer ${turnRunning ? "composer-running" : ""}`} onSubmit={(event) => { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); }}>
+                {platformCapabilities.goals&&<GoalPanel key={`${projectScope}:${threadId??"new"}`} client={appClientRef.current} threadId={threadId} online={appState==="online"} disabled={sending||Boolean(threadBusy)||deviceState!=="online"||Boolean(uncertainSubmission)} planMode={collaboration==="plan"} createThread={createGoalThread} initialOpen={threadId===goalOpenThread&&!!threadId}/>}
+                {platformCapabilities.planMode&&collaboration==="plan"&&<div className="plan-mode-notice"><span>{t("计划模式：先调研和确认方案，再开始实施。")}</span>{!turnRunning&&messages.some(m=>m.kind==="plan"&&m.itemStatus==="completed")&&<button type="button" disabled={sending||!!threadBusy||appState!=="online"||deviceState!=="online"||!!uncertainSubmission} onClick={()=>void sendTurn(true)}>{t("开始实施")}</button>}</div>}
                 {!threadId && mode === "central-gateway" && <ComposerProjectPicker key={projectScope}
                   selected={projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject} projects={projectService.projects}
                   disabled={sending || Boolean(threadBusy) || configApplying} loading={projectService.loading} error={projectService.error}
@@ -1681,6 +1715,7 @@ export default function App() {
                     disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? t("中央引擎不可用，请重新连接并核对任务状态") : mode === "fake-central" ? t("Fake Central 仅用于设置页的工具验证") : appState !== "online" ? t("请先在设置中连接中央网关") : t("描述任务，按 Enter 发送")} /></div>
                   </div>
                   <div className="composer-footer">
+                    {platformCapabilities.planMode&&<label className="collaboration-picker"><span className="sr-only">{t("协作模式")}</span><select aria-label={t("协作模式")} value={collaboration} disabled={turnRunning||sending||!!threadBusy} onChange={event=>selectCollaboration(event.target.value as "default"|"plan")}><option value="default">{t("普通模式")}</option><option value="plan">{t("计划模式")}</option></select></label>}
                     {mode === "central-gateway" && attachments.pickerButton}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
                       <summary aria-label={[t("切换模型、推理强度和速度"), speedIndicatorLabel].filter(Boolean).join(". ")}>{acceleratedSpeed && <span className="model-picker-fast" title={speedIndicatorLabel} aria-hidden="true"><UiIcon name="bolt" /></span>}<span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-chevron" aria-hidden="true"><UiIcon name="chevronDown" /></span></summary>

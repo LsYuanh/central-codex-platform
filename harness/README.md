@@ -15,6 +15,26 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+### Native plan and goals (2026-09-24, not deployed)
+
+`yuan-zhou-plan-goal/1` advertises built-in collaboration modes and native goal
+RPCs. The remote registry retains plan/question handlers and native goal tools;
+the remote App Server branch installs the goal extension before returning. Only
+the Goals feature is enabled for this extension. Native goal state, token usage,
+budget boundaries and cross-turn continuation remain upstream responsibilities.
+The gateway reserves capacity across automatic turns and pauses goals before
+interrupting by Turn ID on stop or disconnect. Plan mode rejects mutating device
+tools and skill projection in both gateway and native dispatcher.
+
+Run `node harness/plan-goal-smoke.mjs /absolute/path/to/codex-app-server` against a
+fresh compiled pinned runtime. It uses isolated histories and a deterministic
+local Responses fixture to prove plan write denial, questions, a native plan
+item, goal continuation/completion, usage, budget stop, pause/interrupt and explicit
+resume. This check is part of `build-runtime-update.mjs`, alongside gateway task
+control regressions. Real model plus Windows Agent verification is separately
+recorded in `verification/plan-goal-20260924.json`; protocol fixtures alone do not
+qualify the real execution boundary. Production revision 13 remains unchanged.
+
 ### 0.156.1 adaptation (2026-09-23)
 
 The patch generator now reads the pinned version and commit. Global instruction

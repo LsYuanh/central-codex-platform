@@ -119,7 +119,7 @@
 .thread-delete-progress { color:var(--ink-muted); font-size:12px; margin:12px 0 0; }
 .thread-delete-actions > button:disabled { opacity:.55; cursor:not-allowed; }
 .thread-delete-dialog :focus-visible { outline:2px solid var(--input-focus-ring); outline-offset:2px; }
-.thread-delete-dialog .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @keyframes thread-delete-in { from { opacity:0; } to { opacity:1; } }
 @keyframes thread-delete-out { from { opacity:1; } to { opacity:0; } }
 @media (pointer:coarse) { .thread-delete-actions > button { min-height:44px; min-width:44px; } }
@@ -3179,3 +3179,25 @@ button.result-image-button { display:block; max-width:100%; padding:0; backgroun
 .image-viewer-stage .image-fit { display:block; max-width:100%; max-height:100%; margin:auto; object-fit:contain; }
 .image-viewer-stage .image-zoom { display:block; max-width:none; max-height:none; height:auto; }
 @media (pointer:coarse) { button.result-control,button.json-toggle,.output-actions > button,.attachment-actions > button { min-height:44px; min-width:44px; } }
+/* Plan and goal controls share the existing compact composer and theme. */
+.collaboration-picker select { min-height:28px; max-width:120px; border:0; border-radius:6px; background:var(--hover); color:var(--ink); padding:3px 8px; font:inherit; font-size:12px; }
+.plan-mode-notice,.goal-summary { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; }
+.plan-mode-notice { padding:6px 12px; color:var(--ink-muted); }
+.goal-panel { padding:6px 12px; border-bottom:1px solid var(--line); min-width:0; }
+.goal-panel button,.plan-mode-notice button { min-height:28px; padding:4px 8px; font-size:12px; }
+.goal-objective { flex:1; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.goal-summary small { color:var(--ink-muted); }
+.goal-editor { display:grid; gap:10px; padding:10px 0; max-height:40vh; overflow:auto; }
+.goal-editor label,.question-custom { display:grid; gap:6px; font-size:12px; }
+.goal-editor textarea,.goal-editor input,.question-custom input { width:100%; min-width:0; box-sizing:border-box; color:var(--ink); background:var(--canvas); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+.goal-editor p { margin:0; font-size:12px; color:var(--ink-muted); }
+.task-control-error { color:var(--danger); font-size:12px; overflow-wrap:anywhere; }
+.user-input-questions { display:grid; gap:12px; max-height:45vh; overflow:auto; }
+.user-input-questions fieldset { border:0; padding:0; margin:0; min-width:0; display:grid; gap:8px; }
+.user-input-questions legend { font-size:14px; line-height:1.5; margin-bottom:8px; }
+.question-option { display:flex; gap:8px; align-items:flex-start; border:1px solid var(--line); border-radius:6px; padding:8px; cursor:pointer; }
+.question-option:has(input:checked) { background:var(--hover); }
+.question-option input { width:auto; margin-top:3px; }
+.question-option small { display:block; color:var(--ink-muted); margin-top:4px; }
+.turn-process-plan { border-left:2px solid var(--line); }
+@media (pointer:coarse) { .goal-panel button,.plan-mode-notice button,.collaboration-picker select { min-height:44px; } }

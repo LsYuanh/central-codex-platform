@@ -26,6 +26,8 @@ export interface ApprovalRequest {
   kind: "approval" | "user-input" | "tool-call" | "other"; threadId?: string;
 }
 export interface PlatformCapabilities {
+  planMode?: boolean;
+  goals?: boolean;
   projects?: boolean;
   skills?: boolean;
   remoteWorkspace?: boolean; imageGeneration?: boolean; plugins?: boolean; subagents?: boolean;
@@ -103,7 +105,7 @@ export function normalizeGatewayUiEvent(message: AppServerMessage, now = Date.no
   }
   if (message.method === "gateway/capabilities") {
     const capabilities: PlatformCapabilities = {};
-    for (const key of ["projects", "skills", "remoteWorkspace", "imageGeneration", "plugins", "subagents"] as const) {
+    for (const key of ["planMode", "goals", "projects", "skills", "remoteWorkspace", "imageGeneration", "plugins", "subagents"] as const) {
       if (typeof p[key] === "boolean") capabilities[key] = p[key];
     }
     return event({kind:"capabilities", capabilities});

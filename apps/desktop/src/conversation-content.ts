@@ -85,6 +85,7 @@ export function reduceConversationEvent(rows: ChatMessage[], message: AppServerM
 }
 
 export function isProcessMessage(message: ChatMessage): boolean {
+  if (message.kind === "plan") return false;
   return !message.outputs?.length && (Boolean(message.kind) || message.phase === "commentary");
 }
 

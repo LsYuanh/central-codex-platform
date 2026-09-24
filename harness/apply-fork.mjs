@@ -37,12 +37,33 @@ replace('codex-rs/core/src/tools/handlers/dynamic.rs', 'impl CoreToolRuntime for
 }`);
 at('core/src/tools/registry.rs', '        let telemetry_tags = tool.telemetry_tags(&invocation);', `        if ${coreCondition} && !tool.remote_workspace_safe() {
             return Err(FunctionCallError::RespondToModel("REMOTE_WORKSPACE_UNSUPPORTED: local or unadapted tool".into()));
+        }
+        if ${coreCondition} && invocation.turn.collaboration_mode().mode == codex_protocol::config_types::ModeKind::Plan {
+            let name = tool.tool_name();
+            if !name.is_default_namespace() || !(crate::remote_workspace::plan_tool(&name.name) || matches!(name.name.as_str(), "update_plan" | "request_user_input" | "get_goal")) {
+                return Err(FunctionCallError::RespondToModel("PLAN_MODE_READ_ONLY: confirm the plan and switch to default mode before executing changes or commands".into()));
+            }
         }`);
+for (const [path, runtime] of [['plan', 'PlanHandler'], ['request_user_input', 'RequestUserInputHandler']]) {
+    at('core/src/tools/handlers/' + path + '.rs', 'impl CoreToolRuntime for ' + runtime + ' {', '    fn remote_workspace_safe(&self) -> bool { true }');
+}
+at('core/src/tools/handlers/extension_tools.rs', 'impl CoreToolRuntime for ExtensionToolAdapter {', `    fn remote_workspace_safe(&self) -> bool {
+        let name = self.0.tool_name();
+        name.is_default_namespace() && matches!(name.name.as_str(), "get_goal" | "create_goal" | "update_goal")
+    }`);
 at('core/src/tools/spec_plan.rs', ') -> CodexResult<ToolRouter> {\n    let default_agent_type_description =', '');
-// The fast path never constructs local, hosted, extension, code-mode or child tools.
+// The fast path exposes only audited control extensions and client-device tools.
 replace('codex-rs/core/src/tools/spec_plan.rs', ') -> CodexResult<ToolRouter> {\n    let default_agent_type_description =\n', `) -> CodexResult<ToolRouter> {
     if ${coreCondition} {
         let mut registry = ToolRegistry::default();
+        registry.add(PlanHandler);
+        registry.add_with_exposure(RequestUserInputHandler { available_modes: vec![codex_protocol::config_types::ModeKind::Plan, codex_protocol::config_types::ModeKind::Default] }, ToolExposure::DirectModelOnly);
+        for executor in extension_tool_executors(session, step_store) {
+            let name = executor.tool_name();
+            if name.is_default_namespace() && matches!(name.name.as_str(), "get_goal" | "create_goal" | "update_goal") {
+                registry.register_external(Arc::new(ExtensionToolAdapter::new(executor)));
+            }
+        }
         append_dynamic_tool_runtimes(&turn_context.dynamic_tools, &mut registry);
         let denied: Vec<_> = registry.entries().filter(|tool| !tool.runtime.remote_workspace_safe()).map(|tool| tool.runtime.tool_name()).collect();
         for name in denied { registry.remove(&name); }
@@ -50,7 +71,7 @@ replace('codex-rs/core/src/tools/spec_plan.rs', ') -> CodexResult<ToolRouter> {\
         return Ok(ToolRouter::from_parts(registry, specs, ToolMode::Direct, BTreeMap::new(), None, &[]));
     }
     let default_agent_type_description =`);
-at('features/src/lib.rs', '    pub fn enabled(&self, f: Feature) -> bool {', `        if ${condition} { return false; }`);
+at('features/src/lib.rs', '    pub fn enabled(&self, f: Feature) -> bool {', `        if ${condition} { return matches!(f, Feature::Goals); }`);
 at('core/src/agents_md.rs', '    let mut loaded = LoadedAgentsMd::from_user_instructions(user_instructions);', `    if ${coreCondition} { return Ok((!loaded.is_empty()).then_some(loaded)); }`);
 // 0.156 moved global instructions into codex-home and refreshes them each turn.
 at('codex-home/src/instructions/mod.rs', '    async fn load_from_codex_home(&self) -> LoadedUserInstructions {', `        if ${condition} { return LoadedUserInstructions::default(); }`);
@@ -112,6 +133,16 @@ at('git-utils/src/info.rs', 'pub async fn collect_git_info(cwd: &Path) -> Option
 at('git-utils/src/info.rs', 'fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {', `    if ${condition} { return None; }`);
 at('git-utils/src/git_process.rs', 'fn spawn_git_command(command: &mut Command) -> Option<(Child, KillGitProcessTreeOnDrop)> {', `    if ${condition} { return None; }`);
 at('app-server/src/extensions.rs', '        builder.turn_start_admission(admission);\n    }', `    if codex_core::remote_workspace::enabled() {
+        if let Some(state_db) = state_db {
+            codex_goal_extension::install_with_backend(
+                &mut builder, state_db, analytics_events_client, codex_otel::global(),
+                thread_manager.clone(), goal_service,
+                |config: &Config| GoalExtensionConfig {
+                    enabled: config.features.enabled(codex_features::Feature::Goals),
+                    max_goal_token_budget: config.max_goal_token_budget,
+                },
+            );
+        }
         let providers = codex_skills_extension::SkillProviders::new().with_host_provider(Arc::new(codex_skills_extension::HostSkillProvider::new()));
         codex_skills_extension::install_with_providers_and_metrics(&mut builder, providers, codex_otel::global(), |config: &Config| codex_skills_extension::SkillsExtensionConfig {
             include_instructions: config.include_skill_instructions, max_context_tokens: config.skill_max_context_tokens, bundled_skills_enabled: false, orchestrator_skills_enabled: false, shadow_selection_enabled: false,

@@ -36,6 +36,7 @@ import { ClientUpdates } from "./client-updates.js";
 import { ProjectCatalog, projectInput, publicProject, projectDeviceParams, projectInstructions, absoluteClientPath, type ClientProject } from "./projects.js";
 import { SkillStore, skillScope, writeClientFiles, SKILL_INSTRUCTIONS, type SkillOwner, type SkillAgent } from "./skills.js";
 import { CONVERSATION_READ_MARKER, CONVERSATION_READ_TOOL, readConversation } from "./conversation-reader.js";
+import { TASK_CONTROL_MARKER, collaborationMode, goalParams, planToolAllowed } from "./task-control.js";
 
 const nativeService=await readNativeServiceHost();
 
@@ -48,6 +49,8 @@ type GatewayRequest = {
   operation:
     | "session.initialize"
     | "model.list"
+    | "collaboration.list"
+    | "conversation.goal.get" | "conversation.goal.set" | "conversation.goal.clear"
     | "skill.list" | "skill.draft" | "skill.preview" | "skill.save" | "skill.update" | "skill.remove" | "skill.discard" | "skill.read"
     | "project.list"
     | "project.save"
@@ -541,6 +544,46 @@ const modelBroker=isolation||windowsWorker?await ModelCredentialBroker.start({co
 const skills = new SkillStore(resolve(dirname(stateFile), "personal-skills.json"));
 const skillUsers = new Set<string>();
 const conversationReadUsers = new Set<string>();
+const taskControlUsers = new Set<string>();
+const taskControlBusy = new Set<string>();
+
+async function pauseThreadGoal(userId: string, threadId: string): Promise<void> {
+  if (!taskControlUsers.has(userId)) return;
+  const bridge = workers.forUser(userId);
+  let result:unknown;
+  try { result = await bridge.request("thread/goal/get", {threadId}); }
+  catch (error) { if(isMissingRolloutError(error)||/thread not found:/i.test(String(error)))return; throw error; }
+  if (isRecord(result) && isRecord(result.goal) && result.goal.status === "active") {
+    await bridge.request("thread/goal/set", {threadId, status:"paused"});
+  }
+}
+
+async function interruptThread(userId:string,threadId:string):Promise<void> {
+  const bridge=workers.forUser(userId);
+  let turnId=workers.activeTurnId(userId,threadId);
+  if(!turnId){
+    let history:unknown;
+    try { history=await bridge.request("thread/read",{threadId,includeTurns:true}); }
+    catch(error){if(isMissingRolloutError(error)||/thread not found:/i.test(String(error)))return;throw error;}
+    if(isRecord(history)&&isRecord(history.thread)&&Array.isArray(history.thread.turns)){
+      const running=history.thread.turns.find(t=>isRecord(t)&&t.status==="inProgress");
+      if(isRecord(running)&&typeof running.id==="string")turnId=running.id;
+    }
+  }
+  if(!turnId)return;
+  try { await bridge.request("turn/interrupt",{threadId,turnId}); }
+  catch(error){if(!/no active turn/i.test(String(error)))throw error;}
+}
+
+function pauseDeviceGoals(deviceId: string): void {
+  for (const [threadId, summary] of threadSummaryById) {
+    const userId = threadOwnerById.get(threadId);
+    if (summary.deviceId !== deviceId || !userId || !taskControlUsers.has(userId) || summary.goalStatus !== "active") continue;
+    turnCancelVersions.set(threadId, (turnCancelVersions.get(threadId) ?? 0) + 1);
+    cancelDeviceTools(threadId);
+    void pauseThreadGoal(userId, threadId).then(()=>interruptThread(userId,threadId)).catch(() => { workers.stopUser(userId); });
+  }
+}
 type SkillTurn = {catalog:Map<string, ReturnType<SkillStore['resolve']>>; loads:Map<string, Promise<Awaited<ReturnType<typeof prepareSkill>>>>};
 const turnSkillLoads = new Map<string, SkillTurn>();
 const pendingSkillTurns = new Map<string, SkillTurn>();
@@ -620,6 +663,22 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
     if(message.id!==undefined)bridge.respond(message.id,{success:false,decision:"reject",reason:"worker_thread_owner_mismatch"});
     audit("worker.owner_mismatch","failed",{userId:workerUserId,errorCode:"WORKER_THREAD_OWNER_MISMATCH"});return;
   }
+  if (eventThread && (message.method === "thread/goal/updated" || message.method === "thread/goal/cleared")) {
+    const summary = threadSummaryById.get(eventThread);
+    if (summary) {
+      summary.goalStatus = isRecord(notification.goal) ? notification.goal.status : undefined; persistState();
+      if (summary.goalStatus === "active" && typeof summary.deviceId === "string"
+        && (!agents.get(summary.deviceId)?.ready || ![...clients.values()].some(c=>c.deviceId===summary.deviceId&&c.socket.readyState===WebSocket.OPEN))) pauseDeviceGoals(summary.deviceId);
+    }
+  }
+  if (eventThread && message.method === "turn/started" && isRecord(notification.turn) && typeof notification.turn.id === "string") {
+    const userId = threadOwnerById.get(eventThread);
+    const key = `${eventThread}:${notification.turn.id}`;
+    if (userId && skillUsers.has(userId) && !turnSkillLoads.has(key)) {
+      const snapshot = pendingSkillTurns.get(eventThread) ?? {catalog:new Map(skills.list(userId).filter(s=>s.enabled).map(row=>[row.name,skills.resolve(userId,row.id,row.revision)])), loads:new Map()};
+      turnSkillLoads.set(key, snapshot);
+    }
+  }
   if (typeof notification.threadId === "string" && isRecord(notification.item) && notification.item.type === "imageGeneration") {
     void outputs.image(notification.threadId, typeof notification.turnId === "string" ? notification.turnId : undefined, notification.item);
   }
@@ -692,6 +751,10 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
     // informational event, but is not a required hop in the execution path;
     // this prevents stale clients from leaving the central turn loading.
     const toolName = typeof params.tool === "string" ? params.tool : "";
+    if (threadId && threadSummaryById.get(threadId)?.collaborationMode === "plan" && !planToolAllowed(toolName)) {
+      bridge.respond(message.id, {success:false,contentItems:[{type:"inputText",text:"PLAN_MODE_READ_ONLY: confirm the plan and start an implementation turn before changes or commands."}]});
+      return;
+    }
     const toolMethods: Record<string, AgentRpcMethod> = {
       device_workspace_context: "workspace/context",
       device_workspace_search: "workspace/search",
@@ -1047,11 +1110,13 @@ function handleClient(socket: WebSocket, _request: IncomingMessage, principal?:P
     rehomePendingApprovals(client);
     clients.delete(client.id);
     audit("client.disconnect", "disconnected", { userId, deviceId });
+    if (![...clients.values()].some(c => c.userId === userId && c.deviceId === deviceId && c.socket.readyState === WebSocket.OPEN)) pauseDeviceGoals(deviceId);
   });
   socket.on("error", () => {
     rehomePendingApprovals(client);
     clients.delete(client.id);
     audit("client.error", "failed", { userId, deviceId });
+    if (![...clients.values()].some(c => c.userId === userId && c.deviceId === deviceId && c.socket.readyState === WebSocket.OPEN)) pauseDeviceGoals(deviceId);
   });
 }
 
@@ -1260,15 +1325,79 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
     audit(message.operation, "started", { userId: client.userId, deviceId: client.deviceId, requestId: message.requestId });
     if(auditFailed)throw Error("AUDIT_STORAGE_UNAVAILABLE");
     if (message.operation !== "conversation.create" && ("projectId" in (message.payload ?? {}) || "projectRevision" in (message.payload ?? {}))) throw Error("PROJECT_SNAPSHOT_IMMUTABLE: 已有对话的工作目录不可更改");
-    if (["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.steer", "conversation.turn.cancel"].includes(message.operation)) {
+    if (message.operation.startsWith("conversation.goal.") || ["conversation.resume", "conversation.read", "conversation.archive", "conversation.unarchive", "conversation.delete", "conversation.rename", "conversation.turn.create", "conversation.turn.steer", "conversation.turn.cancel"].includes(message.operation)) {
       assertOwnedThread(client, message.payload ?? {});
+    }
+    if (message.operation === "collaboration.list" || message.operation.startsWith("conversation.goal.")) {
+      if (!taskControlUsers.has(client.userId)) throw Error("TASK_CONTROL_UPGRADE_REQUIRED: 请升级中央服务后使用计划和目标模式");
+    }
+    if (message.operation.startsWith("conversation.goal.")) {
+      const action = message.operation.split(".").at(-1) as "get" | "set" | "clear";
+      const payload = goalParams(message.payload ?? {}, action), tid = String(payload.threadId);
+      if (action !== "get") {
+        if (threadSummaryById.get(tid)?.deviceId !== client.deviceId) throw Error("GOAL_DEVICE_MISMATCH");
+        if (taskControlBusy.has(tid) || submissionsFor(tid).some(s=>["preparing","submitting","unknown"].includes(s.status))) throw Error("TASK_CONTROL_BUSY");
+        taskControlBusy.add(tid);
+      }
+      try {
+        const cancellation = turnCancelVersions.get(tid) ?? 0;
+        const activating = action === "set" && payload.status !== "paused";
+        const checkActivation = () => {
+          if (client.socket.readyState !== WebSocket.OPEN || agents.get(client.deviceId)?.socket.readyState !== WebSocket.OPEN || (turnCancelVersions.get(tid) ?? 0) !== cancellation) throw Error("GOAL_CANCELLED: 连接已断开或任务已停止，请刷新后继续");
+        };
+        if (activating) {
+          const binding = await ensureRemoteBinding(client,tid);
+          if (threadSummaryById.get(tid)?.collaborationMode === "plan") throw Error("GOAL_PLAN_ONLY: 请先开始实施计划，再启动目标");
+          const loaded = await bridge.request("thread/loaded/list", {});
+          if (!isRecord(loaded) || !Array.isArray(loaded.data) || loaded.nextCursor) throw Error("GOAL_THREAD_STATE_UNKNOWN: 请刷新对话后重试");
+          if (!loaded.data.includes(tid)) {
+            // Idle Worker eviction must not turn Resume Goal into a stored but inert goal.
+            // Pause persisted state before loading to prevent unadmitted native continuation.
+            await pauseThreadGoal(client.userId,tid);
+            const project = threadSummaryById.get(tid)?.clientProject as ClientProject | undefined;
+            const context = await sendAgentRequest(client.deviceId,"workspace/context",project?{path:project.folders[0]}:{},{binding});
+            if (!context.ok) throw Error(`GOAL_CONTEXT_UNAVAILABLE: ${context.error ?? "客户端工作区不可用"}`);
+            if (skillUsers.has(client.userId)) skills.project(client.userId,skillDirectory(client.userId));
+            checkActivation();
+            await bridge.request("thread/resume",{threadId:tid,developerInstructions:clientDeviceInstructions(client.deviceId)+(skillUsers.has(client.userId)?SKILL_INSTRUCTIONS:"")+projectInstructions(project)+`\nClient project context (source: Local Agent; project rules apply within their stated paths):\n${JSON.stringify(context.result)}`});
+          }
+          payload.status ??= "active";
+          checkActivation();
+        }
+        if (action === "clear" || payload.status === "paused") {
+          await pauseThreadGoal(client.userId,tid);
+          turnCancelVersions.set(tid,(turnCancelVersions.get(tid)??0)+1);
+          cancelDeviceTools(tid);
+          await interruptThread(client.userId,tid);
+        }
+        const result = await bridge.request(`thread/goal/${action}`, payload);
+        if (activating) {
+          try { checkActivation(); }
+          catch (error) {
+            try { await pauseThreadGoal(client.userId,tid); await interruptThread(client.userId,tid); }
+            catch { workers.stopUser(client.userId); }
+            throw error;
+          }
+        }
+        send(client.socket,{type:"response",requestId:message.requestId,ok:true,data:result});
+      } finally { if(action!=="get")taskControlBusy.delete(tid); }
+      return;
     }
     if (message.operation === "conversation.turn.cancel" && typeof message.payload?.threadId === "string") {
       turnCancelVersions.set(message.payload.threadId, (turnCancelVersions.get(message.payload.threadId) ?? 0) + 1);
       cancelDeviceTools(message.payload.threadId, typeof message.payload.turnId === "string" ? message.payload.turnId : undefined);
+      await pauseThreadGoal(client.userId, message.payload.threadId);
+      if(typeof message.payload.turnId!=="string"){
+        await interruptThread(client.userId,message.payload.threadId);
+        send(client.socket,{type:"response",requestId:message.requestId,ok:true,data:{}});return;
+      }
     }
+    if (["conversation.archive", "conversation.delete"].includes(message.operation) && typeof message.payload?.threadId === "string") await pauseThreadGoal(client.userId,message.payload.threadId);
     if (["conversation.create", "conversation.resume", "conversation.turn.create", "conversation.turn.steer"].includes(message.operation)) {
       validateRemotePayload(message.payload ?? {});
+      const selectedMode = collaborationMode(message.payload?.collaborationMode);
+      if (selectedMode && (message.operation !== "conversation.turn.create" || typeof message.payload?.clientMessageId !== "string")) throw Error("COLLABORATION_SUBMISSION_REQUIRED: 模式选择必须随可核对的消息提交");
+      if(selectedMode && !taskControlUsers.has(client.userId)) throw Error("TASK_CONTROL_UPGRADE_REQUIRED");
       await ensureRemoteBinding(client, typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined);
     }
     if (["conversation.resume", "conversation.turn.create"].includes(message.operation) && typeof message.payload?.threadId === "string") {
@@ -1323,6 +1452,9 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
     let metadataOnlyMutation = false;
     let result: unknown;
     try {
+      // A recovered goal must not start itself before device/quota admission.
+      // Pause stored state before loading the thread; live admitted goals keep running.
+      if(message.operation === "conversation.resume" && !workers.hasGoal(client.userId,String(message.payload?.threadId))) await pauseThreadGoal(client.userId,String(message.payload?.threadId));
       result = agentMethod
         ? await sendAgentRequest(client.deviceId, agentMethod, validateDeviceParams(message.payload ?? {}), {binding: await ensureRemoteBinding(client)})
         : await bridge.request(method as string, appPayload);
@@ -1352,9 +1484,10 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
         : result)
       : result;
     if (message.operation === "session.initialize" && isRecord(visibleResult)) {
+      if(typeof visibleResult.userAgent === "string" && visibleResult.userAgent.includes(TASK_CONTROL_MARKER)) taskControlUsers.add(client.userId); else taskControlUsers.delete(client.userId);
       if (typeof visibleResult.userAgent === "string" && visibleResult.userAgent.includes(CONVERSATION_READ_MARKER) && Boolean(auth)) conversationReadUsers.add(client.userId); else conversationReadUsers.delete(client.userId);
       if (typeof visibleResult.userAgent === "string" && visibleResult.userAgent.includes("yuan-zhou-managed-skills/1") && Boolean(auth)) skillUsers.add(client.userId); else skillUsers.delete(client.userId);
-      visibleResult = {...visibleResult, platformCapabilities:{conversationRead:conversationReadUsers.has(client.userId),skills:skillUsers.has(client.userId),projects:true,remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
+      visibleResult = {...visibleResult, platformCapabilities:{planMode:taskControlUsers.has(client.userId),goals:taskControlUsers.has(client.userId),conversationRead:conversationReadUsers.has(client.userId),skills:skillUsers.has(client.userId),projects:true,remoteWorkspace:true,imageGeneration:false,plugins:false,subagents:false,policy:REMOTE_WORKSPACE_POLICY}};
     }
     if (message.operation === "conversation.create") {
       const createdId = threadIdFromResult(result);
@@ -1372,7 +1505,7 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
     if (["conversation.read", "conversation.resume"].includes(message.operation) && isRecord(visibleResult)) {
       const tid = String(message.payload?.threadId);
       reconcileSubmissions(tid, visibleResult);
-      visibleResult = { ...visibleResult, ...(isRecord(visibleResult.thread) ? {thread:{...visibleResult.thread,clientProject:threadSummaryById.get(tid)?.clientProject}} : {}), attachmentSubmissions: submissionsFor(tid), outputs:outputs.list(tid) };
+      visibleResult = { ...visibleResult, collaborationMode:threadSummaryById.get(tid)?.collaborationMode ?? "default", ...(isRecord(visibleResult.thread) ? {thread:{...visibleResult.thread,clientProject:threadSummaryById.get(tid)?.clientProject}} : {}), attachmentSubmissions: submissionsFor(tid), outputs:outputs.list(tid) };
     }
     if (["conversation.rename", "conversation.archive", "conversation.unarchive"].includes(message.operation)) {
       const changedId = typeof message.payload?.threadId === "string" ? message.payload.threadId : undefined;
@@ -1422,6 +1555,10 @@ function operationMethod(operation: GatewayRequest["operation"]): string | undef
   const methods: Partial<Record<GatewayRequest["operation"], string>> = {
     "session.initialize": "initialize",
     "model.list": "model/list",
+    "collaboration.list": "collaborationMode/list",
+    "conversation.goal.get": "thread/goal/get",
+    "conversation.goal.set": "thread/goal/set",
+    "conversation.goal.clear": "thread/goal/clear",
     "conversation.create": "thread/start",
     "conversation.resume": "thread/resume",
     "conversation.read": "thread/read",
@@ -1537,6 +1674,9 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   const bridge=workers.forUser(client.userId);
   const threadId = String(payload.threadId);
   const summary = threadSummaryById.get(threadId)!;
+  if(taskControlBusy.has(threadId)) throw Error("TASK_CONTROL_BUSY");
+  const selectedMode = collaborationMode(payload.collaborationMode);
+  const previousMode = summary.collaborationMode;
   if (summary.deviceId && summary.deviceId !== client.deviceId) throw new Error("此 Thread 绑定另一台设备，请连接原设备或新建对话");
   const id = payload.clientMessageId;
   if (typeof id !== "string" || !/^[a-zA-Z0-9-]{8,128}$/.test(id)) throw new Error("clientMessageId 无效");
@@ -1550,6 +1690,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   if (steering && selectedSkills !== undefined) throw Error("SKILL_STEER_UNSUPPORTED: 请在下一轮选择技能");
   const content = payload.input.map((v: {text:string}) => v.text).join("");
   if (existing && JSON.stringify((existing as unknown as JsonObject).skills ?? []) !== JSON.stringify(selectedSkills ?? [])) throw Error("SKILL_SUBMISSION_CONFLICT");
+  if (existing && JSON.stringify((existing as unknown as JsonObject).collaborationMode ?? null) !== JSON.stringify(payload.collaborationMode ?? null)) throw Error("COLLABORATION_SUBMISSION_CONFLICT");
   if (existing && existing.content !== content) throw new Error("消息 ID 对应的正文不一致");
   if (steering && (refs.length || !content.trim())) throw new Error("运行中追加目前仅支持非空文字，请移除附件后重试");
   if (steering && (typeof payload.expectedTurnId !== "string" || !payload.expectedTurnId.trim())) throw new Error("缺少当前 Turn ID，请刷新对话后重试");
@@ -1570,6 +1711,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
   summary.deviceId = client.deviceId;
   const entry: AttachmentSubmission = {clientMessageId:id, kind:steering ? "steer" : "start", ...(steering ? {expectedTurnId:payload.expectedTurnId as string} : {}), content, attachments:[], status:"preparing"};
   if (selectedSkills !== undefined) Object.assign(entry, {skills:selectedSkills});
+  if (payload.collaborationMode !== undefined) Object.assign(entry, {collaborationMode:payload.collaborationMode});
   const cancelVersion = turnCancelVersions.get(threadId) ?? 0;
   if (existing) entries.splice(entries.indexOf(existing),1,entry); else entries.push(entry);
   persistState();
@@ -1588,10 +1730,17 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
         if(known){const row=skills.resolve(client.userId,known.id);if(!selected.some(s=>s.id===row.id))selected.push(row);}
       }
       if(selected.length>4)throw Error("SKILL_SELECTION_LIMIT");
+      if ((selectedMode ?? summary.collaborationMode) === "plan" && selected.length) throw Error("PLAN_MODE_READ_ONLY: 计划阶段请直接读取技能说明，开始实施后再加载技能资源");
       const check=()=>{if(entry.status!=="preparing"||client.socket.readyState!==WebSocket.OPEN||(turnCancelVersions.get(threadId)??0)!==cancelVersion)throw Error("CANCELLED: 技能准备已取消");};
       for(const row of selected){check();progress(`正在准备技能 ${row.name}`);const loaded=await prepareSkill(client,row,threadId,check);skillTurn.loads.set(row.name,Promise.resolve(loaded));const {instructions:_body,...resources}=loaded;skillInput.push({type:"skill",name:row.name,path:skills.nativePath(skillDirectory(client.userId),row)},{type:"text",text:`Selected skill resources: ${JSON.stringify(resources)}`});}
     } else if(Array.isArray(selectedSkills)&&selectedSkills.length) throw Error("SKILL_RUNTIME_UPGRADE_REQUIRED");
-    if (steering && (turnCancelVersions.get(threadId) ?? 0) !== cancelVersion) throw new Error("当前任务已请求停止，追加未发送");
+    const checkSubmission = () => { if ((turnCancelVersions.get(threadId) ?? 0) !== cancelVersion || client.socket.readyState !== WebSocket.OPEN || agents.get(client.deviceId)?.hello?.agent.deviceKey !== deviceKey) throw new Error("当前任务已停止或连接变化，消息未发送"); };
+    checkSubmission();
+    if (selectedMode) {
+      if (selectedMode === "plan") await pauseThreadGoal(client.userId,threadId);
+      checkSubmission();
+      summary.collaborationMode = selectedMode;
+    }
     entry.status = "submitting";
     persistState();
     progress("正在提交中央模型");
@@ -1613,6 +1762,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
       // A definitive rejection may arrive after the UI's submission deadline.
       // Persist it so status reconciliation can unlock the retained draft.
       if (entry.status !== "sent" && error instanceof Error && error.message.startsWith("App Server request failed:")) {
+        if (selectedMode && summary.collaborationMode === selectedMode) summary.collaborationMode = previousMode;
         entry.status = "failed";
         entry.error = error.message;
         persistState();
@@ -1627,6 +1777,7 @@ async function submitAttachmentTurn(client: ConnectedClient, payload: JsonObject
     if (entry.status === "preparing" || entry.status === "failed") release();
     const explicitRejection = error instanceof Error && /^(App Server request failed:|MODEL_|TURN_LIMIT:|THREAD_BUSY:|WORKER_(CAPACITY|REQUEST_LIMIT|RESTART_BACKOFF|STOPPING):)/.test(error.message);
     if (entry.status !== "sent") entry.status = entry.status === "submitting" && !explicitRejection ? "unknown" : "failed";
+    if (entry.status === "failed" && selectedMode && summary.collaborationMode === selectedMode) summary.collaborationMode = previousMode;
     entry.error = error instanceof Error ? error.message : String(error);
     persistState(); throw error;
   }
@@ -1788,6 +1939,7 @@ function handleAgentConnection(socket: WebSocket, request: IncomingMessage, prin
     if (agents.get(requestedDeviceId)?.socket === socket) {
       rejectAgentRequestsForDevice(requestedDeviceId, "Local Agent connection closed; execution result unknown", "AGENT_DISCONNECTED");
       agents.delete(requestedDeviceId);
+      pauseDeviceGoals(requestedDeviceId);
       audit("device.disconnect", "disconnected", { deviceId: requestedDeviceId });
       broadcastDeviceStatus(requestedDeviceId);
     }

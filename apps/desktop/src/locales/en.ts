@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "目标进行中": "Goal active", "目标已暂停": "Goal paused", "目标遇到阻碍": "Goal blocked", "额度受限": "Usage limited", "目标预算已用尽": "Goal budget reached", "目标已完成": "Goal complete",
+  "目标状态格式不兼容": "Unsupported goal state", "对话目标": "Conversation goal", "设置目标": "Set goal", "暂停目标": "Pause goal", "继续目标": "Resume goal",
+  "目标与验收条件": "Objective and success criteria", "Token 预算（可选）": "Token budget (optional)", "请先开始实施计划，再启动目标。": "Start implementing the plan before activating a goal.",
+  "目标会跨轮持续执行；完成、暂停、遇阻或达到预算后停止。": "Work continues across turns until complete, paused, blocked, or the budget is reached.", "处理中…": "Working…", "启动目标": "Start goal", "清除目标": "Clear goal",
+  "问题格式不兼容，请停止本轮后重试。": "Unsupported question format. Stop this turn and try again.", "补充回答": "Your answer", "提交回答": "Submit answers", "跳过问题": "Skip questions",
+  "请按上述计划开始实施。": "Please implement the plan above.", "目标对话创建结果待核对": "Goal conversation creation needs reconciliation",
+  "计划模式：先调研和确认方案，再开始实施。": "Plan mode: investigate and agree on the approach before implementation.", "开始实施": "Implement plan", "协作模式": "Collaboration mode", "普通模式": "Default mode", "计划模式": "Plan mode", "分钟": "min",
   "更新（开发预览）": "Update (development preview)",
   "{{detail}}（{{code}}）": "{{detail}} ({{code}})",
   "暂时无法确认本机配对状态。{{detail}}": "Cannot confirm local pairing status. {{detail}}",
@@ -763,5 +770,7 @@ export const en = {
   "已复制对话 ID": "Chat ID copied",
   "正在复制对话 ID…": "Copying chat ID…",
   "复制失败，可重试或手动复制：": "Copy failed. Retry or copy manually: ",
-  "关闭复制提示": "Dismiss copy notice"
+  "关闭复制提示": "Dismiss copy notice",
+  "调整预算": "Adjust budget",
+  "预算用于限制自动续跑，当前轮收尾可能超出预算。": "The budget limits automatic continuation. The current turn may finish over budget."
 } as const;

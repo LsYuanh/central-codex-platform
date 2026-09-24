@@ -105,7 +105,8 @@ try {
   assert.equal(requests.length,4);
   assert.match(JSON.stringify(requests[0]),/MANAGED_SKILL_BODY_NATIVE_LOADED/);
   const tools=requests[0].tools.map(tool=>tool.name);
-  assert.deepEqual(tools,['device_workspace_context','device_skill_draft']);
+  for(const name of ['device_workspace_context','device_skill_draft','update_plan','request_user_input'])assert(tools.includes(name),name);
+  assert(tools.every(name=>['device_workspace_context','device_skill_draft','update_plan','request_user_input','get_goal','create_goal','update_goal'].includes(name)),JSON.stringify(tools));
   assert.equal(dynamicCalls,2);
   assert.match(JSON.stringify(requests[1].input),/unsupported|REMOTE_WORKSPACE/i);
   assert(!JSON.stringify(requests).includes('CENTRAL_RULES_MUST_NOT_BE_LOADED'));

@@ -23,11 +23,14 @@ try{
   run('cargo',['build','-p','codex-app-server','--bin','codex-app-server','--locked'],join(report.source,'codex-rs'));
   const binary=join(env.CARGO_TARGET_DIR,'debug/codex-app-server');
   run(process.execPath,['harness/runtime-smoke.mjs',binary]);
+  run(process.execPath,['harness/plan-goal-smoke.mjs',binary]);
   run(process.execPath,['harness/model-catalog-smoke.mjs',binary,join(report.source,'codex-rs/models-manager/models.json'),report.latestVersion]);
   run(process.execPath,['harness/thread-delete-smoke.mjs',binary]);
   run(process.execPath,['harness/worker-isolation-smoke.mjs']);
   run(process.execPath,['tests/smoke/model-credential-broker-smoke.mjs']);
   run(process.execPath,['tests/smoke/worker-routing-smoke.mjs']);
+  run(process.execPath,['tests/smoke/task-control-smoke.mjs']);
+  run(process.execPath,['tests/smoke/task-control-gateway-smoke.mjs']);
   run(process.execPath,['tests/smoke/runtime-updates-smoke.mjs']);
   run(process.execPath,['tests/smoke/native-account-update-smoke.mjs']);
   run('cargo',['test','-p','central-app','runtime_updates','--locked']);

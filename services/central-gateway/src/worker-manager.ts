@@ -14,8 +14,8 @@ export interface WorkerBridge {
   /** Resolves only after owned process cleanup is verified; rejection means cleanup is unknown. */
   readonly closed?:Promise<void>;
 }
-type ActiveTurn = {id?:string; completedBeforeResponse:Set<string>};
-type Worker = {userId:string; bridge?:WorkerBridge; starting?:Promise<WorkerBridge>; cancelStart?:()=>void; startTimer?:NodeJS.Timeout; stopping:boolean; exitConfirmed?:boolean; calls:number; touched:number; turns:Map<string,ActiveTurn>};
+type ActiveTurn = {id?:string; pendingStart?:boolean; completedBeforeResponse:Set<string>};
+type Worker = {userId:string; bridge?:WorkerBridge; starting?:Promise<WorkerBridge>; cancelStart?:()=>void; startTimer?:NodeJS.Timeout; stopping:boolean; exitConfirmed?:boolean; calls:number; touched:number; turns:Map<string,ActiveTurn>; goals:Set<string>; pendingGoals:Set<string>};
 type Options = {
   root:string; perUser:boolean; maxWorkers:number; perUserTurns:number; totalTurns:number; maxRequests:number; idleMs:number; cooldownMs:number;
   create:(userId:string|undefined, paths:{home:string; directory:string}|undefined)=>WorkerBridge|Promise<WorkerBridge>;
@@ -64,7 +64,7 @@ export class WorkerManager {
     const starting=new Promise<WorkerBridge>((resolve,reject)=>{resolveStart=resolve;rejectStart=reject;});
     // Eager legacy construction or a cancelled startup may have no waiter yet.
     void starting.catch(()=>{});
-    const worker:Worker={userId:key,starting,stopping:false,calls:0,touched:Date.now(),turns:new Map(),
+    const worker:Worker={userId:key,starting,stopping:false,calls:0,touched:Date.now(),turns:new Map(),goals:new Set(),pendingGoals:new Set(),
       cancelStart:()=>rejectStart(Error("WORKER_STOPPING: startup cancelled; operation was not sent"))};
     // Reserve before invoking an async factory: both capacity and same-user
     // single-flight admission include workers whose bridge does not exist yet.
@@ -125,11 +125,14 @@ export class WorkerManager {
     if(w.calls>=this.options.maxRequests)throw Error("WORKER_REQUEST_LIMIT: too many pending requests");
     const tid=record(params)&&typeof params.threadId==="string"?params.threadId:undefined;
     let reserved:ActiveTurn|undefined;
-    if(this.options.perUser&&method==="turn/start"&&tid){
-      if(w.turns.has(tid))throw Error("THREAD_BUSY: an active or unknown turn must be reconciled before starting another");
+    const activatingGoal=method==="thread/goal/set"&&record(params)&&params.status==="active";
+    const newGoalReservation=!!(activatingGoal&&tid&&!w.goals.has(tid));
+    if((method==="turn/start"||activatingGoal)&&tid){
+      if(this.options.perUser&&method==="turn/start"&&w.turns.has(tid)&&(!w.goals.has(tid)||w.turns.get(tid)?.id||w.turns.get(tid)?.pendingStart))throw Error("THREAD_BUSY: an active or unknown turn must be reconciled before starting another");
       const total=[...this.workers.values()].reduce((n,w)=>n+w.turns.size,0);
-      if(w.turns.size>=this.options.perUserTurns||total>=this.options.totalTurns){this.options.event("worker.quota",w.userId,"failed","TURN_LIMIT");throw Error("TURN_LIMIT: active turn quota reached; stop or wait for an existing turn");}
-      reserved={completedBeforeResponse:new Set()};w.turns.set(tid,reserved);
+      if(this.options.perUser&&!w.turns.has(tid)&&(w.turns.size>=this.options.perUserTurns||total>=this.options.totalTurns)){this.options.event("worker.quota",w.userId,"failed","TURN_LIMIT");throw Error("TURN_LIMIT: active turn quota reached; stop or wait for an existing turn");}
+      if(method==="turn/start"||!w.turns.has(tid)){reserved={pendingStart:method==="turn/start",completedBeforeResponse:new Set()};w.turns.set(tid,reserved);}
+      if(activatingGoal){w.goals.add(tid);w.pendingGoals.add(tid);}
     }
     w.calls++;
     try{
@@ -140,20 +143,29 @@ export class WorkerManager {
       if(this.options.perUser&&method!=="initialize"&&!bridge.enforcedRuntimeReady)await bridge.request("initialize",{clientInfo:{name:"yuan-worker-manager",version:"1"},capabilities:{experimentalApi:true}});
       assertCurrent();
       const result=await bridge.request(method,params);
+      if(activatingGoal&&tid&&record(result)&&record(result.goal)&&result.goal.status!=="active"){
+        w.pendingGoals.delete(tid);w.goals.delete(tid);
+        if(!w.turns.get(tid)?.id&&!w.turns.get(tid)?.pendingStart)w.turns.delete(tid);
+      }
       if(reserved&&tid&&w.turns.get(tid)===reserved&&record(result)&&record(result.turn)&&typeof result.turn.id==="string"){
+        reserved.pendingStart=false;
         reserved.id=result.turn.id;
-        if(reserved.completedBeforeResponse.has(reserved.id))w.turns.delete(tid);
+        if(reserved.completedBeforeResponse.has(reserved.id)){if(w.goals.has(tid))delete reserved.id;else w.turns.delete(tid);}
         reserved.completedBeforeResponse.clear();
       }
       const active=tid?w.turns.get(tid):undefined;
       if(tid&&["thread/read","thread/resume"].includes(method)&&active?.id&&record(result)&&record(result.thread)&&Array.isArray(result.thread.turns)){
         const turn=result.thread.turns.find(t=>record(t)&&t.id===active.id);
-        if(record(turn)&&["completed","failed","interrupted"].includes(String(turn.status)))w.turns.delete(tid);
+        if(record(turn)&&["completed","failed","interrupted"].includes(String(turn.status))){if(w.goals.has(tid))delete active.id;else w.turns.delete(tid);}
       }
       return result;
     }catch(error){
       // A timeout may have started work. Retain its slot until terminal event or worker exit.
-      if(reserved&&tid&&w.turns.get(tid)===reserved&&!/timeout|unknown/i.test(String(error)))w.turns.delete(tid);
+      if(tid&&!/timeout|unknown/i.test(String(error))){
+        if(activatingGoal)w.pendingGoals.delete(tid);
+        if(newGoalReservation)w.goals.delete(tid);
+        if(reserved&&w.turns.get(tid)===reserved){reserved.pendingStart=false;if(!w.goals.has(tid))w.turns.delete(tid);}
+      }
       throw error;
     }finally{w.calls--;w.touched=Date.now();}
   }
@@ -161,9 +173,25 @@ export class WorkerManager {
     const key=this.key(userId??"legacy"),w=this.workers.get(key);
     if(!w||w.bridge!==bridge)return;
     const p=record(message.params)?message.params:{};
+    if(typeof p.threadId==="string") {
+      const tid=p.threadId;
+      if(message.method==="thread/goal/updated"&&record(p.goal)&&p.goal.status==="active"){
+        // Native create_goal can only run inside an already admitted turn.
+        if(!w.turns.has(tid)){this.options.event("worker.quota",w.userId,"failed","UNADMITTED_GOAL");this.stop(w);return;}
+        w.pendingGoals.delete(tid);
+        w.goals.add(tid);
+      }else if(message.method==="thread/goal/cleared"||(message.method==="thread/goal/updated"&&record(p.goal)&&p.goal.status!=="active")){
+        // Resume snapshots may arrive after the activation request/response. Hold
+        // admission until its ordered active event (or non-active RPC result).
+        if(!w.pendingGoals.has(tid)){w.goals.delete(tid);if(!w.turns.get(tid)?.id&&!w.turns.get(tid)?.pendingStart)w.turns.delete(tid);}
+      }
+      if(message.method==="turn/started"&&record(p.turn)&&typeof p.turn.id==="string"&&w.goals.has(tid)){
+        w.turns.set(tid,{id:p.turn.id,completedBeforeResponse:new Set()});
+      }
+    }
     if(message.method==="turn/completed"&&typeof p.threadId==="string"&&record(p.turn)&&typeof p.turn.id==="string"){
       const active=w.turns.get(p.threadId);
-      if(active?.id===p.turn.id)w.turns.delete(p.threadId);
+      if(active?.id===p.turn.id){if(w.goals.has(p.threadId))delete active.id;else w.turns.delete(p.threadId);}
       else if(active&&!active.id){
         // A previous Turn can finish late while a new start still awaits its ID.
         // Retain the reservation until the start response identifies a matching completion.
@@ -172,7 +200,7 @@ export class WorkerManager {
       }
     }
     if(message.method==="gateway/runtimeUnavailable"){
-      w.turns.clear();this.options.event("worker.exit",key,"failed","RUNTIME_UNAVAILABLE");
+      w.turns.clear();w.goals.clear();w.pendingGoals.clear();this.options.event("worker.exit",key,"failed","RUNTIME_UNAVAILABLE");
     }
     w.touched=Date.now();
   }
@@ -190,6 +218,8 @@ export class WorkerManager {
     for(const w of this.workers.values())if(!w.stopping&&w.bridge?.alive&&!w.calls&&!w.turns.size&&Date.now()-w.touched>=this.options.idleMs){this.options.event("worker.idle_stop",w.userId,"succeeded");this.stop(w,true);}
   }
   hasActiveThreads(matches:(threadId:string)=>boolean){return [...this.workers.values()].some(w=>[...w.turns.keys()].some(matches));}
+  hasGoal(userId:string,threadId:string){return this.workers.get(this.key(userId))?.goals.has(threadId)===true;}
+  activeTurnId(userId:string,threadId:string){return this.workers.get(this.key(userId))?.turns.get(threadId)?.id;}
   snapshot(){return [...this.workers.values()].map(w=>({userId:w.userId,pid:w.bridge?.pid,ready:!w.stopping&&(w.bridge?.enforcedRuntimeReady??false),alive:w.bridge?.alive??false,starting:!!w.starting,stopping:w.stopping,pendingRequests:w.calls,activeTurns:w.turns.size}));}
   /** Check and close admission in one event-loop turn; polling metrics is insufficient. */
   quiesceIfIdle(){

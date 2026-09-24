@@ -1,0 +1,58 @@
+{
+  "date": "2026-09-24",
+  "scope": "Development plan mode and native Codex goals; not packaged or deployed",
+  "upstream": "rust-v0.156.1",
+  "upstreamCommit": "b412ff32c417f855c2b2d1581b77058eed87c84b",
+  "patchSha256": "553446fb00fed82db213f637b9a4c2429d35c989293ebb45dc88f48de36048c7",
+  "capability": "yuan-zhou-plan-goal/1",
+  "sourceVerification": {
+    "pinnedPatchAndManifest": "passed",
+    "windowsHomeAndModelOverlays": "passed",
+    "macNativeBuild": "passed",
+    "nativeExecutionBoundary": "passed"
+  },
+  "nativeDeterministicModel": {
+    "script": "harness/plan-goal-smoke.mjs",
+    "appServer": "real compiled native runtime",
+    "checks": ["plan-write-denied", "structured-questions", "plan-item", "goal-api", "native-cross-turn-continuation", "evidence-completion", "token-accounting", "budget-stop", "pause-clear", "pause-interrupt-no-continuation", "explicit-resume"],
+    "passed": true,
+    "modelRequests": 16
+  },
+  "authenticatedGateway": {
+    "scripts": ["tests/smoke/task-control-smoke.mjs", "tests/smoke/task-control-gateway-smoke.mjs"],
+    "appServerAndAgent": "protocol fixtures",
+    "passed": true,
+    "coverage": ["mode and goal validation", "read-only device boundary", "mode idempotency", "ownership and device binding", "persistent goal quota", "late resume snapshots", "pause-before-interrupt with actual turn ID", "disconnect and explicit recovery", "idle thread reload", "activation-stop race"]
+  },
+  "realModelAndClient": {
+    "script": "tests/smoke/task-control-live-smoke.mjs",
+    "central": "isolated authenticated WSS gateway and Mac Seatbelt Worker",
+    "model": "gpt-6-sol",
+    "client": "real Windows native device-token helper and Local Agent",
+    "hotGoalRunPassed": true,
+    "finalColdGoalRunPassed": true,
+    "finalGoalTokensUsed": 2865,
+    "checks": ["CA-verified WSS", "native credential store", "plan reads client random marker without writing", "Worker idle eviction then explicit goal activation", "goal writes new client file", "exact client readback", "native complete and nonzero usage"],
+    "detailedEvidence": "ignored target/task-control-live-* directories; no credentials included"
+  },
+  "ui": {
+    "script": "tests/smoke/task-control-ui-smoke.mjs",
+    "realAppBrowserWithProtocolFixture": "passed",
+    "checks": ["plan and question flow", "implementation uses default mode", "goal draft survives failure", "new-thread goal draft survives failure", "pause-resume", "budget adjustment", "clear", "light and dark themes", "400px without horizontal overflow"],
+    "windowsNativeComponents": "viewed in an isolated Tauri window; pause and question option selection verified",
+    "nativeFixtureConnectsToProduction": false
+  },
+  "regressions": {
+    "desktopTypeScriptAndVite": "passed; existing large-chunk warning",
+    "gatewayTypeScript": "passed",
+    "workerManager": 28,
+    "workerDrain": 7,
+    "workerRouting": 10,
+    "harnessGateway": "passed"
+  },
+  "limits": [
+    "Budget limits automatic continuation at native turn boundaries; current turn can exceed the token budget.",
+    "Full native UI to real central end-to-end interaction and macOS work-client UI were not tested.",
+    "Production central remains 0.1.2 revision 13 and released client remains 0.2.9; both central gateway/Harness and client need an authorized future update."
+  ]
+}

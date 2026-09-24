@@ -4,7 +4,15 @@ use serde_json::Value;
 use std::sync::OnceLock;
 
 pub const MARKER: &str =
-    "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1";
+    "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1 yuan-zhou-plan-goal/1";
+
+/// These device operations inspect client state. General exec is deliberately
+/// excluded: a shell string cannot reliably prove that it has no side effects.
+pub fn plan_tool(name: &str) -> bool {
+    matches!(name, "device_workspace_list" | "device_read_file" | "device_read_text"
+        | "device_workspace_context" | "device_workspace_search" | "device_workspace_read_text"
+        | "device_workspace_git_status" | "device_workspace_git_diff" | "conversation_read")
+}
 
 pub fn enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
@@ -57,6 +65,10 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
             | "account/read"
             | "account/rateLimits/read"
             | "skills/list"
+            | "collaborationMode/list"
+            | "thread/goal/get"
+            | "thread/goal/set"
+            | "thread/goal/clear"
     ) {
         return Err(format!("REMOTE_WORKSPACE_UNSUPPORTED: {method}"));
     }
@@ -79,6 +91,13 @@ pub fn validate_request(request: &Value) -> Result<(), String> {
     let Some(params) = request.get("params").and_then(Value::as_object) else {
         return Ok(());
     };
+    if let Some(mode) = params.get("collaborationMode").filter(|v| !v.is_null()) {
+        if !matches!(mode.get("mode").and_then(Value::as_str), Some("default" | "plan"))
+            || mode.get("settings").and_then(|v| v.get("developer_instructions")).is_some_and(|v| !v.is_null())
+        {
+            return Err("REMOTE_COLLABORATION_INVALID: use built-in mode instructions".into());
+        }
+    }
     if method == "skills/list" {
         // Discovery never accepts client-controlled host roots or cwd values.
         if params
