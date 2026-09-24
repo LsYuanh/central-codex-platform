@@ -1702,8 +1702,11 @@ export default function App() {
                       </div>
                     </details>
                     <div className="button-row">
-                      {turnRunning && <button className="send-button send-button-stop" type="button" aria-label={t("停止当前任务")} title={t("停止当前任务")} disabled={appState !== "online" || (sending && !steeringRequestRef.current)} onClick={() => void interruptTurn()}><PauseIcon /></button>}
-                      <button className="send-button" type="submit" aria-label={turnRunning ? t("追加要求") : t("发送")} title={turnRunning ? t("追加要求") : t("发送")} disabled={engineState === "unavailable" || sending || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || (turnRunning ? !composer.trim() || !turnId || mode !== "central-gateway" || Boolean(attachments.drafts.length) : !composer.trim() && !attachments.drafts.length)}><SendIcon /></button>
+                      {turnRunning ? (
+                        <button className="send-button send-button-stop" type="button" aria-label={t("停止当前任务")} title={t("停止当前任务")} disabled={appState !== "online" || (sending && !steeringRequestRef.current)} onClick={() => void interruptTurn()}><PauseIcon /></button>
+                      ) : (
+                        <button className="send-button" type="submit" aria-label={t("发送")} title={t("发送")} disabled={engineState === "unavailable" || sending || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || !composer.trim() && !attachments.drafts.length}><SendIcon /></button>
+                      )}
                     </div>
                   </div>
                 </div>

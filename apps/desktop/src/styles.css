@@ -1193,26 +1193,20 @@ a {
   margin: 0 auto 20px;
 }
 
-.send-button:not(.send-button-stop):hover:not(:disabled) { background: var(--message-action-bg); }
+.send-button:hover:not(:disabled) { background: var(--message-action-bg); }
 
 .send-button .ui-icon {
   width: 16px;
   height: 16px;
 }
 
-.send-button:not(.send-button-stop):not(:disabled) .ui-icon,
+.send-button:not(:disabled) .ui-icon,
 .sidebar-update-button > .ui-icon {
   color: #fff;
 }
 
 .send-button-stop {
-  border: 1px solid var(--line-strong);
-  background: transparent;
-  color: var(--ink);
-}
-
-.send-button-stop:hover:not(:disabled) {
-  background: var(--hover);
+  border: 0;
 }
 
 /* Menus open above the input; submenus expand inside a bounded panel. */
