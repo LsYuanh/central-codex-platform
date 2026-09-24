@@ -96,7 +96,7 @@ try {
  await page.locator('.result-notice').filter({hasText:'JSON incomplete or invalid; raw text preserved'}).waitFor();
  await page.getByText('用户原文：设置',{exact:true}).waitFor();await page.getByText('打印中文',{exact:true}).waitFor();
  const unresolved=await page.locator('[data-catalogue]').evaluateAll(rows=>rows.filter(row=>row.textContent.includes('{{')).map(row=>row.getAttribute('data-catalogue')));assert.deepEqual(unresolved,[]);
- const update=page.getByRole('button',{name:'Update: version 9.0.0'});await update.hover();await page.waitForTimeout(250);assert.equal(Math.round((await update.boundingBox()).width),72);
+ const update=page.getByRole('button',{name:'Update: version 9.0.0'});await update.hover();await page.waitForTimeout(250);assert.equal(Math.round((await update.boundingBox()).width),64);
  await chooseLanguage(page,'简体中文');await page.getByTestId('notice').filter({hasText:'技能 我的技能'}).waitFor();
  assert.deepEqual(errors,[]);console.log(JSON.stringify({status:'LANGUAGE_UI_OK',output,checks:['switch without RPC/reconnect','draft retained','Chinese user content untouched','restart persistence','storage failure retry','existing notices and native errors switch','raw remote errors untouched','plural/date formats','memoized JSON locale refresh','catalogue interpolation','light/dark/narrow layouts']}));
 } finally {await browser.close();for(const socket of gateway.clients)socket.terminate();await new Promise(r=>gateway.close(r));await server.close();await qaServer?.close();}

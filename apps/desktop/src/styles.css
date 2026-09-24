@@ -1771,10 +1771,10 @@ a {
   pointer-events: none;
   transition: opacity 180ms ease;
 }
-.sidebar-update-button > span { opacity: 0; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.sidebar-update-button > span { opacity: 0; white-space: nowrap; color: #fff; font-size: 11px; line-height: 14px; font-weight: 500; }
 .sidebar-update-button > .ui-icon { width: 12px; height: 12px; }
-.sidebar-update-button:is(:hover,:focus-visible) { width: var(--update-label-width, 52px); background: var(--message-action-bg); }
-:root:lang(en) { --update-label-width: 72px; }
+.sidebar-update-button:is(:hover,:focus-visible) { width: var(--update-label-width, 44px); background: var(--message-action-bg); }
+:root:lang(en) { --update-label-width: 64px; }
 .language-picker { position:relative; flex:none; width:160px; max-width:100%; }
 .language-picker-trigger[aria-disabled="true"] { cursor:wait; opacity:.6; }
 .connection-settings .language-picker-trigger { background:transparent; }
@@ -1791,7 +1791,7 @@ a {
 .sidebar-update-button:is(:hover,:focus-visible) > span { opacity: 1; }
 @media (hover: none), (pointer: coarse) {
   .sidebar-settings-row > .sidebar-settings-button { min-height: 44px; }
-  .sidebar-update-button { width: var(--update-label-width, 52px); height: 44px; min-height: 44px; }
+  .sidebar-update-button { width: var(--update-label-width, 44px); height: 44px; min-height: 44px; }
   .sidebar-update-button > .ui-icon { opacity: 0; }
   .sidebar-update-button > span { opacity: 1; }
 }

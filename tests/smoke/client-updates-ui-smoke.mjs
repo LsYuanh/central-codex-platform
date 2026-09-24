@@ -23,7 +23,7 @@ try{
     const resting=await updateEntry.boundingBox();assert.equal(resting.width,20);assert.equal(resting.height,20);
     await page.screenshot({path:path.join(output,`sidebar-icon-${theme}.png`)});
     await updateEntry.hover();await page.waitForTimeout(220);
-    const expanded=await updateEntry.boundingBox();assert.equal(expanded.width,52);assert.equal(expanded.height,20);assert.equal(expanded.x+expanded.width,resting.x+resting.width);
+    const expanded=await updateEntry.boundingBox();assert.equal(expanded.width,44);assert.equal(expanded.height,20);assert.equal(expanded.x+expanded.width,resting.x+resting.width);
     assert.equal(await updateEntry.locator('span').evaluate(el=>getComputedStyle(el).opacity),'1');
     assert.equal(await updateEntry.locator('svg').evaluate(el=>getComputedStyle(el).opacity),'0');
     assert.match(await updateEntry.evaluate(el=>getComputedStyle(el).transitionProperty),/width/);
@@ -33,7 +33,7 @@ try{
   await page.getByRole('button',{name:'设置',exact:true}).click();assert.equal(await page.evaluate(()=>window.updateFixture.navigation),'settings');
   await page.mouse.move(500,500);await page.keyboard.press('Tab');await page.waitForTimeout(220);
   assert(await updateEntry.evaluate(el=>el===document.activeElement&&el.matches(':focus-visible')));
-  assert.equal((await updateEntry.boundingBox()).width,52);
+  assert.equal((await updateEntry.boundingBox()).width,44);
   await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await updateEntry.evaluate(el=>getComputedStyle(el).transitionDuration),'0s');
   await page.emulateMedia({reducedMotion:'no-preference'});
   await page.setViewportSize({width:400,height:700});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
