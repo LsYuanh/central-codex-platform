@@ -20,10 +20,10 @@ try{
   for(const theme of ['light','dark']) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     await page.mouse.move(500,500);await page.waitForTimeout(220);
-    const resting=await updateEntry.boundingBox();assert.equal(resting.width,28);assert.equal(resting.height,28);
+    const resting=await updateEntry.boundingBox();assert.equal(resting.width,20);assert.equal(resting.height,20);
     await page.screenshot({path:path.join(output,`sidebar-icon-${theme}.png`)});
     await updateEntry.hover();await page.waitForTimeout(220);
-    const expanded=await updateEntry.boundingBox();assert.equal(expanded.width,52);assert.equal(expanded.x+expanded.width,resting.x+resting.width);
+    const expanded=await updateEntry.boundingBox();assert.equal(expanded.width,52);assert.equal(expanded.height,20);assert.equal(expanded.x+expanded.width,resting.x+resting.width);
     assert.equal(await updateEntry.locator('span').evaluate(el=>getComputedStyle(el).opacity),'1');
     assert.equal(await updateEntry.locator('svg').evaluate(el=>getComputedStyle(el).opacity),'0');
     assert.match(await updateEntry.evaluate(el=>getComputedStyle(el).transitionProperty),/width/);
