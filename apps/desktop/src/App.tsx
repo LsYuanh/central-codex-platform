@@ -1571,7 +1571,7 @@ export default function App() {
                 <span className="connection-summary-lines"><span><i className={`connection-dot dot-${primaryConnectionState}`} />{connectionTitle} · {connectionStateLabel}</span><span><i className={`connection-dot dot-${deviceState}`} />{t("本机设备 · ")}{deviceState === "online" ? t("在线") : deviceState === "connecting" || deviceState === "reconnecting" ? t("连接中") : t("离线")}</span></span>
               </div>
               <button className="sidebar-settings-button" onClick={() => openSettings("skills")}><UiIcon name="skill" /><span>{t("我的技能")}</span></button>
-              <SidebarSettingsRow release={clientUpdate.release} openSettings={() => openSettings()} openUpdates={() => openSettings("updates")} />
+              <SidebarSettingsRow release={clientUpdate.release} previewAvailable={import.meta.env.DEV && import.meta.env.VITE_PREVIEW_UPDATE_BUTTON === "1"} openSettings={() => openSettings()} openUpdates={() => openSettings("updates")} />
             </div>
           </>
         ) : (

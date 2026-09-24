@@ -54,15 +54,16 @@ export function useClientUpdates(scope: string, enabled: boolean) {
   };
   return {phase,release,error,progress,check,download,install};
 }
-export function SidebarSettingsRow({release, openSettings, openUpdates}: {
-  release: Release; openSettings: () => void; openUpdates: () => void;
+export function SidebarSettingsRow({release, openSettings, openUpdates, previewAvailable = false}: {
+  release: Release; openSettings: () => void; openUpdates: () => void; previewAvailable?: boolean;
 }) {
   useLocale();
   const available = !release.current && Boolean(release.version || release.ready);
-  return <div className={`sidebar-settings-row${available ? " has-update" : ""}`}>
+  const preview = previewAvailable && !available;
+  return <div className={`sidebar-settings-row${available || preview ? " has-update" : ""}`}>
     <button type="button" className="sidebar-settings-button" onClick={openSettings}><UiIcon name="settings" /><span>{t("设置")}</span></button>
-    {available && <button type="button" className="sidebar-update-button" onClick={openUpdates}
-      aria-label={release.version ? t("更新：新版本 {{p0}}", { p0: release.version }) : t("更新：更新包已就绪")} title={t("查看版本更新")}>
+    {(available || preview) && <button type="button" className="sidebar-update-button" onClick={openUpdates}
+      aria-label={preview ? t("更新（开发预览）") : release.version ? t("更新：新版本 {{p0}}", { p0: release.version }) : t("更新：更新包已就绪")} title={preview ? t("更新（开发预览）") : t("查看版本更新")}>
       <UiIcon name="download" /><span aria-hidden="true">{t("更新")}</span>
     </button>}
   </div>;

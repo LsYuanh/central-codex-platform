@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "更新（开发预览）": "Update (development preview)",
   "{{detail}}（{{code}}）": "{{detail}} ({{code}})",
   "暂时无法确认本机配对状态。{{detail}}": "Cannot confirm local pairing status. {{detail}}",
   "{{label}}{{suffix}}": "{{label}}{{suffix}}",
