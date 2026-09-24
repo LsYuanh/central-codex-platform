@@ -1200,6 +1200,11 @@ a {
   height: 16px;
 }
 
+.send-button:not(.send-button-stop):not(:disabled) .ui-icon,
+.sidebar-update-button > .ui-icon {
+  color: #fff;
+}
+
 .send-button-stop {
   border: 1px solid var(--line-strong);
   background: transparent;
