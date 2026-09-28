@@ -293,7 +293,7 @@ button:disabled {
 }
 
 /* The outer container owns focus for compound inputs; never draw two rings. */
-:root[data-input-focus="keyboard"] :where(input:not([type="checkbox"]):not([type="radio"]):not(.skills-search input,.project-name input,.composer-project-search input,.composer-shell input),textarea:not(.composer-shell textarea)):focus-visible {
+:root[data-input-focus="keyboard"] :where(input:not([type="checkbox"]):not([type="radio"]):not(.skills-search input,.project-name input,.composer-project-search input,.composer-shell input),textarea:not(.composer-shell textarea,.goal-editor-panel textarea)):focus-visible {
   outline: 2px solid var(--input-focus-ring);
   outline-offset: 2px;
 }
@@ -3242,20 +3242,21 @@ button.result-image-button { display:block; max-width:100%; padding:0; backgroun
 @media (max-width:600px) { .goal-status {margin-inline:6px;} .goal-status-bar {padding-inline:4px;} .goal-status-summary {gap:3px;} }
 @media (pointer:coarse) { .goal-status-bar button {min-height:44px;} .goal-icon-button {width:44px;} }
 
-.conversation-workspace {display:flex;height:100%;min-width:0;min-height:0;}
+.conversation-workspace {--conversation-heading-height:48px;display:flex;height:100%;min-width:0;min-height:0;}
 .conversation-workspace > .conversation-page {flex:1;min-width:0;}
 .goal-editor-panel {display:flex;flex-direction:column;flex:0 0 50%;min-width:320px;max-width:65%;height:100%;min-height:0;border-left:1px solid var(--line);background:var(--canvas);color:var(--ink);}
-.goal-editor-heading {display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:14px;}
+.conversation-workspace .conversation-header,.goal-editor-heading {height:var(--conversation-heading-height);min-height:var(--conversation-heading-height);flex:none;}
+.goal-editor-heading {display:flex;align-items:center;justify-content:space-between;padding:8px 20px;border-bottom:1px solid var(--line);font-size:14px;}
 .goal-editor-heading > span {display:flex;align-items:center;gap:6px;}
 .goal-editor-panel .ui-icon {width:16px;height:16px;}
 .goal-editor-toolbar {display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);}
 .goal-editor-toolbar small {flex:1;min-width:0;color:var(--ink-muted);font-size:12px;}
 .goal-editor-panel button {min-height:28px;}
-.goal-editor-panel .text-icon-button {width:28px;display:grid;place-items:center;padding:4px;}
+.goal-editor-panel .text-icon-button {width:28px;height:28px;display:grid;place-items:center;padding:4px;}
 .goal-save-button {padding:4px 10px;border-radius:8px;font-size:12px;}
 .goal-editor-panel textarea {flex:1;min-height:100px;width:100%;resize:none;border:0;border-radius:0;padding:20px;background:transparent;color:var(--ink);font:inherit;font-size:14px;line-height:1.7;box-sizing:border-box;}
-.goal-editor-panel textarea:focus-visible {outline:2px solid var(--ink-muted);outline-offset:-3px;}
+.goal-editor-panel textarea:focus {border:0;outline:none;box-shadow:none;}
 .goal-editor-panel footer {display:flex;align-items:center;justify-content:space-between;padding:8px 12px;color:var(--ink-muted);font-size:12px;}
 .goal-editor-panel .task-control-error,.goal-editor-notice {padding:0 12px;overflow-wrap:anywhere;font-size:12px;}
 @media (max-width:959px) {.goal-editor-panel {position:absolute;inset:0;z-index:60;max-width:none;min-width:0;width:100%;border-left:0;}}
-@media (pointer:coarse) {.goal-editor-panel button {min-height:44px;} .goal-editor-panel .text-icon-button {width:44px;}}
+@media (pointer:coarse) {.conversation-workspace {--conversation-heading-height:64px;} .goal-editor-panel button {min-height:44px;} .goal-editor-panel .text-icon-button {width:44px;height:44px;}}
