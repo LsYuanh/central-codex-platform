@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 const paths = {
+  undo: "M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12h-3",
   pause: "M9 5v14M15 5v14",
   play: "m8 4 12 8-12 8V4Z",
   expand: "M8 3H3v5M16 21h5v-5M3 3l6 6M21 21l-6-6",

@@ -42,7 +42,7 @@ import { groupConversation, reduceConversationEvent } from "./conversation-conte
 import { TurnConversation } from "./TurnConversation";
 import { UserInputQuestions } from "./UserInputQuestions";
 import { ComposerActions, type ComposerPopover } from "./ComposerActions";
-import { GoalStatusBar, readGoal, useGoalControl } from "./GoalPanel";
+import { GoalEditorPanel, GoalStatusBar, readGoal, useGoalControl } from "./GoalPanel";
 import { ClientUpdatePanel, SidebarSettingsRow, useClientUpdates } from "./client-updates";
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
@@ -1439,12 +1439,13 @@ export default function App() {
   const interruptTurn = useCallback(async () => {
     const codexia = codexiaRef.current;
     if (!codexia || !threadId) return;
+    goalControl.cancelSave();
     try {
       await codexia.turnInterrupt({ threadId, ...(turnId ? { turnId } : {}) });
     } catch (error) {
       setAppError(errorMessage(error));
     }
-  }, [threadId, turnId]);
+  }, [threadId, turnId, goalControl.cancelSave]);
 
   const sendApprovalResponse = useCallback((response: unknown) => {
     const client = appClientRef.current;
@@ -1656,7 +1657,8 @@ export default function App() {
       <section className="main-stage" inert={compactLayout && sidebarOpen}>
         <button ref={sidebarToggleRef} className="sidebar-toggle text-icon-button" aria-label={t("打开导航")} aria-controls="app-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><UiIcon name="panel" /></button>
         {activePage === "conversation" ? (
-          <div className="conversation-page">
+          <div className="conversation-workspace">
+          <div className="conversation-page" inert={compactLayout&&composerPopover==="goal"}>
             <header className="conversation-header">
               <div className="conversation-title">
                 <UiIcon name="folder" />
@@ -1780,6 +1782,8 @@ export default function App() {
                 </div>
               </form>
             </section>
+          </div>
+          {mode==="central-gateway"&&platformCapabilities.goals&&composerPopover==="goal"&&<GoalEditorPanel key={`${projectScope}:${threadId}`} control={goalControl} compact={compactLayout} close={closeGoalDetails}/>}
           </div>
         ) : (
           <div className={`settings-page${settingsSection === "connection" ? " connection-settings-page" : settingsSection === "conversations" ? " archived-settings-page" : ""}`}>

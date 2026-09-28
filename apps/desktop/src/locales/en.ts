@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "编辑目标": "Edit goal", "关闭目标编辑器": "Close goal editor", "撤销修改": "Revert changes", "未保存的修改": "Unsaved changes", "已同步目标": "Goal synced",
+  "目标保存已停止，草稿已保留。": "Goal update stopped; your draft is preserved.",
+  "目标已被清除，编辑内容已保留。": "The goal was cleared; your edits are preserved.",
+  "目标已在其他位置修改，请撤销修改以载入最新目标。": "The goal changed elsewhere. Revert your changes to load the latest goal.",
+
   "退出目标模式": "Exit goal mode", "展开目标": "Expand goal",
   "描述你的目标，定义可衡量的成果，以获得最佳效果": "Describe your goal and define measurable outcomes for the best results",
   "目标仅支持文字，请先移除附件或技能标记；草稿已保留。": "Goals accept text only. Remove attachments or skill mentions first; your draft is preserved.",
