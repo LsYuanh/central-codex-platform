@@ -3180,8 +3180,8 @@ button.result-image-button { display:block; max-width:100%; padding:0; backgroun
 .image-viewer-stage .image-zoom { display:block; max-width:none; max-height:none; height:auto; }
 @media (pointer:coarse) { button.result-control,button.json-toggle,.output-actions > button,.attachment-actions > button { min-height:44px; min-width:44px; } }
 /* Plan and goal controls share the existing compact composer and theme. */
-.collaboration-picker select { min-height:28px; max-width:120px; border:0; border-radius:6px; background:var(--hover); color:var(--ink); padding:3px 8px; font:inherit; font-size:12px; }
-.plan-mode-notice,.goal-summary { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; }
+
+.goal-summary { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; }
 .plan-mode-notice { padding:6px 12px; color:var(--ink-muted); }
 .goal-panel { padding:6px 12px; border-bottom:1px solid var(--line); min-width:0; }
 .goal-panel button,.plan-mode-notice button { min-height:28px; padding:4px 8px; font-size:12px; }
@@ -3201,3 +3201,27 @@ button.result-image-button { display:block; max-width:100%; padding:0; backgroun
 .question-option small { display:block; color:var(--ink-muted); margin-top:4px; }
 .turn-process-plan { border-left:2px solid var(--line); }
 @media (pointer:coarse) { .goal-panel button,.plan-mode-notice button,.collaboration-picker select { min-height:44px; } }
+
+/* Unified composer add menu and compact mode chips. */
+.composer-actions { display:flex; align-items:center; gap:6px; min-width:0; flex-wrap:wrap; }
+.composer-popover { position:absolute; bottom:calc(100% + 6px); left:0; right:0; z-index:45; box-sizing:border-box; max-height:min(440px,55dvh); overflow:auto; overscroll-behavior:contain; border:1px solid var(--composer-border); border-radius:18px; padding:8px; background:var(--surface-raised); box-shadow:var(--composer-shadow); animation:composer-popover-in 120ms ease-out; }
+.composer-menu-heading { padding:2px 6px 4px; font-size:12px; color:var(--ink-muted); }
+.composer-add-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:28px; padding:4px 6px; border:0; border-radius:14px; background:transparent; color:var(--ink); text-align:left; font-size:13px; font-weight:400; }
+.composer-add-menu button:is(:hover,:focus-visible):not(:disabled) { background:var(--hover); }
+.composer-add-menu button small { color:var(--ink-muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.composer-add-menu .ui-icon,.composer-mode-chip .ui-icon { width:16px; height:16px; flex:none; }
+.composer-add-menu button > span { flex:none; }
+.composer-mode-chip { display:flex; align-items:center; gap:4px; min-height:28px; max-width:100%; padding:3px 6px; border-radius:14px; background:transparent; color:var(--ink-muted); font-size:12px; font-weight:400; }
+.composer-mode-chip > span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.composer-mode-chip:is(:hover,:focus-visible) { background:var(--hover); color:var(--ink); }
+.chip-icon { position:relative; display:flex; }
+.chip-close { position:absolute; inset:0; display:flex; opacity:0; }
+.plan-chip:is(:hover,:focus-visible):not(:disabled) .chip-icon > .ui-icon { opacity:0; }
+.plan-chip:is(:hover,:focus-visible):not(:disabled) .chip-close { opacity:1; }
+.goal-panel.composer-popover { padding:12px; }
+.goal-panel .goal-editor { max-height:none; overflow:visible; }
+.implement-plan-button { justify-self:start; width:max-content; min-height:28px; padding:4px 10px; margin:8px 0; font-size:12px; }
+@keyframes composer-popover-in { from {opacity:0;transform:translateY(4px);} to {opacity:1;transform:translateY(0);} }
+@media (prefers-reduced-motion:reduce) { .composer-popover {animation:none;} }
+@media (max-width:600px) { .composer-actions {flex:0 1 auto;} .goal-chip {min-width:0;} }
+@media (pointer:coarse) { .composer-add-menu button,.composer-mode-chip,.implement-plan-button { justify-self:start; width:max-content; min-height:44px; } }

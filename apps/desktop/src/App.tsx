@@ -13,7 +13,7 @@ import { useTrayNewConversation } from "./use-tray-new-conversation";
 import { invoke } from "./native-invoke";
 import { isTauri } from "@tauri-apps/api/core";
 import { RuntimeSettings, type ConfigView, type DesktopConfig } from "./runtime-settings";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MarkdownImageReference } from "./markdown-images";
 import { AppServerClient, type AppServerMessage, threadIdFromResult } from "./app-server-client";
 import { reduceExecutions, type GatewayUiEvent, type ExecutionActivity, type ExecutionStatus, type ConnectionState, type DeviceState, type ChatMessage, type ThreadSummary, type ApprovalRequest, type PlatformCapabilities, type CentralEngineState } from "./gateway-ui-events";
@@ -41,7 +41,7 @@ import { TurnTimingStore, timingScope } from "./turn-timing";
 import { groupConversation, reduceConversationEvent } from "./conversation-content";
 import { TurnConversation } from "./TurnConversation";
 import { UserInputQuestions } from "./UserInputQuestions";
-import { GoalPanel } from "./GoalPanel";
+import { ComposerActions, type ComposerPopover } from "./ComposerActions";
 import { ClientUpdatePanel, SidebarSettingsRow, useClientUpdates } from "./client-updates";
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
@@ -188,8 +188,11 @@ export default function App() {
   const threadIdRef = useRef<string | undefined>(undefined);
   threadIdRef.current = threadId;
   const [collaborationModes,setCollaborationModes] = useState<Record<string,"default"|"plan">>({});
-  const [goalOpenThread,setGoalOpenThread] = useState<string>();
+  const [composerPopover,setComposerPopover] = useState<ComposerPopover>(null);
+  const showComposerPopover = useCallback((value:ComposerPopover)=>{if(value&&modelPickerRef.current)modelPickerRef.current.open=false;setComposerPopover(value);},[]);
   const collaboration = collaborationModes[threadId ?? "__new__"] ?? "default";
+  const goalOpenThreadRef=useRef<string|undefined>(undefined);
+  useEffect(()=>{setComposerPopover(threadId&&goalOpenThreadRef.current===threadId?"goal":null);goalOpenThreadRef.current=undefined;},[threadId]);
   const selectCollaboration = (value:"default"|"plan") => setCollaborationModes(current=>({...current,[threadId??"__new__"]:value}));
   const [draftProject, setDraftProject] = useState<ClientProject>();
   const projectScope = JSON.stringify([mode, appUrl, runtimeConfig?.effective.userId, deviceId]);
@@ -197,8 +200,8 @@ export default function App() {
   const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
   // The selector changes this draft's destination; sidebar navigation switches draft slots.
   const newDraftSlotRef = useRef("__new__:");
-  useEffect(() => { setDraftProject(undefined); setCollaborationModes({}); setGoalOpenThread(undefined); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
-  useEffect(() => { if(threadId&&goalOpenThread===threadId)setGoalOpenThread(undefined); }, [threadId,goalOpenThread]);
+  useEffect(() => { setDraftProject(undefined); setCollaborationModes({}); setComposerPopover(null); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
+
   const newDraftKey = () => newDraftSlotRef.current;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const sidebarOrder = useSidebarOrganization(projectScope, threads, projectService.projects);
@@ -1511,8 +1514,8 @@ export default function App() {
       const response=await client.threadStart({...(project?{projectId:project.id,projectRevision:project.revision}:{}),...(appModel?{model:appModel}:{}),...(appServiceTier?{serviceTier:appServiceTier}:{})});
       const id=threadIdFromResult(response.result);
       if(!id||generation!==connectionGenerationRef.current)throw new Error(t("目标对话创建结果待核对"));
+      goalOpenThreadRef.current=id;
       setThreadId(id);threadIdRef.current=id;
-      setGoalOpenThread(id);
       setCollaborationModes(current=>({...current,[id]:collaboration}));
       setThreads(rows=>[{id,updatedAt:new Date().toISOString(),clientProject:project},...rows.filter(row=>row.id!==id)]);
       return id;
@@ -1662,12 +1665,12 @@ export default function App() {
                   running={turnRunning && Boolean(group.turnId) && group.turnId === turnId} now={executionClock}
                   executions={visibleExecutions.filter(execution => execution.turnId === group.turnId)}
                   renderExecution={execution => <ExecutionPanel executions={[execution]} now={executionClock} continuing={false} />}
-                  renderMessage={message => <ChatBubble key={message.id} message={message} images={markdownImages} retryOutput={async(output)=>{
+                  renderMessage={message => <Fragment key={message.id}><ChatBubble message={message} images={markdownImages} retryOutput={async(output)=>{
                   if(!appClientRef.current)throw new UiError("请先连接中央网关");
                   const reply=await appClientRef.current.request("output/retry",{threadId:output.threadId,outputId:output.id});
                   const result=asRecord(reply.result);
                   if(asRecord(result?.output))setMessages(current=>current.map(item=>item.id===`output-${output.id}`?{...item,outputs:[result!.output as OutputArtifact]}:item));
-                }}/>} />)}
+                }}/>{platformCapabilities.planMode&&collaboration==="plan"&&message.id===messages.filter(m=>m.kind==="plan"&&m.itemStatus==="completed").at(-1)?.id&&<button className="implement-plan-button" type="button" disabled={turnRunning||sending||!!threadBusy||appState!=="online"||deviceState!=="online"||!!uncertainSubmission} onClick={()=>void sendTurn(true)}>{t("开始实施")}</button>}</Fragment>} />)}
               </div>
 
               {showLatest && messages.length > 0 && <button className="jump-to-latest" type="button" aria-label={t("回到最新")} title={t("回到最新")} onClick={() => {
@@ -1691,8 +1694,6 @@ export default function App() {
               )}
 
               <form ref={composerRef} className={`composer ${turnRunning ? "composer-running" : ""}`} onSubmit={(event) => { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); }}>
-                {platformCapabilities.goals&&<GoalPanel key={`${projectScope}:${threadId??"new"}`} client={appClientRef.current} threadId={threadId} online={appState==="online"} disabled={sending||Boolean(threadBusy)||deviceState!=="online"||Boolean(uncertainSubmission)} planMode={collaboration==="plan"} createThread={createGoalThread} initialOpen={threadId===goalOpenThread&&!!threadId}/>}
-                {platformCapabilities.planMode&&collaboration==="plan"&&<div className="plan-mode-notice"><span>{t("计划模式：先调研和确认方案，再开始实施。")}</span>{!turnRunning&&messages.some(m=>m.kind==="plan"&&m.itemStatus==="completed")&&<button type="button" disabled={sending||!!threadBusy||appState!=="online"||deviceState!=="online"||!!uncertainSubmission} onClick={()=>void sendTurn(true)}>{t("开始实施")}</button>}</div>}
                 {!threadId && mode === "central-gateway" && <ComposerProjectPicker key={projectScope}
                   selected={projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject} projects={projectService.projects}
                   disabled={sending || Boolean(threadBusy) || configApplying} loading={projectService.loading} error={projectService.error}
@@ -1715,9 +1716,10 @@ export default function App() {
                     disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? t("中央引擎不可用，请重新连接并核对任务状态") : mode === "fake-central" ? t("Fake Central 仅用于设置页的工具验证") : appState !== "online" ? t("请先在设置中连接中央网关") : t("描述任务，按 Enter 发送")} /></div>
                   </div>
                   <div className="composer-footer">
-                    {platformCapabilities.planMode&&<label className="collaboration-picker"><span className="sr-only">{t("协作模式")}</span><select aria-label={t("协作模式")} value={collaboration} disabled={turnRunning||sending||!!threadBusy} onChange={event=>selectCollaboration(event.target.value as "default"|"plan")}><option value="default">{t("普通模式")}</option><option value="plan">{t("计划模式")}</option></select></label>}
-                    {mode === "central-gateway" && attachments.pickerButton}
-                    <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); }}>
+                    {mode === "central-gateway" && <ComposerActions key={`${projectScope}:${threadId??"new"}`} client={appClientRef.current} threadId={threadId} online={appState==="online"} disabled={sending||Boolean(threadBusy)||deviceState!=="online"||Boolean(uncertainSubmission)} planMode={collaboration==="plan"} createThread={createGoalThread} enabled={platformCapabilities.goals===true}
+                      planSupported={platformCapabilities.planMode===true} planLocked={turnRunning||sending||!!threadBusy||appState!=="online"||!!uncertainSubmission} selectPlan={plan=>selectCollaboration(plan?"plan":"default")} focusComposer={()=>composerInputRef.current?.focus({preventScroll:true})}
+                      pickFiles={attachments.pickFiles} pickerDisabled={attachments.pickerDisabled} popover={composerPopover} showPopover={showComposerPopover}/>}
+                    <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); else setComposerPopover(null); }}>
                       <summary aria-label={[t("切换模型、推理强度和速度"), speedIndicatorLabel].filter(Boolean).join(". ")}>{acceleratedSpeed && <span className="model-picker-fast" title={speedIndicatorLabel} aria-hidden="true"><UiIcon name="bolt" /></span>}<span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-chevron" aria-hidden="true"><UiIcon name="chevronDown" /></span></summary>
                       <div className="model-picker-popover">
                         <details className="model-picker-submenu" open={openModelSubmenu === "model"}>

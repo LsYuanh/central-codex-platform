@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 const paths = {
+  plan: "M9 18h6M9 21h6M8 14a6 6 0 1 1 8 0l-1 2H9l-1-2Z",
+  goal: "M21 12a9 9 0 1 1-9-9M17 12a5 5 0 1 1-5-5M12 12l9-9M17 3h4v4",
+  paperclip: "m9 12 6-6a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M6 14l8-8",
+
   panel: "M3 3h18v18H3zM9 3v18",
   edit: "m15 4 5 5M4 20l5-1L21 7l-5-5L4 14z",
   search: "M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14M15 15l6 6",

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "添加文件": "Add files", "选择本机文件": "Choose local files", "目标": "Goal", "设置要持续追求的目标": "Set an ongoing objective", "开启计划模式": "Enable plan mode", "计划": "Plan", "退出计划模式": "Exit plan mode", "收起目标": "Collapse goal", "目标·进行中": "Goal · Active", "目标·已暂停": "Goal · Paused", "目标·遇阻": "Goal · Blocked", "目标·额度受限": "Goal · Usage limited", "目标·预算用尽": "Goal · Budget reached", "目标·已完成": "Goal · Complete", "目标·需核对": "Goal · Check needed",
+
   "目标进行中": "Goal active", "目标已暂停": "Goal paused", "目标遇到阻碍": "Goal blocked", "额度受限": "Usage limited", "目标预算已用尽": "Goal budget reached", "目标已完成": "Goal complete",
   "目标状态格式不兼容": "Unsupported goal state", "对话目标": "Conversation goal", "设置目标": "Set goal", "暂停目标": "Pause goal", "继续目标": "Resume goal",
   "目标与验收条件": "Objective and success criteria", "Token 预算（可选）": "Token budget (optional)", "请先开始实施计划，再启动目标。": "Start implementing the plan before activating a goal.",

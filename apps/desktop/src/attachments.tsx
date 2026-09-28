@@ -84,18 +84,17 @@ export function useAttachments(locked:boolean, enabled:boolean) {
     if(refs.filter(ref=>ref.kind==="image").reduce((sum,ref)=>sum+ref.bytes,0)>10*1024*1024)throw new UiError("每回合图片总量最大 10 MiB");
     return refs;
   };
-  const pickerButton=(
-    <button type="button" className="attachment-add-button" aria-label={t("添加附件")} title={t("添加附件（支持拖入文件、粘贴截图）")} disabled={locked||adding||!enabled} onClick={()=>void invoke<string[]>("select_attachment_paths").then(addPaths).catch(e=>setError(errorMessage(e)))}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-    </button>
-  );
+  const pickFiles=()=>{
+    if(locked||adding||!enabled)return;
+    void invoke<string[]>("select_attachment_paths").then(addPaths).catch(e=>setError(errorMessage(e)));
+  };
   const controls=<>
     {adding&&<p className="attachment-notice" role="status">{t("正在本机准备预览…")}</p>}
     {drafts.length>0&&<div className="attachment-list">{drafts.map(draft=><div className={`attachment-card ${draft.error?"attachment-error":""}`} key={draft.id} title={draft.path??t("剪贴板图片：发送时保存到本机")}>{draft.preview?<img src={draft.preview} alt={draft.name}/>:<span className="attachment-file-icon">▤</span>}<div><strong>{draft.name}</strong><small>{sizeLabel(draft.bytes)} · {draft.error??t("待发送")}</small></div><button type="button" className="composer-remove-button" aria-label={t("移除 {{p0}}", { p0: draft.name })} disabled={locked||adding} onClick={()=>setDrafts(current=>current.filter(item=>item.id!==draft.id))}><UiIcon name="close" /></button></div>)}</div>}
     {error&&<p role="alert" className="attachment-error-text">{error}</p>}
     {drafts.length>0&&<p className="attachment-notice">{t("点击发送后，附件内容会经中央推理链路处理。普通文件按需读取。")}</p>}
   </>;
-  return {drafts,setDrafts,prepare,paste,controls,pickerButton,adding};
+  return {drafts,setDrafts,prepare,paste,controls,pickFiles,pickerDisabled:locked||adding||!enabled,adding};
 }
 
 export function MessageAttachments({attachments}:{attachments:MessageAttachment[]}) {
