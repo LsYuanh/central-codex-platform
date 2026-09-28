@@ -3225,3 +3225,19 @@ button.result-image-button { display:block; max-width:100%; padding:0; backgroun
 @media (prefers-reduced-motion:reduce) { .composer-popover {animation:none;} }
 @media (max-width:600px) { .composer-actions {flex:0 1 auto;} .goal-chip {min-width:0;} }
 @media (pointer:coarse) { .composer-add-menu button,.composer-mode-chip,.implement-plan-button { justify-self:start; width:max-content; min-height:44px; } }
+
+/* Goal creation uses the main composer; the existing goal sits above it. */
+.goal-status { margin:0 14px -1px; min-width:0; border:1px solid var(--composer-border); border-radius:16px 16px 0 0; background:var(--surface-raised); }
+.goal-status-bar { display:flex; align-items:center; gap:2px; padding:3px 8px; min-width:0; }
+.goal-status-bar button { min-height:28px; border:0; background:transparent; color:var(--ink-muted); padding:4px; border-radius:8px; box-shadow:none; }
+.goal-status-bar button:hover:not(:disabled) { background:var(--hover); }
+.goal-status-bar .ui-icon { width:16px; height:16px; flex:none; }
+.goal-status-summary { display:flex; align-items:center; gap:5px; flex:1; min-width:0; text-align:left; font-size:12px; }
+.goal-status-summary strong { font-size:12px; font-weight:500; color:var(--ink); white-space:nowrap; }
+.goal-status-summary .goal-objective { min-width:0; }
+.goal-status-summary small { flex:none; font-size:11px; }
+.goal-icon-button { display:grid; place-items:center; flex:none; width:28px; }
+.goal-status .goal-panel { border:0; max-height:35dvh; overflow:auto; overscroll-behavior:contain; }
+.goal-detail-objective { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media (max-width:600px) { .goal-status {margin-inline:6px;} .goal-status-bar {padding-inline:4px;} .goal-status-summary {gap:3px;} }
+@media (pointer:coarse) { .goal-status-bar button {min-height:44px;} .goal-icon-button {width:44px;} }

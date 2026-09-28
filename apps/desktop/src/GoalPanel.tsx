@@ -1,83 +1,94 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "./platform-gateway-client";
+import { UiIcon } from "./UiIcon";
 import { t, useLocale, type MessageKey } from "./i18n";
 
 const labels = {active:"目标进行中",paused:"目标已暂停",blocked:"目标遇到阻碍",usageLimited:"额度受限",budgetLimited:"目标预算已用尽",complete:"目标已完成"} as const satisfies Record<string,MessageKey>;
-type Goal = {threadId:string;objective:string;status:keyof typeof labels;tokenBudget:number|null;tokensUsed:number;timeUsedSeconds:number};
-function readGoal(value:unknown): Goal | null {
+export type Goal = {threadId:string;objective:string;status:keyof typeof labels;tokenBudget:number|null;tokensUsed:number;timeUsedSeconds:number};
+export function readGoal(value:unknown): Goal | null {
   if(value === null)return null;
   const g=value as Goal;
   if(!g||typeof g.threadId!=="string"||typeof g.objective!=="string"||!Object.hasOwn(labels,g.status)||!Number.isFinite(g.tokensUsed)||!Number.isFinite(g.timeUsedSeconds)||(g.tokenBudget!==null&&(!Number.isSafeInteger(g.tokenBudget)||g.tokenBudget<=0)))throw Error(t("目标状态格式不兼容"));
   return g;
 }
-export function useGoalControl({client,threadId,online,disabled,planMode,createThread,enabled}: {
-  client:RpcClient|undefined;threadId?:string;online:boolean;disabled:boolean;planMode:boolean;createThread:()=>Promise<string>;enabled:boolean;
+type Snapshot = {key:string;goal:Goal|null;busy:boolean;loading:boolean;error:string;observedAt:number};
+export function useGoalControl({client,threadId,scope,online,disabled,planMode,enabled}: {
+  client:RpcClient|undefined;threadId?:string;scope:string;online:boolean;disabled:boolean;planMode:boolean;enabled:boolean;
 }) {
   useLocale();
-  const [goal,setGoal]=useState<Goal|null>(null),[dirty,setDirty]=useState(false),[objective,setObjective]=useState(""),[budget,setBudget]=useState("");
-  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState("");
-  const revision=useRef(0),mounted=useRef(true);
-  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;revision.current++;};},[]);
+  const key=JSON.stringify([scope,threadId]),current=useRef(key),revision=useRef(0);
+  current.current=key;
+  const [state,setState]=useState<Snapshot>({key,goal:null,busy:false,loading:false,error:"",observedAt:Date.now()});
+  const [budgets,setBudgets]=useState<Record<string,string>>({});
+  const snapshot=state.key===key?state:{key,goal:null,busy:false,loading:Boolean(threadId&&enabled),error:"",observedAt:Date.now()};
+  const patch=useCallback((change:Partial<Snapshot>)=>{if(current.current===key)setState(old=>({...old,...(old.key!==key?{goal:null,busy:false,loading:false,error:""}:{}),...change,key}));},[key]);
   const refresh=useCallback(async()=>{
     if(!enabled||!threadId||!client||!online)return;
-    const version=++revision.current;setLoading(true);setError("");
-    try{const reply=await client.request("thread/goal/get",{threadId});if(version===revision.current)setGoal(readGoal((reply.result as {goal:unknown}).goal));}
-    catch(e){if(version===revision.current)setError(String(e));}
-    finally{if(mounted.current)setLoading(false);}
-  },[client,threadId,online,enabled]);
-  useEffect(()=>{void refresh();},[refresh]);
+    const version=++revision.current;patch({loading:true,error:""});
+    try{const reply=await client.request("thread/goal/get",{threadId});if(version===revision.current)patch({goal:readGoal((reply.result as {goal:unknown}).goal),observedAt:Date.now()});}
+    catch(e){if(version===revision.current)patch({error:String(e)});}
+    finally{if(version===revision.current)patch({loading:false});}
+  },[client,threadId,online,enabled,patch]);
+  useEffect(()=>{patch({error:"",busy:false,loading:false});void refresh();return()=>{revision.current++;};},[refresh,patch]);
   useEffect(()=>client?.subscribe(message=>{
     const p=message.params as {threadId?:string;goal?:unknown}|undefined;
     if(!enabled||!p||!threadId||p.threadId!==threadId)return;
     if(message.method!=="thread/goal/updated"&&message.method!=="thread/goal/cleared")return;
     revision.current++;
-    try{setGoal(message.method.endsWith("cleared")?null:readGoal(p.goal));setError("");setLoading(false);}catch(e){setError(String(e));}
-  }),[client,threadId,enabled]);
-  useEffect(()=>{if(!dirty){setObjective(goal?.objective??"");setBudget(goal?.tokenBudget?.toString()??"");}},[goal,dirty]);
+    try{patch({goal:message.method.endsWith("cleared")?null:readGoal(p.goal),observedAt:Date.now(),error:"",loading:false});}catch(e){patch({error:String(e),loading:false});}
+  }),[client,threadId,enabled,patch]);
   const mutate=async(action:"set"|"clear",params:Record<string,unknown>)=>{
-    if(!client||!threadId||!online||busy)return false;
-    setBusy(true);setError("");
-    const version=++revision.current;
+    if(!client||!threadId||!online||snapshot.busy)return false;
+    patch({busy:true,error:""});const version=++revision.current;
     try{
       const response=await client.request(`thread/goal/${action}`,{threadId,...params});
-      if(mounted.current){if(version===revision.current)setGoal(action==="clear"?null:readGoal((response.result as {goal:unknown}).goal));if(action==="clear"||"objective" in params)setDirty(false);}
-      return mounted.current;
-    }catch(e){if(mounted.current)setError(String(e));return false;}
-    finally{if(mounted.current)setBusy(false);}
+      if(version===revision.current)patch({goal:action==="clear"?null:readGoal((response.result as {goal:unknown}).goal),observedAt:Date.now()});
+      if(action==="clear"||"tokenBudget" in params)setBudgets(old=>{const next={...old};delete next[key];return next;});
+      return current.current===key;
+    }catch(e){patch({error:String(e)});return false;}
+    finally{patch({busy:false});}
   };
-  const locked=disabled||busy||!online;
-  const ensureThread=async()=>{
-    if(threadId||locked)return;
-    setBusy(true);setError("");
-    try{await createThread();}catch(e){if(mounted.current)setError(String(e));}
-    finally{if(mounted.current)setBusy(false);}
-  };
-  return {goal,objective,budget,busy,loading,error,locked,planMode,online,threadId,refresh,mutate,ensureThread,
-    setObjective:(value:string)=>{setDirty(true);setObjective(value);},setBudget:(value:string)=>{setDirty(true);setBudget(value);}};
+  const budget=budgets[key]??snapshot.goal?.tokenBudget?.toString()??"";
+  return {...snapshot,budget,locked:disabled||snapshot.busy||snapshot.loading||!online,planMode,online,threadId,refresh,mutate,
+    setBudget:(value:string)=>setBudgets(old=>({...old,[key]:value}))};
 }
-export function GoalPanel({control:c,close}:{control:ReturnType<typeof useGoalControl>;close:()=>void}) {
+export function GoalStatusBar({control:c,expanded,showDetails,close}:{control:ReturnType<typeof useGoalControl>;expanded:boolean;showDetails:()=>void;close:()=>void}) {
   useLocale();
-  const {goal,objective,budget,busy,loading,error,locked,planMode,online,threadId}=c;
-  return <section className="goal-panel composer-popover" role="dialog" aria-label={t("对话目标")} onKeyDown={event=>{if(event.key==="Enter"&&event.target instanceof HTMLInputElement)event.preventDefault();}}>
-    <div className="goal-summary">
-      <strong>{goal?t(labels[goal.status]):t("设置目标")}</strong>
-      {goal&&<><span className="goal-objective" title={goal.objective}>{goal.objective}</span><small>{goal.tokensUsed.toLocaleString()} {goal.tokenBudget!==null?`/ ${goal.tokenBudget.toLocaleString()}`:""} tokens · {Math.floor(goal.timeUsedSeconds/60)} {t("分钟")}</small>
-        {goal.status==="active"?<button type="button" disabled={busy||!online} onClick={()=>void c.mutate("set",{status:"paused"})}>{t("暂停目标")}</button>
-          :goal.status==="budgetLimited"?<button type="button" disabled={locked} onClick={event=>event.currentTarget.closest("section")?.querySelector<HTMLInputElement>('input')?.focus()}>{t("调整预算")}</button>
-          :goal.status!=="complete"&&<button type="button" disabled={locked||planMode} onClick={()=>void c.mutate("set",{status:"active"})}>{t("继续目标")}</button>}</>}
-      {threadId&&<button type="button" className="button-quiet" disabled={loading||busy||!online} onClick={()=>void c.refresh()}>{loading?t("读取中…"):t("刷新")}</button>}
-      <button type="button" className="button-quiet" onClick={close}>{t("收起目标")}</button>
+  const root=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null);
+  const {goal,budget,busy,loading,error,locked,planMode,online}=c;
+  const [now,setNow]=useState(Date.now());
+  useEffect(()=>{if(goal?.status!=="active")return;setNow(Date.now());const timer=window.setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[goal]);
+  useEffect(()=>{
+    if(!expanded)return;
+    root.current?.querySelector<HTMLInputElement>('input')?.focus();
+    const outside=(event:Event)=>{if(event.target instanceof Node&&!root.current?.contains(event.target))close();};
+    const escape=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();close();trigger.current?.focus();}};
+    document.addEventListener("keydown",escape);
+    document.addEventListener("pointerdown",outside);document.addEventListener("focusin",outside);
+    return()=>{document.removeEventListener("keydown",escape);document.removeEventListener("pointerdown",outside);document.removeEventListener("focusin",outside);};
+  },[expanded,close]);
+  if(!goal&&!error)return null;
+  const collapse=()=>{close();trigger.current?.focus();};
+  const seconds=Math.floor((goal?.timeUsedSeconds??0)+(goal?.status==="active"?Math.max(0,now-c.observedAt)/1000:0));
+  return <div className="goal-status" ref={root} onKeyDown={event=>{if(event.key==="Escape"&&expanded){event.preventDefault();event.stopPropagation();collapse();}if(event.key==="Enter"&&event.target instanceof HTMLInputElement)event.preventDefault();}}>
+    <div className="goal-status-bar">
+      <button ref={trigger} type="button" className="goal-status-summary" aria-expanded={expanded} title={error||goal?.objective} onClick={()=>expanded?collapse():showDetails()}><UiIcon name="goal"/><strong aria-live="polite">{error?t("目标·需核对"):t(labels[goal!.status])}</strong><span className="goal-objective">{goal?.objective}</span>{goal&&<small>{seconds}s</small>}</button>
+      {goal&&<>
+        <button type="button" className="goal-icon-button" aria-label={t("清除目标")} title={t("清除目标")} disabled={busy||!online} onClick={()=>void c.mutate("clear",{}).then(ok=>{if(ok)close();})}><UiIcon name="trash"/></button>
+        {goal.status!=="complete"&&<button type="button" className="goal-icon-button" aria-label={t(goal.status==="active"?"暂停目标":"继续目标")} title={t(goal.status==="active"?"暂停目标":"继续目标")} disabled={goal.status==="active"?busy||!online:locked||planMode||goal.status==="budgetLimited"} onClick={()=>void c.mutate("set",{status:goal.status==="active"?"paused":"active"})}><UiIcon name={goal.status==="active"?"pause":"play"}/></button>}
+      </>}
+      <button type="button" className="goal-icon-button" aria-label={t(expanded?"收起目标":"展开目标")} title={t(expanded?"收起目标":"展开目标")} onClick={()=>expanded?collapse():showDetails()}><UiIcon name={expanded?"chevronDown":"expand"}/></button>
     </div>
-    {error&&<p className="task-control-error" role="alert">{error}</p>}
-    <div className="goal-editor">
-      <label>{t("目标与验收条件")}<textarea maxLength={4000} required value={objective} onChange={e=>c.setObjective(e.target.value)} disabled={locked} rows={3}/></label>
-      <label>{t("Token 预算（可选）")}<input type="number" min={1} step={1} value={budget} onChange={e=>c.setBudget(e.target.value)} disabled={locked}/></label>
-      <p>{planMode?t("请先开始实施计划，再启动目标。"):t("目标会跨轮持续执行；完成、暂停、遇阻或达到预算后停止。")}</p>
-      <p>{t("预算用于限制自动续跑，当前轮收尾可能超出预算。")}</p>
-      <div className="button-row"><button type="button" disabled={locked||!threadId||planMode||!objective.trim()||(budget!==""&&(!Number.isSafeInteger(Number(budget))||Number(budget)<=0))} onClick={()=>void c.mutate("set",{objective:objective.trim(),status:"active",tokenBudget:budget?Number(budget):null}).then(ok=>{if(ok)close();})}>{busy?t("处理中…"):t("启动目标")}</button>
-        {goal&&<button type="button" className="button-secondary" disabled={busy||!online} onClick={()=>void c.mutate("clear",{}).then(ok=>{if(ok)close();})}>{t("清除目标")}</button>}
-        <button type="button" className="button-quiet" onClick={close}>{t("取消")}</button></div>
-    </div>
-  </section>;
+    {expanded&&<section className="goal-panel" role="region" aria-label={t("对话目标")}>
+      {error&&<p className="task-control-error" role="alert">{error}</p>}
+      {goal&&<div className="goal-editor"><p className="goal-detail-objective">{goal.objective}</p><small>{goal.tokensUsed.toLocaleString()}{goal.tokenBudget!==null?` / ${goal.tokenBudget.toLocaleString()}`:""} tokens · {Math.floor(goal.timeUsedSeconds/60)} {t("分钟")}</small>
+        <label>{t("Token 预算（可选）")}<input type="number" min={1} step={1} value={budget} onChange={e=>c.setBudget(e.target.value)} disabled={locked||goal.status==="complete"}/></label>
+        <p>{t("预算用于限制自动续跑，当前轮收尾可能超出预算。")}</p>
+        {planMode&&<p>{t("请先开始实施计划，再启动目标。")}</p>}
+        <div className="button-row"><button type="button" disabled={locked||goal.status==="complete"||(budget!==""&&(!Number.isSafeInteger(Number(budget))||Number(budget)<=0))} onClick={()=>void c.mutate("set",{tokenBudget:budget?Number(budget):null,status:goal.status==="active"?"active":"paused"})}>{t("调整预算")}</button></div>
+      </div>}
+      <button type="button" className="button-quiet" disabled={loading||busy||!online} onClick={()=>void c.refresh()}>{loading?t("读取中…"):t("刷新")}</button>
+    </section>}
+  </div>;
 }

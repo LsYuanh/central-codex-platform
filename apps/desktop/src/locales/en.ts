@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "退出目标模式": "Exit goal mode", "展开目标": "Expand goal",
+  "描述你的目标，定义可衡量的成果，以获得最佳效果": "Describe your goal and define measurable outcomes for the best results",
+  "目标仅支持文字，请先移除附件或技能标记；草稿已保留。": "Goals accept text only. Remove attachments or skill mentions first; your draft is preserved.",
+  "目标不能超过 4000 个字符；草稿已保留。": "Goals cannot exceed 4,000 characters; your draft is preserved.",
+  "已有目标，请先清除后再设置新目标。": "Clear the existing goal before setting a new one.",
+
   "添加文件": "Add files", "选择本机文件": "Choose local files", "目标": "Goal", "设置要持续追求的目标": "Set an ongoing objective", "开启计划模式": "Enable plan mode", "计划": "Plan", "退出计划模式": "Exit plan mode", "收起目标": "Collapse goal", "目标·进行中": "Goal · Active", "目标·已暂停": "Goal · Paused", "目标·遇阻": "Goal · Blocked", "目标·额度受限": "Goal · Usage limited", "目标·预算用尽": "Goal · Budget reached", "目标·已完成": "Goal · Complete", "目标·需核对": "Goal · Check needed",
 
   "目标进行中": "Goal active", "目标已暂停": "Goal paused", "目标遇到阻碍": "Goal blocked", "额度受限": "Usage limited", "目标预算已用尽": "Goal budget reached", "目标已完成": "Goal complete",

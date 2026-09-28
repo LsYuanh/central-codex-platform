@@ -42,6 +42,7 @@ import { groupConversation, reduceConversationEvent } from "./conversation-conte
 import { TurnConversation } from "./TurnConversation";
 import { UserInputQuestions } from "./UserInputQuestions";
 import { ComposerActions, type ComposerPopover } from "./ComposerActions";
+import { GoalStatusBar, readGoal, useGoalControl } from "./GoalPanel";
 import { ClientUpdatePanel, SidebarSettingsRow, useClientUpdates } from "./client-updates";
 import { applyTheme, settingsStorageKey, type ThemeMode } from "./theme";
 
@@ -80,6 +81,7 @@ interface GatewayStatus {
 }
 
 interface ThreadDraft {
+  goalMode?: boolean;
   mentions?: SkillMention[];
   text: string;
   attachments: DraftAttachment[];
@@ -191,8 +193,9 @@ export default function App() {
   const [composerPopover,setComposerPopover] = useState<ComposerPopover>(null);
   const showComposerPopover = useCallback((value:ComposerPopover)=>{if(value&&modelPickerRef.current)modelPickerRef.current.open=false;setComposerPopover(value);},[]);
   const collaboration = collaborationModes[threadId ?? "__new__"] ?? "default";
-  const goalOpenThreadRef=useRef<string|undefined>(undefined);
-  useEffect(()=>{setComposerPopover(threadId&&goalOpenThreadRef.current===threadId?"goal":null);goalOpenThreadRef.current=undefined;},[threadId]);
+  const [goalDraft,setGoalDraft]=useState(false);
+  const closeGoalDetails=useCallback(()=>setComposerPopover(null),[]);
+  useEffect(()=>{setComposerPopover(null);},[threadId]);
   const selectCollaboration = (value:"default"|"plan") => setCollaborationModes(current=>({...current,[threadId??"__new__"]:value}));
   const [draftProject, setDraftProject] = useState<ClientProject>();
   const projectScope = JSON.stringify([mode, appUrl, runtimeConfig?.effective.userId, deviceId]);
@@ -200,7 +203,7 @@ export default function App() {
   const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
   // The selector changes this draft's destination; sidebar navigation switches draft slots.
   const newDraftSlotRef = useRef("__new__:");
-  useEffect(() => { setDraftProject(undefined); setCollaborationModes({}); setComposerPopover(null); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
+  useEffect(() => { setDraftProject(undefined); setGoalDraft(false); setCollaborationModes({}); setComposerPopover(null); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
 
   const newDraftKey = () => newDraftSlotRef.current;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -269,6 +272,7 @@ export default function App() {
   const attachments = useAttachments(sending || configApplying || Boolean(uncertainSubmission), mode === "central-gateway");
   const turnId = threadId ? turnIdsByThread.get(threadId) : undefined;
   const turnRunning = Boolean(threadId && runningThreadIds.has(threadId));
+  const goalControl=useGoalControl({client:appClientRef.current,threadId,scope:projectScope,online:appState==="online",disabled:sending||Boolean(threadBusy)||deviceState!=="online"||Boolean(uncertainSubmission),planMode:collaboration==="plan",enabled:mode==="central-gateway"&&platformCapabilities.goals===true});
   const approval = approvals.find((item) => !item.threadId || item.threadId === threadId);
   const hasRunningExecution = executions.some((execution) => execution.status === "running");
 
@@ -306,11 +310,12 @@ export default function App() {
   }, []);
 
   const persistCurrentDraft = useCallback(() => {
-    threadDraftsRef.current.set(threadIdRef.current ?? newDraftKey(), { text: composer, mentions: composerDoc.mentions, attachments: attachments.drafts });
-  }, [attachments.drafts, composerDoc, composer]);
+    threadDraftsRef.current.set(threadIdRef.current ?? newDraftKey(), { text: composer, mentions: composerDoc.mentions, attachments: attachments.drafts, goalMode:goalDraft });
+  }, [attachments.drafts, composerDoc, composer, goalDraft]);
 
   const restoreThreadDraft = useCallback((id?: string) => {
     const draft = threadDraftsRef.current.get(id ?? newDraftKey());
+    setGoalDraft(draft?.goalMode??false);
     setComposerDoc({text:draft?.text ?? "",mentions:draft?.mentions ?? []});
     attachments.setDrafts(draft?.attachments ?? []);
   }, [attachments]);
@@ -329,8 +334,8 @@ export default function App() {
   useEffect(() => { runningThreadIdsRef.current = runningThreadIds; }, [runningThreadIds]);
 
   useEffect(() => {
-    threadDraftsRef.current.set(threadId ?? newDraftKey(), { text: composer, mentions: composerDoc.mentions, attachments: attachments.drafts });
-  }, [attachments.drafts, composerDoc, composer, threadId, draftProject]);
+    threadDraftsRef.current.set(threadId ?? newDraftKey(), { text: composer, mentions: composerDoc.mentions, attachments: attachments.drafts, goalMode:goalDraft });
+  }, [attachments.drafts, composerDoc, composer, threadId, draftProject, goalDraft]);
 
   useEffect(() => {
     if (!approval) return;
@@ -1383,6 +1388,7 @@ export default function App() {
     // Keep the ordinary new-conversation draft when launching a skill from settings.
     newDraftSlotRef.current = initialSkill ? `__skill__:${crypto.randomUUID()}` : `__new__:${project?.id ?? ""}`;
     if (initialSkill) {
+      setGoalDraft(false);
       const text = '$' + initialSkill.name;
       setComposerDoc({text:text+' '+initialPrompt,mentions:[{id:initialSkill.id,revision:initialSkill.revision,name:initialSkill.name,...(initialSkill.displayName?{displayName:initialSkill.displayName}:{}),start:0,end:text.length}]});
       attachments.setDrafts([]);
@@ -1505,21 +1511,45 @@ export default function App() {
   const createGoalThread = async ():Promise<string> => {
     if(threadIdRef.current)return threadIdRef.current;
     const client=codexiaRef.current;
-    if(!client||appState!=="online"||sendGuard.current||threadBusy)throw new UiError("请先连接中央网关");
+    if(!client||appState!=="online"||threadBusy)throw new UiError("请先连接中央网关");
     const generation=connectionGenerationRef.current;
-    sendGuard.current=true;setThreadBusy("__new__:goal");
+    setThreadBusy("__new__:goal");
     try {
       const project=draftProject?projectService.projects.find(p=>p.id===draftProject.id):undefined;
       if(draftProject&&!project)throw new UiError("项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留");
       const response=await client.threadStart({...(project?{projectId:project.id,projectRevision:project.revision}:{}),...(appModel?{model:appModel}:{}),...(appServiceTier?{serviceTier:appServiceTier}:{})});
       const id=threadIdFromResult(response.result);
       if(!id||generation!==connectionGenerationRef.current)throw new Error(t("目标对话创建结果待核对"));
-      goalOpenThreadRef.current=id;
       setThreadId(id);threadIdRef.current=id;
       setCollaborationModes(current=>({...current,[id]:collaboration}));
       setThreads(rows=>[{id,updatedAt:new Date().toISOString(),clientProject:project},...rows.filter(row=>row.id!==id)]);
       return id;
-    }finally{sendGuard.current=false;setThreadBusy(undefined);}
+    }finally{setThreadBusy(undefined);}
+  };
+
+  const sendComposer = async () => {
+    if(!goalDraft){await sendTurn();return;}
+    if(sendGuard.current||sending||threadBusy||turnRunning||configApplying||uncertainSubmission||appState!=="online"||deviceState!=="online"||!platformCapabilities.goals||collaboration==="plan")return;
+    const objective=composer.trim(),client=appClientRef.current,generation=connectionGenerationRef.current;
+    if(!objective||!client)return;
+    if(attachments.drafts.length||composerDoc.mentions.length){setAppError(t("目标仅支持文字，请先移除附件或技能标记；草稿已保留。"));return;}
+    if(Array.from(objective).length>4000){setAppError(t("目标不能超过 4000 个字符；草稿已保留。"));return;}
+    sendGuard.current=true;setSending(true);setSendStage("");setAppError("");
+    const draftKey=threadIdRef.current??newDraftKey();
+    let target:string|undefined;
+    try {
+      target=await createGoalThread();
+      // Reconcile the authoritative state before retrying an interrupted submission.
+      const existing=readGoal(((await client.request("thread/goal/get",{threadId:target})).result as {goal:unknown}).goal);
+      if(existing&&existing.objective!==objective)throw Error(t("已有目标，请先清除后再设置新目标。"));
+      if(!existing)await client.request("thread/goal/set",{threadId:target,objective,status:"active",tokenBudget:null});
+      if(generation!==connectionGenerationRef.current)return;
+      threadDraftsRef.current.delete(draftKey);
+      threadDraftsRef.current.set(target,{text:"",mentions:[],attachments:[],goalMode:false});
+      if(threadIdRef.current===target){setComposerDoc({text:"",mentions:[]});setGoalDraft(false);setComposerPopover(null);requestAnimationFrame(()=>composerInputRef.current?.focus());}
+    } catch(error) {
+      if(generation===connectionGenerationRef.current)setAppError(errorMessage(error));
+    } finally {sendGuard.current=false;setSending(false);}
   };
 
   const configDirty = runtimeConfig && (Object.keys(configDraft) as (keyof DesktopConfig)[]).some(key => configDraft[key] !== runtimeConfig.saved[key]);
@@ -1693,13 +1723,14 @@ export default function App() {
                 </div>
               )}
 
-              <form ref={composerRef} className={`composer ${turnRunning ? "composer-running" : ""}`} onSubmit={(event) => { event.preventDefault(); if (mode !== "fake-central") void sendTurn(); }}>
+              <form ref={composerRef} className={`composer ${turnRunning ? "composer-running" : ""}`} onSubmit={(event) => { event.preventDefault(); if (mode !== "fake-central") void sendComposer(); }}>
                 {!threadId && mode === "central-gateway" && <ComposerProjectPicker key={projectScope}
                   selected={projectService.projects.find(p => p.id === draftProject?.id) ?? draftProject} projects={projectService.projects}
                   disabled={sending || Boolean(threadBusy) || configApplying} loading={projectService.loading} error={projectService.error}
                   unavailable={appState !== "online" ? t("连接后选择项目") : !platformCapabilities.projects ? t("中央服务需更新后启用项目") : ""}
                   refresh={projectService.refresh} save={projectService.save} remove={projectService.remove}
                   choose={project => { if (threadIdRef.current || sendGuard.current || configApplyingRef.current || threadBusy) return; setDraftProject(project); }} />}
+                {mode==="central-gateway"&&platformCapabilities.goals&&<GoalStatusBar control={goalControl} expanded={composerPopover==="goal"} showDetails={()=>showComposerPopover("goal")} close={closeGoalDetails}/>}
                 <div className="composer-shell" onClick={(event) => {
                   const target = event.target;
                   if (!(target instanceof Element) || target.closest("button, a, input, textarea, select, label, summary, [role='button'], [role='menu'], [role='dialog'], [contenteditable='true'], .model-picker-popover")) return;
@@ -1711,14 +1742,14 @@ export default function App() {
                     {sending && <p className="attachment-notice" role="status">{sendStage || t("正在核对提交结果…")}{sendStage && sendStage !== t("正在追加要求…") && sendStage !== t("正在提交中央模型") && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(errorMessage(e)));}}>{t("取消准备")}</button>}</p>}
                     {uncertainSubmission && <div className="attachment-error-text">{t("提交结果未知，草稿已保留。")}<button type="button" disabled={sending||appState!=="online"} onClick={()=>void reconcileSubmission()}>{t("核对历史")}</button></div>}
                   <div className="composer-input-wrap"><SkillComposer key={`${projectScope}:${threadId ?? newDraftKey()}`} editorRef={composerInputRef} value={composerDoc} onChange={setComposerDoc}
-                    scope={`${projectScope}:${threadId ?? newDraftKey()}`} service={skillService} skillsDisabled={turnRunning || mode !== "central-gateway"}
-                    onPaste={attachments.paste} onSend={() => { if (mode !== "fake-central") void sendTurn(); }} manage={() => openSettings("skills")}
-                    disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? t("中央引擎不可用，请重新连接并核对任务状态") : mode === "fake-central" ? t("Fake Central 仅用于设置页的工具验证") : appState !== "online" ? t("请先在设置中连接中央网关") : t("描述任务，按 Enter 发送")} /></div>
+                    scope={`${projectScope}:${threadId ?? newDraftKey()}`} service={skillService} skillsDisabled={goalDraft || turnRunning || mode !== "central-gateway"}
+                    onPaste={attachments.paste} onSend={() => { if (mode !== "fake-central") void sendComposer(); }} manage={() => openSettings("skills")}
+                    disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? t("中央引擎不可用，请重新连接并核对任务状态") : mode === "fake-central" ? t("Fake Central 仅用于设置页的工具验证") : appState !== "online" ? t("请先在设置中连接中央网关") : goalDraft?t("描述你的目标，定义可衡量的成果，以获得最佳效果"):t("描述任务，按 Enter 发送")} /></div>
                   </div>
                   <div className="composer-footer">
-                    {mode === "central-gateway" && <ComposerActions key={`${projectScope}:${threadId??"new"}`} client={appClientRef.current} threadId={threadId} online={appState==="online"} disabled={sending||Boolean(threadBusy)||deviceState!=="online"||Boolean(uncertainSubmission)} planMode={collaboration==="plan"} createThread={createGoalThread} enabled={platformCapabilities.goals===true}
-                      planSupported={platformCapabilities.planMode===true} planLocked={turnRunning||sending||!!threadBusy||appState!=="online"||!!uncertainSubmission} selectPlan={plan=>selectCollaboration(plan?"plan":"default")} focusComposer={()=>composerInputRef.current?.focus({preventScroll:true})}
-                      pickFiles={attachments.pickFiles} pickerDisabled={attachments.pickerDisabled} popover={composerPopover} showPopover={showComposerPopover}/>}
+                    {mode === "central-gateway" && <ComposerActions control={goalControl} planMode={collaboration==="plan"} goalDraft={goalDraft} selectGoal={setGoalDraft} enabled={platformCapabilities.goals===true}
+                      planSupported={platformCapabilities.planMode===true} planLocked={turnRunning||sending||!!threadBusy||appState!=="online"||!!uncertainSubmission} selectPlan={plan=>{setGoalDraft(false);selectCollaboration(plan?"plan":"default");}} focusComposer={()=>composerInputRef.current?.focus({preventScroll:true})}
+                      pickFiles={attachments.pickFiles} pickerDisabled={attachments.pickerDisabled||goalDraft} popover={composerPopover} showPopover={showComposerPopover}/>}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); else setComposerPopover(null); }}>
                       <summary aria-label={[t("切换模型、推理强度和速度"), speedIndicatorLabel].filter(Boolean).join(". ")}>{acceleratedSpeed && <span className="model-picker-fast" title={speedIndicatorLabel} aria-hidden="true"><UiIcon name="bolt" /></span>}<span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-chevron" aria-hidden="true"><UiIcon name="chevronDown" /></span></summary>
                       <div className="model-picker-popover">
@@ -1739,10 +1770,10 @@ export default function App() {
                       </div>
                     </details>
                     <div className="button-row">
-                      {turnRunning ? (
+                      {turnRunning||goalControl.goal?.status==="active" ? (
                         <button className="send-button send-button-stop" type="button" aria-label={t("停止当前任务")} title={t("停止当前任务")} disabled={appState !== "online" || (sending && !steeringRequestRef.current)} onClick={() => void interruptTurn()}><PauseIcon /></button>
                       ) : (
-                        <button className="send-button" type="submit" aria-label={t("发送")} title={t("发送")} disabled={engineState === "unavailable" || sending || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || !composer.trim() && !attachments.drafts.length}><SendIcon /></button>
+                        <button className="send-button" type="submit" aria-label={t("发送")} title={t("发送")} disabled={engineState === "unavailable" || sending || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || (goalDraft&&(deviceState!=="online"||goalControl.loading||collaboration==="plan")) || !composer.trim() && !attachments.drafts.length}><SendIcon /></button>
                       )}
                     </div>
                   </div>

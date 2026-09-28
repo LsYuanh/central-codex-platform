@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 const paths = {
+  pause: "M9 5v14M15 5v14",
+  play: "m8 4 12 8-12 8V4Z",
+  expand: "M8 3H3v5M16 21h5v-5M3 3l6 6M21 21l-6-6",
   plan: "M9 18h6M9 21h6M8 14a6 6 0 1 1 8 0l-1 2H9l-1-2Z",
   goal: "M21 12a9 9 0 1 1-9-9M17 12a5 5 0 1 1-5-5M12 12l9-9M17 3h4v4",
   paperclip: "m9 12 6-6a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M6 14l8-8",
