@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {releasePath,releaseVersion} from '../../harness/check-upstream.mjs';
+import {releasePath,releaseVersion,upstreamHeaders} from '../../harness/check-upstream.mjs';
 
 test('trial selects an exact stable release while scheduled discovery stays on latest',()=>{
   assert.equal(releasePath(),'latest');
@@ -17,4 +17,12 @@ test('trial refuses a changed, draft or prerelease target',()=>{
   for(const patch of [{tag_name:'rust-v0.159.3'},{draft:true},{prerelease:true},{tag_name:'rust-v0.159.2-beta'},{tag_name:'main'}]){
     assert.throws(()=>releaseVersion({...release,...patch},'0.159.2'),/UPSTREAM_NOT_STABLE/);
   }
+});
+test('discovery token is limited to the official upstream API',()=>{
+  const token='synthetic-trial-token';
+  assert.equal(upstreamHeaders('https://api.github.com/repos/openai/codex/releases/latest',true,token).authorization,`Bearer ${token}`);
+  for(const url of ['https://codeload.github.com/openai/codex/tar.gz/abc','https://api.github.com/repos/other/repo/releases/latest','https://api.github.com.evil.invalid/repos/openai/codex/releases/latest','http://api.github.com/repos/openai/codex/releases/latest']){
+    assert.equal(upstreamHeaders(url,true,token).authorization,undefined);
+  }
+  assert.equal(upstreamHeaders('https://api.github.com/repos/openai/codex/releases/latest',true).authorization,undefined);
 });

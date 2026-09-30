@@ -56,6 +56,8 @@ jobs:
           npm run build --workspace @central-codex-spike/central-gateway
           node --test tests/smoke/runtime-trial.test.mjs
       - name: Validate the selected App Server without signing or publishing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           NODE_LICENSE="$(node -p 'require("node:path").resolve(process.execPath,"../../LICENSE")')"
           node scripts/release/build-runtime-update.mjs "$RUNTIME_TRIAL_OUTPUT" "$NODE_LICENSE" "$RUNTIME_TRIAL_VERSION"

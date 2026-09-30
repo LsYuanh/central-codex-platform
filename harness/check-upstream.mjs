@@ -21,8 +21,17 @@ export function releaseVersion(release,requestedVersion) {
 export function compareVersions(a,b) {
   for(let i=0;i<3;i++){const delta=Number(a.split('.')[i])-Number(b.split('.')[i]);if(delta)return Math.sign(delta);}return 0;
 }
+export function upstreamHeaders(url,json,token) {
+  const headers={'User-Agent':'Yuan-Zhou-runtime-updates',accept:json?'application/vnd.github+json':'application/octet-stream'};
+  const target=new URL(url);
+  // The ephemeral read-only job token avoids the shared runner's anonymous API limit.
+  // Never forward it to archives, redirects or another origin.
+  if(token&&target.origin==='https://api.github.com'&&target.pathname.startsWith('/repos/openai/codex/'))headers.authorization=`Bearer ${token}`;
+  return headers;
+}
 async function download(url, limit, json=false) {
-  const response=await fetch(url,{headers:{'User-Agent':'Yuan-Zhou-runtime-updates',accept:json?'application/vnd.github+json':'application/octet-stream'},signal:AbortSignal.timeout(60000)});
+  const response=await fetch(url,{headers:upstreamHeaders(url,json,process.env.GITHUB_TOKEN),redirect:'error',signal:AbortSignal.timeout(60000)});
+  if(response.status===403&&response.headers.get('x-ratelimit-remaining')==='0')throw Error('UPSTREAM_RATE_LIMITED');
   if(!response.ok)throw Error(`UPSTREAM_HTTP_${response.status}`);
   const chunks=[];let size=0;
   for await(const chunk of response.body){size+=chunk.length;if(size>limit)throw Error('UPSTREAM_TOO_LARGE');chunks.push(chunk);}
