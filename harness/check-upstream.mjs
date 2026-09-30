@@ -7,6 +7,17 @@ import {resolve, join, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isolatedGitEnvironment} from './patch-git-env.mjs';
 export const stableVersion = tag => /^rust-v(\d+\.\d+\.\d+)$/.exec(tag ?? '')?.[1];
+// A trial pins its release so a newly published version cannot change the experiment.
+export function releasePath(version) {
+  if(version===undefined)return 'latest';
+  if(typeof version!=='string'||!/^\d+\.\d+\.\d+$/.test(version))throw Error('UPSTREAM_VERSION_INVALID');
+  return `tags/rust-v${version}`;
+}
+export function releaseVersion(release,requestedVersion) {
+  const version=stableVersion(release.tag_name);
+  if(!version||release.draft||release.prerelease||(requestedVersion!==undefined&&version!==requestedVersion))throw Error('UPSTREAM_NOT_STABLE');
+  return version;
+}
 export function compareVersions(a,b) {
   for(let i=0;i<3;i++){const delta=Number(a.split('.')[i])-Number(b.split('.')[i]);if(delta)return Math.sign(delta);}return 0;
 }
@@ -17,16 +28,16 @@ async function download(url, limit, json=false) {
   for await(const chunk of response.body){size+=chunk.length;if(size>limit)throw Error('UPSTREAM_TOO_LARGE');chunks.push(chunk);}
   const bytes=Buffer.concat(chunks);return json?JSON.parse(bytes):bytes;
 }
-export async function checkUpstream(destination) {
+export async function checkUpstream(destination,requestedVersion) {
+  const releaseEndpoint=releasePath(requestedVersion);
   const here=dirname(fileURLToPath(import.meta.url));
   const pin=JSON.parse(await readFile(join(here,'upstream.json')));
   await mkdir(destination,{recursive:false});
   const report={schemaVersion:1,checkedAt:new Date().toISOString(),currentVersion:pin.version,status:'checking'};
   const save=()=>writeFile(join(destination,'upstream-report.json'),JSON.stringify(report,null,2)+'\n');
   try{
-    const release=await download('https://api.github.com/repos/openai/codex/releases/latest',1024*1024,true);
-    const version=stableVersion(release.tag_name);
-    if(!version||release.draft||release.prerelease)throw Error('UPSTREAM_NOT_STABLE');
+    const release=await download(`https://api.github.com/repos/openai/codex/releases/${releaseEndpoint}`,1024*1024,true);
+    const version=releaseVersion(release,requestedVersion);
     Object.assign(report,{latestVersion:version,tag:release.tag_name});
     if(compareVersions(version,pin.version)<=0){report.status='up-to-date';await save();return report;}
     // Resolve the release tag once; pin the immutable commit and downloaded bytes.

@@ -1,23 +1,40 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Dedicated Mac build runner only. Does not install, stop, or mutate a service.
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {mkdtempSync,statfsSync,writeFileSync} from 'node:fs';
+import {totalmem,freemem} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {resolve,join} from 'node:path';
 import {checkUpstream} from '../../harness/check-upstream.mjs';
 import {checkRuntimeSchema} from '../../harness/check-runtime-schema.mjs';
 import {stageGateway,verifyCandidate,digestFile} from '../build/stage-central-gateway.mjs';
-const [outputArg,licenseArg]=process.argv.slice(2);
-if(!outputArg||!licenseArg||process.platform!=='darwin'||process.arch!=='arm64')throw Error('Usage on dedicated Mac arm64: node scripts/release/build-runtime-update.mjs NEW_OUTPUT NODE_LICENSE');
+const [outputArg,licenseArg,requestedVersion]=process.argv.slice(2);
+if(!outputArg||!licenseArg||process.platform!=='darwin'||process.arch!=='arm64')throw Error('Usage on isolated Mac arm64: node scripts/release/build-runtime-update.mjs NEW_OUTPUT NODE_LICENSE [STABLE_VERSION]');
 const root=resolve('.'),output=resolve(outputArg);
 await mkdir(output,{recursive:false});
-const report=await checkUpstream(join(output,'upstream'));
+const started=Date.now();
+function resources(){const disk=statfsSync(output);return {elapsedSeconds:Math.round((Date.now()-started)/1000),totalMemoryBytes:totalmem(),freeMemoryBytes:freemem(),availableDiskBytes:disk.bavail*disk.bsize};}
+const initialResources=resources();
+const report=await checkUpstream(join(output,'upstream'),requestedVersion);
+Object.assign(report,{requestedVersion,resources:{start:initialResources,afterDiscovery:resources()},steps:[]});
 await writeFile(join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
 if(report.status!=='ready-for-validation'){console.log(JSON.stringify(report));process.exit(report.status==='up-to-date'?0:1);}
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(TOKEN|SECRET|PASSWORD|SIGNING|API_KEY|CODEX_HOME)/i.test(key)));
 // Honor the reviewed candidate's rust-toolchain.toml, not a runner's stable override.
 delete env.RUSTUP_TOOLCHAIN;
-Object.assign(env,{CARGO_TARGET_DIR:join(output,'cargo-target'),HARNESS_QA_ROOT:output,DEVELOPER_DIR:'/Library/Developer/CommandLineTools'});
-function run(command,args,cwd=root){const r=spawnSync(command,args,{cwd,env,stdio:'inherit',timeout:90*60*1000});if(r.status!==0)throw Error('RUNTIME_VALIDATION_FAILED');}
+// GitHub's temporary path can exceed macOS's Unix socket path limit in isolation probes.
+const qaRoot=mkdtempSync('/private/tmp/yz-');
+Object.assign(env,{CARGO_TARGET_DIR:join(output,'cargo-target'),HARNESS_QA_ROOT:qaRoot});
+// Respect the runner's selected Xcode; a standalone CLT directory need not exist.
+function run(command,args,cwd=root){
+  const step={command,args,startedAt:new Date().toISOString(),before:resources()};
+  report.steps.push(step);
+  writeFileSync(join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
+  const r=spawnSync('/usr/bin/time',['-l',command,...args],{cwd,env,stdio:'inherit',timeout:90*60*1000});
+  Object.assign(step,{exitCode:r.status,signal:r.signal,after:resources()});
+  writeFileSync(join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
+  if(r.status!==0)throw Error('RUNTIME_VALIDATION_FAILED');
+}
 try{
   checkRuntimeSchema(report.source,join(output,'schema-changes.json'));
   run('cargo',['build','-p','codex-app-server','--bin','codex-app-server','--locked'],join(report.source,'codex-rs'));
@@ -47,6 +64,7 @@ try{
   await writeFile(join(output,'latest.json'),JSON.stringify(descriptor,null,2)+'\n');
   Object.assign(report,{status:'validated',releaseTag,archiveSha256:digest.sha256});
 }catch(error){Object.assign(report,{status:'needs-adaptation',code:error.message==='RUNTIME_SCHEMA_ADAPTATION_REQUIRED'?error.message:'RUNTIME_VALIDATION_FAILED'});}
+report.resources.finish=resources();
 await writeFile(join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify(report));
 if(report.status!=='validated')process.exitCode=1;
