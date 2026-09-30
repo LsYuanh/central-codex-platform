@@ -12,6 +12,7 @@ on:
       - harness/remote-workspace.patch
       - harness/upstream.json
       - harness/schema/reviews/**
+      - harness/adaptations/**
   workflow_dispatch:
     inputs:
       upstream_version:

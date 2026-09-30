@@ -21,6 +21,11 @@ export function releaseVersion(release,requestedVersion) {
 export function compareVersions(a,b) {
   for(let i=0;i<3;i++){const delta=Number(a.split('.')[i])-Number(b.split('.')[i]);if(delta)return Math.sign(delta);}return 0;
 }
+export function candidatePatch(pin,version,commit) {
+  const patch=pin.candidatePatches?.[version];
+  if(patch&&patch.commit!==commit)throw Error('UPSTREAM_ADAPTATION_COMMIT_MISMATCH');
+  return patch;
+}
 export function upstreamHeaders(url,json,token) {
   const headers={'User-Agent':'Yuan-Zhou-runtime-updates',accept:json?'application/vnd.github+json':'application/octet-stream'};
   const target=new URL(url);
@@ -67,9 +72,14 @@ export async function checkUpstream(destination,requestedVersion) {
     if(listing.status!==0||types.status!==0||names.length>100000||names.some(name=>!name.startsWith(`codex-${object.sha}/`)||name.includes('\\')||name.includes(':')||name.split('/').includes('..'))||types.stdout.trim().split(/\r?\n/).some(line=>!/^[-d]/.test(line)))throw Error('UPSTREAM_ARCHIVE_UNSAFE');
     const extraction=spawnSync('tar',['-xzf',archivePath,'-C',destination,...exclude],{encoding:'utf8',timeout:60000});
     if(extraction.status!==0)throw Error('UPSTREAM_EXTRACT_FAILED');
-    for(const spec of [pin.patch,...(process.platform==='win32'?[pin.windowsPatch,pin.windowsModelPatch]:[])]){
+    const adaptation=candidatePatch(pin,version,report.commit);
+    const patches=[pin.patch,...(adaptation?[adaptation]:[]),...(process.platform==='win32'?[pin.windowsPatch,pin.windowsModelPatch]:[])];
+    const appliedBytes=[];
+    report.patches=[];
+    for(const spec of patches){
       const patch=join(here,spec.path);
-      if(createHash('sha256').update(await readFile(patch)).digest('hex')!==spec.sha256)throw Error('UPSTREAM_PATCH_HASH_MISMATCH');
+      const bytes=await readFile(patch);
+      if(createHash('sha256').update(bytes).digest('hex')!==spec.sha256)throw Error('UPSTREAM_PATCH_HASH_MISMATCH');
       // Upstream source-less workspace package versions follow the candidate version.
       // Never carry the old release's Cargo.lock hunk or touch third-party pins.
       const exclusions=spec===pin.patch?['--exclude=codex-rs/Cargo.lock']:[];
@@ -77,7 +87,11 @@ export async function checkUpstream(destination,requestedVersion) {
       if(result.status!==0){report.status='needs-adaptation';report.code='UPSTREAM_PATCH_CONFLICT';await writeFile(join(destination,'patch-conflicts.txt'),result.stderr);await save();return report;}
       const applied=spawnSync('git',['-c','core.autocrlf=input','apply',...exclusions,patch],{cwd:source,env:isolatedGitEnvironment(source),encoding:'utf8',timeout:60000});
       if(applied.status!==0)throw Error('UPSTREAM_PATCH_APPLY_FAILED');
+      appliedBytes.push(bytes);
+      report.patches.push({path:spec.path,sha256:spec.sha256});
     }
+    // Bind staged provenance to all applied patches, including version-scoped adaptations.
+    report.patchSha256=createHash('sha256').update(Buffer.concat(appliedBytes)).digest('hex');
     const lockPath=join(source,'codex-rs/Cargo.lock');
     const lock=await readFile(lockPath,'utf8');
     await writeFile(lockPath,lock.replace(/(\[\[package\]\]\nname = "[^"]+"\nversion = ")0\.0\.0("\n)(?!source =)/g,(_match,prefix,suffix)=>prefix+version+suffix));

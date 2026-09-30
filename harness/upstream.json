@@ -46,5 +46,13 @@
     "path": "windows-model.patch",
     "sha256": "f772a5361e03c01624f6520da22a1e84c1f2e002dba45301a8d54b21bde6cf1e",
     "scope": "Windows remote AppContainer model-only authenticated TLS named pipe transport"
+  },
+  "candidatePatches": {
+    "0.159.2": {
+      "commit": "ff6aec96948b70d94983af2641a6b67c94faeff5",
+      "path": "adaptations/0.159.2.patch",
+      "sha256": "aabbffd231cc7b2861bf1bd35aa4481e0142ee8b56dcf3729993c50026c60fb0",
+      "scope": "Upstream skills field rename; keep cloud skills disabled in remote runtime"
+    }
   }
 }

@@ -51,7 +51,7 @@ try{
   run(process.execPath,['tests/smoke/runtime-updates-smoke.mjs']);
   run(process.execPath,['tests/smoke/native-account-update-smoke.mjs']);
   run('cargo',['test','-p','central-app','runtime_updates','--locked']);
-  const upstream={version:report.latestVersion,commit:report.commit,archiveSha256:report.archiveSha256,patchSha256:JSON.parse(await readFile('harness/upstream.json')).patch.sha256};
+  const upstream={version:report.latestVersion,commit:report.commit,archiveSha256:report.archiveSha256,patchSha256:report.patchSha256};
   const staged=await stageGateway({sourceRoot:root,nodeExe:process.execPath,nodeLicense:resolve(licenseArg),appServer:binary,seatbeltProfile:join(root,'harness/worker-isolated.sb'),upstream});
   const manifest=await verifyCandidate(staged.destination);
   const archive=join(output,'runtime.tar.gz');run('tar',['-czf',archive,'-C',staged.destination,...['manifest.json',...manifest.files.map(f=>f.path)]]);

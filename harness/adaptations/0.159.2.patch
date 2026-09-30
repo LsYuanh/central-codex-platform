@@ -1,0 +1,12 @@
+diff --git a/codex-rs/app-server/src/extensions.rs b/codex-rs/app-server/src/extensions.rs
+--- a/codex-rs/app-server/src/extensions.rs
++++ b/codex-rs/app-server/src/extensions.rs
+@@ -93,7 +93,7 @@
+                 include_instructions: config.include_skill_instructions,
+                 max_context_tokens: config.skill_max_context_tokens,
+                 bundled_skills_enabled: false,
+-                orchestrator_skills_enabled: false,
++                cloud_skill_enabled: false,
+                 shadow_selection_enabled: false,
+             },
+         );
