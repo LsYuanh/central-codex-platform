@@ -33,7 +33,6 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: '0'
       CARGO_INCREMENTAL: '0'
       RUNTIME_TRIAL_VERSION: ${{ inputs.upstream_version || '0.159.2' }}
-      RUNTIME_TRIAL_OUTPUT: ${{ runner.temp }}/runtime-trial-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +42,7 @@ jobs:
           node-version: '24'
       - name: Verify host and record initial resources
         run: |
+          echo "RUNTIME_TRIAL_OUTPUT=$RUNNER_TEMP/runtime-trial-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
           test "$(uname -m)" = arm64
           node --version
           sysctl -n hw.memsize hw.logicalcpu
