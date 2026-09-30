@@ -2,6 +2,7 @@
 harness/remote-workspace.patch -text whitespace=-blank-at-eol
 harness/windows-home.patch -text whitespace=-blank-at-eol
 harness/windows-model.patch -text whitespace=-blank-at-eol
+harness/adaptations/*.patch -text whitespace=-blank-at-eol
 *.sh text eol=lf
 # Synthetic signed payloads must retain their exact bytes on every checkout.
 tests/fixtures/runtime-update-signature/* -text

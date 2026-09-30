@@ -51,8 +51,8 @@
     "0.159.2": {
       "commit": "ff6aec96948b70d94983af2641a6b67c94faeff5",
       "path": "adaptations/0.159.2.patch",
-      "sha256": "aabbffd231cc7b2861bf1bd35aa4481e0142ee8b56dcf3729993c50026c60fb0",
-      "scope": "Upstream skills field rename; keep cloud skills disabled in remote runtime"
+      "sha256": "3c58220a3654691ea028cdf7a22d1917be10c57b06253b09c801a89e629c2e89",
+      "scope": "Cloud skill field rename; isolated Mac Workers use explicit managed-policy inputs without host preference IPC, preserving supplied and file-based requirements"
     }
   }
 }
