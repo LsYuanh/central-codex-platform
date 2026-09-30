@@ -24,7 +24,9 @@ const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(TOKE
 delete env.RUSTUP_TOOLCHAIN;
 // GitHub's temporary path can exceed macOS's Unix socket path limit in isolation probes.
 const qaRoot=mkdtempSync('/private/tmp/yz-');
-Object.assign(env,{CARGO_TARGET_DIR:join(output,'cargo-target'),HARNESS_QA_ROOT:qaRoot});
+// Node's macOS default /var/folders path aliases /private/var; Worker roots reject
+// aliases deliberately. Keep every fixture on the same canonical, short QA root.
+Object.assign(env,{CARGO_TARGET_DIR:join(output,'cargo-target'),HARNESS_QA_ROOT:qaRoot,TMPDIR:qaRoot});
 // Respect the runner's selected Xcode; a standalone CLT directory need not exist.
 function run(command,args,cwd=root){
   const step={command,args,startedAt:new Date().toISOString(),before:resources()};
