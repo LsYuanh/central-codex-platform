@@ -8,6 +8,10 @@ on:
       - .github/workflows/runtime-trial.yml
       - scripts/release/build-runtime-update.mjs
       - harness/check-upstream.mjs
+      - harness/check-runtime-schema.mjs
+      - harness/remote-workspace.patch
+      - harness/upstream.json
+      - harness/schema/reviews/**
   workflow_dispatch:
     inputs:
       upstream_version:

@@ -2046,8 +2046,7 @@ diff --git a/codex-rs/app-server/src/lib.rs b/codex-rs/app-server/src/lib.rs
 index fc11b83..86f43cf 100644
 --- a/codex-rs/app-server/src/lib.rs
 +++ b/codex-rs/app-server/src/lib.rs
-@@ -497,6 +497,11 @@ pub async fn run_main_with_transport_options(
-     auth: AppServerWebsocketAuthSettings,
+@@ -498,4 +498,9 @@ pub async fn run_main_with_transport_options(
      runtime_options: AppServerRuntimeOptions,
  ) -> IoResult<AppServerExit> {
 +    let mut runtime_options = runtime_options;
@@ -2057,7 +2056,6 @@ index fc11b83..86f43cf 100644
 +    }
      #[cfg(target_os = "windows")]
      let _registered_core = codex_windows_sandbox::registered_core_requested();
-     let loader_overrides = loader_overrides_with_test_user_config_file(
 diff --git a/codex-rs/app-server/src/message_processor.rs b/codex-rs/app-server/src/message_processor.rs
 index 118106d..b64b57a 100644
 --- a/codex-rs/app-server/src/message_processor.rs

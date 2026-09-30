@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {releasePath,releaseVersion,upstreamHeaders} from '../../harness/check-upstream.mjs';
+import {readFileSync} from 'node:fs';
+import {schemaReviewMatches} from '../../harness/check-runtime-schema.mjs';
 
 test('trial selects an exact stable release while scheduled discovery stays on latest',()=>{
   assert.equal(releasePath(),'latest');
@@ -25,4 +27,17 @@ test('discovery token is limited to the official upstream API',()=>{
     assert.equal(upstreamHeaders(url,true,token).authorization,undefined);
   }
   assert.equal(upstreamHeaders('https://api.github.com/repos/openai/codex/releases/latest',true).authorization,undefined);
+});
+test('reviewed schema requires exact release, commit, baseline and candidate bytes',()=>{
+  const review=JSON.parse(readFileSync(new URL('../../harness/schema/reviews/0.159.2.json',import.meta.url)));
+  const candidate={version:review.version,commit:review.commit};
+  for(const mode of ['stable','experimental']){
+    const {baseSha256,sha256}=review.schema[mode];
+    assert.equal(schemaReviewMatches(review,candidate,mode,baseSha256,sha256),true);
+    assert.equal(schemaReviewMatches(review,{...candidate,version:'0.159.3'},mode,baseSha256,sha256),false);
+    assert.equal(schemaReviewMatches(review,{...candidate,commit:'0'.repeat(40)},mode,baseSha256,sha256),false);
+    assert.equal(schemaReviewMatches(review,candidate,mode,'0'.repeat(64),sha256),false);
+    assert.equal(schemaReviewMatches(review,candidate,mode,baseSha256,'0'.repeat(64)),false);
+    assert.equal(schemaReviewMatches(undefined,candidate,mode,baseSha256,sha256),false);
+  }
 });

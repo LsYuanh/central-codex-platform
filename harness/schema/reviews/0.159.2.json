@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "version": "0.159.2",
+  "commit": "ff6aec96948b70d94983af2641a6b67c94faeff5",
+  "schema": {
+    "stable": {
+      "baseSha256": "dfd6f7197d4caa6a240c49984d6d2441ba768ca38a657dc92e2d48f726548476",
+      "sha256": "1d9e0b6f402cbc35bf88b3b49748edd1e7e3bc71df039ae98859c7d91552545b"
+    },
+    "experimental": {
+      "baseSha256": "d12fa7acdd7a0067879e7ae2b228cd19a4256b9a18dc6a6557676fcfa500a6ce",
+      "sha256": "63028565f715c584c2dad98163de85dcb03801f9a7c096f5ef07d4769a900984"
+    }
+  },
+  "review": [
+    "Existing request variants are retained unchanged. New account/gatewayOAuth read/login/cancel routes remain outside remote_workspace::validate_request allowlist.",
+    "Optional initialize explicitGatewayOauth is not sent by the managed broker client. Worker credentials and central shared-login lifecycle remain unchanged.",
+    "thread/items/list cursor adds item anchors while retaining strings; item entries add optional timestamps. This route remains outside the remote allowlist; current history uses thread/read.",
+    "Error metadata adds flexUnavailable and tooManyDenials; PlanType adds promax. These are metadata, not capability grants; remote errors retain generic handling. Turn.error description now also mentions interrupted turns.",
+    "MCP discovery adds optional serverName/httpOrigin and resource target metadata. MCP and resource methods remain disabled in the remote runtime.",
+    "Experimental environment authBearerToken and realtime backendReasoningStatus are on unsupported routes, which remain denied. No permissions, local tools or credential access were enabled.",
+    "This approves only the exact protocol snapshots, not compilation, native isolation, model behavior or deployment. All runtime gates must still pass."
+  ]
+}

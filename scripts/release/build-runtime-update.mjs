@@ -36,7 +36,7 @@ function run(command,args,cwd=root){
   if(r.status!==0)throw Error('RUNTIME_VALIDATION_FAILED');
 }
 try{
-  checkRuntimeSchema(report.source,join(output,'schema-changes.json'));
+  checkRuntimeSchema(report.source,join(output,'schema-changes.json'),{version:report.latestVersion,commit:report.commit});
   run('cargo',['build','-p','codex-app-server','--bin','codex-app-server','--locked'],join(report.source,'codex-rs'));
   const binary=join(env.CARGO_TARGET_DIR,'debug/codex-app-server');
   run(process.execPath,['harness/runtime-smoke.mjs',binary]);
