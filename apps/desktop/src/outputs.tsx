@@ -39,7 +39,7 @@ export function OutputCard({ output, retry }: { output: OutputArtifact; retry: (
   return <>
     <section className={`output-card output-${output.status} output-kind-${output.kind}`} aria-label={t("输出文件 {{p0}}", { p0: output.name })}>
       {preview && <button className="output-image-button" type="button" onClick={() => void viewer.open()} disabled={pending} aria-label={t("查看图片 {{p0}}", { p0: output.name })}><img src={preview} alt={output.name} onError={() => { setPreview(""); setError(uiMessage("图片预览无法加载，请重新读取")); }}/></button>}
-      <div className="output-file-heading"><span className="output-file-icon"><UiIcon name="file" /></span><div className="output-file-copy"><strong title={output.name}>{output.name}</strong><small>{fileDescription(output)}</small><span role="status">{output.status === "saved" ? t("已保存到本机") : output.status === "saving" ? t("正在保存到本机…") : t("保存失败")}</span></div></div>
+      <div className="output-file-heading"><span className="output-file-icon"><UiIcon name="file" /></span><div className="output-file-copy"><strong title={output.name}>{output.name}</strong><small>{fileDescription(output)}</small><span role="status">{output.status === "generating" ? t("正在生成图片…") : output.status === "generationFailed" ? t("图片生成失败或已中断") : output.status === "saved" ? t("已保存到本机") : output.status === "saving" ? t("正在保存到本机…") : t("保存失败")}</span></div></div>
       {output.path && <details className="output-location"><summary>{t("文件位置")}</summary><p className="output-path">{output.path}</p></details>}
       {(output.error || error || viewer.error) && <p role="alert" className="attachment-error-text">{error || viewer.error || output.error}</p>}
       <div className="output-actions">

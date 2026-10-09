@@ -76,7 +76,7 @@ try {
   const discovered=await rpc('skills/list',{cwds:[],forceReload:true});
   assert.equal(discovered.result?.data?.[0]?.skills?.[0]?.name,'native-probe',JSON.stringify(discovered));
   const fullCatalog=['native-probe/1'];
-  for(let i=0;i<100;i++){
+  for(let i=0;i<101;i++){
     const name=`capacity-probe-${i}`,relative=`${name}/1`,directory=join(worker,'managed-skills',relative);
     mkdirSync(directory,{recursive:true});
     writeFileSync(join(directory,'SKILL.md'),`---\nname: ${name}\ndescription: Capacity verification\n---\nFixture only.\n`);
@@ -84,7 +84,7 @@ try {
   }
   writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify(fullCatalog));
   const full=await rpc('skills/list',{cwds:[],forceReload:true});
-  assert.equal(full.result?.data?.flatMap(row=>row.skills).length,101,JSON.stringify(full));
+  assert.equal(full.result?.data?.flatMap(row=>row.skills).length,102,JSON.stringify(full));
   writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify([...fullCatalog,'native-probe/1']));
   const overflow=await rpc('skills/list',{cwds:[],forceReload:true});
   assert.equal(overflow.result?.data?.flatMap(row=>row.skills).length,0,JSON.stringify(overflow));
@@ -114,7 +114,7 @@ try {
   assert(!JSON.stringify(requests).includes('CENTRAL_ONLY_NEVER_MODEL_CONTEXT'));
   assert(!existsSync(sideEffect),'A local command or notify hook executed');
   assert(!fixtureError,String(fixtureError));
-  console.log(JSON.stringify({status:'HARNESS_RUNTIME_BOUNDARY_OK',credentials:false,realModel:false,realDevice:false,managedSkillCapacity:101,overflowDenied:true,requests:requests.length,tools,dynamicCalls,root:run}));
+  console.log(JSON.stringify({status:'HARNESS_RUNTIME_BOUNDARY_OK',credentials:false,realModel:false,realDevice:false,managedSkillCapacity:102,overflowDenied:true,requests:requests.length,tools,dynamicCalls,root:run}));
 } finally {
   if(serverProcess) {serverProcess.stdin.end();serverProcess.kill('SIGTERM');}
   for(const pending of waiting.values())pending.resolve({error:{message:'probe ended'}});

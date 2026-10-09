@@ -32,12 +32,12 @@
   {
     "path": "codex-rs/core/src/tools/handlers/extension_tools.rs",
     "upstreamSha256": "dcfc362856e32c844cb478aab93ede632a6f4c4c6061ea211c6b691ca08e7c4a",
-    "patchedSha256": "aa60b55697989931e14033ee29227ffbe6dace54516f7a2613c513f9dbc83ff8"
+    "patchedSha256": "0850df0b2e31e07f77cf45a0c1419f3de5e55f35fe9f8483bea453b35606ae21"
   },
   {
     "path": "codex-rs/core/src/tools/spec_plan.rs",
     "upstreamSha256": "27fa52215e716abe1e29fd2d1014995212e065324bed41e148fb3232d406d59b",
-    "patchedSha256": "acf4958e204d44845ea029fc98c55b23859a8cff78d7b3db37bd6fa2dc626678"
+    "patchedSha256": "389ebb447b64779c60231aff8d8f2173f2392fefd2906d8e60e2e2a2c5e60903"
   },
   {
     "path": "codex-rs/features/src/lib.rs",
@@ -102,7 +102,7 @@
   {
     "path": "codex-rs/ext/skills/src/host_service.rs",
     "upstreamSha256": "0c77829ea20f6af113b55289d73862f06fe7ab511a3681eb81cb67f1b52daee3",
-    "patchedSha256": "15eae11c604f70f6b0c8978f21f890e7d56f46c87dedc020bba4a8118a2bb50f"
+    "patchedSha256": "9c4a2c3c815bc018acbb099ce1db908d4833e5c409c8ea3c626c22909fa7038b"
   },
   {
     "path": "codex-rs/exec-server/src/environment.rs",
@@ -122,7 +122,7 @@
   {
     "path": "codex-rs/app-server/src/extensions.rs",
     "upstreamSha256": "d747b1f157abcc773b7b9662a2b939f3f6b3ff9536fcc5334f6ef2f427acbca3",
-    "patchedSha256": "a0173e49bf8378c7d0230231cfbbcb054afd6ee2e9582277c69e6e09396a84a9"
+    "patchedSha256": "200361ed0006aa977cb0a09b092b1fc055aba81fec1389b99bf7f6b059d3906d"
   },
   {
     "path": "codex-rs/app-server/src/lib.rs",
@@ -137,7 +137,17 @@
   {
     "path": "codex-rs/app-server/src/request_processors/initialize_processor.rs",
     "upstreamSha256": "d63e5ff483baf37d275c6beae4eeac469bf8bf3785455097c268ac7c4e1ba7c0",
-    "patchedSha256": "46000a67f8d32d7dd85b01790b0360d350e76ca12f367605b8b3eca5cc45d1f3"
+    "patchedSha256": "eeee3d44f639b44089abbd2e6ae75053df7f46a60e1785582ab63b9d743d4c1b"
+  },
+  {
+    "path": "codex-rs/ext/image-generation/src/extension.rs",
+    "upstreamSha256": "d831e12e1a3d531a2ae1bb405045afe9834b59e6ca9ed8956041a5d913f80ab7",
+    "patchedSha256": "3303de3191fe186e03d00f3c5f16f1ff135475ef4ff2c621cf42dcbdee2385de"
+  },
+  {
+    "path": "codex-rs/ext/image-generation/src/tool.rs",
+    "upstreamSha256": "66b992ca79053c7418c30230999d730bf85d0aa21208299facf45e2cd1674fe8",
+    "patchedSha256": "0ed05b687b6f1fee9ab0c4eb8b6d7fe92d41c58b4df4cb19766b84b5d28e96e3"
   },
   {
     "path": "codex-rs/models-manager/src/manager.rs",

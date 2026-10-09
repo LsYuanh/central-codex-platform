@@ -8,6 +8,7 @@ import {Transform, type Duplex} from "node:stream";
 import {createModelPipeTls, MODEL_PIPE_SERVER_NAME} from "./model-pipe-tls.js";
 import {readWindowsPrivateJson, WindowsPrivateJsonError} from "./windows-private-json.js";
 import {catalogVersion, fetchModelCatalog} from "./model-catalog.js";
+import {imageRoute, validateImageRequest, sanitizeImageResponse} from './image-generation.js';
 
 type Provider = {id:string;kind:"chatgpt"|"api-key";credentialFile:string;baseUrl?:string};
 type Binding = {providerId:string;enabled:boolean};
@@ -147,6 +148,9 @@ export class ModelCredentialBroker {
     broker.address=`http://127.0.0.1:${address.port}`;return broker;
   }
   get url(){return this.address;}
+  imageGenerationAvailable(userId:string):boolean {
+    try{return !this.closed&&this.binding(this.readConfig(),userId).provider.kind==='chatgpt'&&this.status(userId).status==='ready';}catch{return false;}
+  }
   status(userId:string):{status:"ready"|"missing"|"disabled"|"expired"|"unavailable";code?:string}{
     try{if(this.closed)return {status:"unavailable",code:"MODEL_BROKER_CLOSED"};const {provider}=this.binding(this.readConfig(),userId);this.credential(provider);return {status:"ready"};}
     catch(error){const code=error instanceof SafeError?error.code:"MODEL_PROVIDER_UNAVAILABLE";return {status:code==="MODEL_CREDENTIAL_DISABLED"?"disabled":code==="MODEL_CREDENTIAL_EXPIRED"?"expired":["MODEL_CREDENTIAL_MISSING","MODEL_CREDENTIAL_UNCONFIGURED"].includes(code)?"missing":"unavailable",code};}
@@ -319,7 +323,8 @@ export class ModelCredentialBroker {
     try{
       if(this.closed)return fail("MODEL_BROKER_CLOSED");
       const version=catalogVersion(request.method,request.url);
-      if(!version&&(request.method!=="POST"||!["/v1/responses","/responses"].includes(request.url??"")))return fail("MODEL_BROKER_ROUTE_DENIED",404);
+      const image=imageRoute(request.method,request.url);
+      if(!version&&!image&&(request.method!=="POST"||!["/v1/responses","/responses"].includes(request.url??"")))return fail("MODEL_BROKER_ROUTE_DENIED",404);
       const auth=request.headers.authorization;
       if(request.rawHeaders.filter((_,index)=>index%2===0&&request.rawHeaders[index]!.toLowerCase()==="authorization").length!==1)return fail("MODEL_LEASE_INVALID",401);
       if(typeof auth!=="string"||!/^Bearer [A-Za-z0-9_-]{43}$/.test(auth))return fail("MODEL_LEASE_INVALID",401);
@@ -331,6 +336,11 @@ export class ModelCredentialBroker {
       if((lease.mode==="pipe")!==(expectedLeaseKey!==undefined))return fail("MODEL_LEASE_INVALID",401);
       if(lease.expiresAt!==undefined&&Date.now()>=lease.expiresAt){this.release(leaseKey);return fail("MODEL_LEASE_INVALID",401);}
       const {provider}=this.binding(config,lease.userId),credential=this.credential(provider),url=this.endpoint(provider);
+      // Image API-key billing is deliberately outside this release's authorization.
+      if(image){
+        if(provider.kind!=='chatgpt')return fail('IMAGE_CHATGPT_REQUIRED',403);
+        url.pathname=url.pathname.replace(/\/responses$/,`/images/${image}`);
+      }
       if(version){
         if(provider.kind!=="chatgpt")return fail("MODEL_CATALOG_UNSUPPORTED",404);
         if(request.headers['transfer-encoding']||Number(request.headers['content-length']??0)!==0)return fail("MODEL_REQUEST_INVALID",400);
@@ -361,7 +371,8 @@ export class ModelCredentialBroker {
       try{const parsed=JSON.parse(Buffer.concat(chunks).toString("utf8"));if(!obj(parsed))return fail("MODEL_REQUEST_INVALID",400);payload=parsed;}catch{return fail("MODEL_REQUEST_INVALID",400);}
       // A shared provider account is not a shared conversation namespace. Never
       // retrieve provider-side state on behalf of a worker capability.
-      if(payload.previous_response_id!=null||payload.conversation!=null||payload.prompt!=null)return fail("MODEL_REMOTE_REFERENCE_DENIED",400);
+      if(image){try{validateImageRequest(payload,image);}catch{return fail('IMAGE_REQUEST_INVALID',400);}}
+      else if(payload.previous_response_id!=null||payload.conversation!=null||payload.prompt!=null)return fail("MODEL_REMOTE_REFERENCE_DENIED",400);
       const checkInput=(value:unknown):void=>{
         if(Array.isArray(value)){for(const item of value)checkInput(item);return;}
         if(!obj(value))return;
@@ -369,8 +380,10 @@ export class ModelCredentialBroker {
         for(const item of Object.values(value))checkInput(item);
       };
       checkInput(payload.input);
-      payload.store=false;
-      payload.prompt_cache_key=this.scope(lease.userId,typeof payload.prompt_cache_key==="string"?payload.prompt_cache_key.slice(0,2048):"default");
+      if(!image){
+        payload.store=false;
+        payload.prompt_cache_key=this.scope(lease.userId,typeof payload.prompt_cache_key==="string"?payload.prompt_cache_key.slice(0,2048):"default");
+      }
       const body=Buffer.from(JSON.stringify(payload));
       if(body.length>this.bodyLimit)return fail("MODEL_REQUEST_TOO_LARGE",413);
       this.emit("model.request",lease.userId,"succeeded");
@@ -379,6 +392,7 @@ export class ModelCredentialBroker {
       // Stateful provider request headers are namespaced; opaque turn-state or
       // provider-owned routing cookies are not accepted from workers.
       for(const name of ["session_id","conversation_id"]){const value=request.headers[name];headers[name]=this.sessionScope(lease.userId,bounded(value,2048)?value:"default");}
+      if(image){const turn=request.headers['x-codex-image-turn-id'];if(bounded(turn,256))headers['x-codex-image-turn-id']=this.sessionScope(lease.userId,turn);}
       if(provider.kind==="chatgpt"){headers["chatgpt-account-id"]=credential.accountId!;headers.originator="codex_cli_rs";}
       await new Promise<void>((resolvePromise,rejectPromise)=>{
         const signal=controller!.signal;
@@ -420,7 +434,7 @@ export class ModelCredentialBroker {
           // does not require a Content-Type header. Match that only for requested
           // SSE and validate every frame before releasing bytes to the Worker.
           if(!contentType&&payload.stream===true)contentType="text/event-stream";
-          if(!["text/event-stream","application/json"].includes(contentType)||rawType.includes(",")){
+          if(!(image?["application/json"]:["text/event-stream","application/json"]).includes(contentType)||rawType.includes(",")){
             const category=rawType.includes(",")?"DUPLICATE":!contentType?"MISSING":contentType==="text/plain"?"PLAIN":contentType==="text/html"?"HTML":contentType==="application/octet-stream"?"OCTET_STREAM":contentType==="application/x-ndjson"?"NDJSON":contentType==="application/jsonl"?"JSONL":contentType==="application/x-event-stream"?"X_EVENT_STREAM":contentType.startsWith("multipart/")?"MULTIPART":"UNKNOWN";
             incoming.destroy();reject(new SafeError(`MODEL_PROVIDER_CONTENT_TYPE_INVALID_${category}`,502));return;
           }
@@ -445,7 +459,7 @@ export class ModelCredentialBroker {
           }else{
             const result:Buffer[]=[];let bytes=0;
             incoming.on("data",chunk=>{bytes+=chunk.length;if(bytes>32*1024*1024){incoming.destroy();reject(new SafeError("MODEL_PROVIDER_JSON_TOO_LARGE",502));}else result.push(Buffer.from(chunk));});
-            incoming.once("end",()=>{try{const body=Buffer.concat(result);const value=JSON.parse(body.toString("utf8"));if(responseFailed(value))throw new SafeError("MODEL_PROVIDER_UNAVAILABLE",502);response.writeHead(status,{"content-type":contentType,"cache-control":"no-store"});response.end(body);done();}catch(error){reject(error instanceof SafeError?error:new SafeError("MODEL_PROVIDER_JSON_INVALID",502));}});
+            incoming.once("end",()=>{try{const body=Buffer.concat(result);const value=JSON.parse(body.toString("utf8"));if(responseFailed(value))throw new SafeError("MODEL_PROVIDER_UNAVAILABLE",502);const output=image?Buffer.from(JSON.stringify(sanitizeImageResponse(value))):body;response.writeHead(status,{"content-type":contentType,"cache-control":"no-store"});response.end(output);done();}catch(error){reject(error instanceof SafeError?error:new SafeError("MODEL_PROVIDER_JSON_INVALID",502));}});
           }
         });
         upstream.once("error",()=>reject(new SafeError("MODEL_PROVIDER_REQUEST_TRANSPORT_FAILED",502)));upstream.end(body);

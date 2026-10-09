@@ -27,6 +27,12 @@ export class OutputBroker {
     await Promise.all([...this.pending].filter(([key]) => key.startsWith(`${threadId}/`)).map(([, task]) => task));
     return this.list(threadId);
   }
+  finishGeneration(threadId:string,turnId?:string){
+    // A completed turn may finish saving after the next turn has already started.
+    for(const output of this.list(threadId))if(output.status==='generating'&&(!turnId||output.turnId===turnId)){
+      output.status='generationFailed';output.error='图片生成已结束或中断，未收到完整图片；请查看对话错误后重试生成';this.changed(output);
+    }
+  }
   private changed(output: OutputArtifact) { this.options.changed(output.threadId, output); }
   private async request(output: OutputArtifact, method: AgentRpcMethod, params: Json): Promise<Json> {
     if (!output.deviceKey || this.options.deviceKey(output.deviceId) !== output.deviceKey) throw new Error("来源设备离线或身份不一致，请连接原设备后重试");
@@ -89,13 +95,21 @@ export class OutputBroker {
     const pending=this.pending.get(key); if(pending)return pending;
     const entries=this.list(threadId);
     let output=entries.find(v=>v.id===item.id);
-    if(output && (!retry || output.status==="saved"))return Promise.resolve();
+    if(output && output.status!=='generating' && output.status!=='generationFailed' && (!retry || output.status==="saved"))return Promise.resolve();
     if (!output) {
-      if (item.status!=="completed" && item.status!=="failed") return Promise.resolve();
+      if (!["in_progress","completed","failed"].includes(String(item.status))) return Promise.resolve();
       const summary=this.options.summary(threadId);if(!summary||typeof summary.deviceId!=="string")return Promise.resolve();
       const safeId=createHash("sha256").update(`${threadId}/${item.id}`).digest("hex").slice(0,16);
       output={id:item.id,threadId,turnId,deviceId:summary.deviceId,deviceKey:typeof summary.deviceKey==="string"?summary.deviceKey:this.options.deviceKey(summary.deviceId),source:"generatedImage",name:`generated-${safeId}.png`,kind:"image",status:"saving"};
       entries.push(output);
+    }
+    if(item.status==='in_progress'){
+      // A stale history event must not turn a failed/interrupted output into a spinner.
+      if(output.status==='generationFailed')return Promise.resolve();
+      output.status='generating';this.changed(output);return Promise.resolve();
+    }
+    if(item.failure||item.status!=='completed'){
+      output.status='generationFailed';output.error='图片生成失败，未收到可保存的完整图片；请查看对话错误后重试生成';this.changed(output);return Promise.resolve();
     }
     output.status="saving";delete output.error;this.changed(output);
     const target=output;

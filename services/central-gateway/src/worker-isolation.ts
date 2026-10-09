@@ -30,7 +30,7 @@ export class WorkerIsolation {
     this.fingerprint=this.artifactFingerprint();
   }
   private artifactFingerprint(){return [this.binary,this.profile].map(path=>{const s=safePath(path,false);return `${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`;}).join('|');}
-  launch(paths:WorkerPaths,url:string,token:string){
+  launch(paths:WorkerPaths,url:string,token:string,imageGeneration=false){
     if(this.artifactFingerprint()!==this.fingerprint)throw Error('WORKER_LAUNCHER_CHANGED');
     const endpoint=new URL(url);
     if(endpoint.protocol!=='http:'||endpoint.hostname!=='127.0.0.1'||!endpoint.port||endpoint.pathname!=='/'||endpoint.username||endpoint.password)throw Error('WORKER_BROKER_URL_UNSAFE');
@@ -47,6 +47,6 @@ export class WorkerIsolation {
     writeFileSync(temp,content,{flag:'wx',mode:0o600});renameSync(temp,config);
     const tmp=join(paths.directory,'tmp');if(!existsSync(tmp))mkdirSync(tmp,{mode:0o700});safePath(tmp,true,true);
     return {command:'/usr/bin/sandbox-exec',args:['-f',this.profile,'-D',`HARNESS_BINARY=${this.binary}`,'-D',`CODEX_HOME=${paths.home}`,'-D',`WORKER_DIR=${paths.directory}`,'-D',`BROKER_ADDRESS=localhost:${endpoint.port}`,this.binary],cwd:paths.directory,
-      env:{PATH:'/usr/bin:/bin',HOME:paths.home,CODEX_HOME:paths.home,CODEX_REMOTE_WORKER_DIR:paths.directory,TMPDIR:tmp,LANG:'en_US.UTF-8',CODEX_REMOTE_WORKSPACE:'1',CODEX_EXEC_SERVER_URL:'none',CODEX_REMOTE_AUTH_MODE:'broker',CODEX_REMOTE_MODEL_CATALOG:'1',CODEX_REFRESH_TOKEN_URL_OVERRIDE:'disabled://broker-owned-auth',CODEX_REVOKE_TOKEN_URL_OVERRIDE:'disabled://broker-owned-auth',YUAN_WORKER_MODEL_TOKEN:token,RUST_LOG:'error'}};
+      env:{PATH:'/usr/bin:/bin',HOME:paths.home,CODEX_HOME:paths.home,CODEX_REMOTE_WORKER_DIR:paths.directory,TMPDIR:tmp,LANG:'en_US.UTF-8',CODEX_REMOTE_WORKSPACE:'1',CODEX_EXEC_SERVER_URL:'none',CODEX_REMOTE_AUTH_MODE:'broker',CODEX_REMOTE_MODEL_CATALOG:'1',CODEX_REMOTE_IMAGE_GENERATION:imageGeneration?'1':'0',CODEX_REFRESH_TOKEN_URL_OVERRIDE:'disabled://broker-owned-auth',CODEX_REVOKE_TOKEN_URL_OVERRIDE:'disabled://broker-owned-auth',YUAN_WORKER_MODEL_TOKEN:token,RUST_LOG:'error'}};
   }
 }

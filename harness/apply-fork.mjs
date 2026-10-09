@@ -49,7 +49,8 @@ for (const [path, runtime] of [['plan', 'PlanHandler'], ['request_user_input', '
 }
 at('core/src/tools/handlers/extension_tools.rs', 'impl CoreToolRuntime for ExtensionToolAdapter {', `    fn remote_workspace_safe(&self) -> bool {
         let name = self.0.tool_name();
-        name.is_default_namespace() && matches!(name.name.as_str(), "get_goal" | "create_goal" | "update_goal")
+        (name.is_default_namespace() && matches!(name.name.as_str(), "get_goal" | "create_goal" | "update_goal"))
+            || (crate::remote_workspace::image_generation_enabled() && name.namespace.as_deref() == Some("image_gen") && name.name == "imagegen")
     }`);
 at('core/src/tools/spec_plan.rs', ') -> CodexResult<ToolRouter> {\n    let default_agent_type_description =', '');
 // The fast path exposes only audited control extensions and client-device tools.
@@ -60,7 +61,8 @@ replace('codex-rs/core/src/tools/spec_plan.rs', ') -> CodexResult<ToolRouter> {\
         registry.add_with_exposure(RequestUserInputHandler { available_modes: vec![codex_protocol::config_types::ModeKind::Plan, codex_protocol::config_types::ModeKind::Default] }, ToolExposure::DirectModelOnly);
         for executor in extension_tool_executors(session, step_store) {
             let name = executor.tool_name();
-            if name.is_default_namespace() && matches!(name.name.as_str(), "get_goal" | "create_goal" | "update_goal") {
+            if (name.is_default_namespace() && matches!(name.name.as_str(), "get_goal" | "create_goal" | "update_goal"))
+                || (crate::remote_workspace::image_generation_enabled() && name.namespace.as_deref() == Some("image_gen") && name.name == "imagegen") {
                 registry.register_external(Arc::new(ExtensionToolAdapter::new(executor)));
             }
         }
@@ -133,6 +135,10 @@ at('git-utils/src/info.rs', 'pub async fn collect_git_info(cwd: &Path) -> Option
 at('git-utils/src/info.rs', 'fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {', `    if ${condition} { return None; }`);
 at('git-utils/src/git_process.rs', 'fn spawn_git_command(command: &mut Command) -> Option<(Child, KillGitProcessTreeOnDrop)> {', `    if ${condition} { return None; }`);
 at('app-server/src/extensions.rs', '        builder.turn_start_admission(admission);\n    }', `    if codex_core::remote_workspace::enabled() {
+        if codex_core::remote_workspace::image_generation_enabled() {
+            // The extension emits inline bytes; client persistence belongs to Local Agent.
+            codex_image_generation_extension::install(&mut builder, auth_manager.clone(), |_| None);
+        }
         if let Some(state_db) = state_db {
             codex_goal_extension::install_with_backend(
                 &mut builder, state_db, analytics_events_client, codex_otel::global(),
@@ -159,10 +165,22 @@ at('app-server/src/message_processor.rs', '        outbound_initialized: Option<
             codex_core::remote_workspace::validate_request(&value).map_err(|message| JSONRPCErrorError { code: -32602, message, data: None })?;
         }`);
 replace('codex-rs/app-server/src/request_processors/initialize_processor.rs', '        let user_agent = get_codex_user_agent();', `        let user_agent = if codex_core::remote_workspace::enabled() {
-            format!("{} {}", get_codex_user_agent(), codex_core::remote_workspace::MARKER)
+            format!("{} {}{}", get_codex_user_agent(), codex_core::remote_workspace::MARKER,
+                if codex_core::remote_workspace::image_generation_enabled() { " yuan-zhou-image-generation/1" } else { "" })
         } else { get_codex_user_agent() };`);
 
 // The Mac broker supplies the official catalog without giving Workers login tokens.
+// Remote image calls use the same credential authority, never a host executor.
+at('ext/image-generation/src/extension.rs', '            available: config.model_provider.is_openai()', '                || (codex_core::remote_workspace::image_generation_enabled() && config.model_provider_id == "yuan_broker")');
+at('ext/image-generation/src/tool.rs', '    let paths = args.referenced_image_paths.as_deref().unwrap_or_default();', `    if codex_core::remote_workspace::enabled() && !paths.is_empty() {
+        return Err(FunctionCallError::RespondToModel("REMOTE_IMAGE_PATH_DENIED: attach client images through Local Agent and use num_last_images_to_include".into()));
+    }`);
+at('ext/image-generation/src/tool.rs', ') -> Option<AbsolutePathBuf> {\n    let (output_dir, save_result) = match save_root {', '');
+replace('codex-rs/ext/image-generation/src/tool.rs', ') -> Option<AbsolutePathBuf> {\n    let (output_dir, save_result) = match save_root {\n', `) -> Option<AbsolutePathBuf> {
+    // Both LOCAL_FS and executor fallback are forbidden for remote image output.
+    if codex_core::remote_workspace::enabled() { return None; }
+    let (output_dir, save_result) = match save_root {
+`);
 const catalogEnabled = 'std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker") && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")';
 at('models-manager/src/manager.rs', '    async fn should_refresh_models(&self) -> bool {', `        if ${catalogEnabled} { return true; }`);
 replace('codex-rs/models-manager/src/manager.rs', 'presets = ModelPreset::filter_by_auth(presets, uses_codex_backend);', `presets = ModelPreset::filter_by_auth(presets, uses_codex_backend || (${catalogEnabled}));`);

@@ -2,6 +2,22 @@
 
 # Local AgentRPC
 
+## Native image generation (2026-10-09, development only)
+
+`session.initialize` accepts the gateway-only `imageOutputStates: 1` opt-in;
+the gateway strips it before native initialization. Opted-in clients receive
+`generating` and `generationFailed` output states, alongside `saving`, `saved`
+and `failed`. Other clients receive the legacy `saving`/`failed` equivalents.
+Persisted statuses are not downgraded. Turn completion, Worker loss and restart
+terminate unresolved generation states; completion cleanup is scoped to its turn.
+
+`platformCapabilities.imageGeneration` is true only for the qualified Mac Harness
+marker `yuan-zhou-image-generation/1` with ready ChatGPT Broker credentials.
+The conditional built-in `yuan-zhou-imagegen` follows managed skill projection.
+Native inline output bytes use existing `file/write_begin/chunk/commit/abort`
+and `outputs/v1`; no new Local Agent methods or direct central filesystem access.
+Only failed saves offer save retry; generation failures require a new request.
+
 ## Conversation history tool (2026-09-22, source only; not deployed)
 
 `conversation_read({threadId,cursor?,includeTools?})` is a **central platform metadata tool**, not an Agent RPC. The gateway reads the calling user's App Server history after checking source/target ownership and live authorization, and rechecks before returning. Archived/other-device same-user history is readable without the target Agent; source/target device bindings are unchanged. No resume, command, file read, output collection or Agent dispatch is performed. Foreign, deleted and absent IDs share `CONVERSATION_UNAVAILABLE`.

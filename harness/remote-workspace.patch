@@ -1478,29 +1478,32 @@ index b6f4356..9ce996e 100644
          true
      }
 diff --git a/codex-rs/core/src/tools/handlers/extension_tools.rs b/codex-rs/core/src/tools/handlers/extension_tools.rs
-index ca1bc68..5c86f82 100644
+index ca1bc68..54e910b 100644
 --- a/codex-rs/core/src/tools/handlers/extension_tools.rs
 +++ b/codex-rs/core/src/tools/handlers/extension_tools.rs
-@@ -71,6 +71,14 @@ impl ToolExecutor<ToolInvocation> for ExtensionToolAdapter {
+@@ -71,6 +71,17 @@ impl ToolExecutor<ToolInvocation> for ExtensionToolAdapter {
  }
  
  impl CoreToolRuntime for ExtensionToolAdapter {
 +    fn remote_workspace_safe(&self) -> bool {
 +        let name = self.0.tool_name();
-+        name.is_default_namespace()
++        (name.is_default_namespace()
 +            && matches!(
 +                name.name.as_str(),
 +                "get_goal" | "create_goal" | "update_goal"
-+            )
++            ))
++            || (crate::remote_workspace::image_generation_enabled()
++                && name.namespace.as_deref() == Some("image_gen")
++                && name.name == "imagegen")
 +    }
      fn is_builtin_control_tool(&self) -> bool {
          let tool_name = self.0.tool_name();
          if tool_name.is_default_namespace() {
 diff --git a/codex-rs/core/src/tools/spec_plan.rs b/codex-rs/core/src/tools/spec_plan.rs
-index f5c88e3..853a569 100644
+index f5c88e3..b49f579 100644
 --- a/codex-rs/core/src/tools/spec_plan.rs
 +++ b/codex-rs/core/src/tools/spec_plan.rs
-@@ -129,6 +129,48 @@ pub(crate) fn build_tool_router(
+@@ -129,6 +129,51 @@ pub(crate) fn build_tool_router(
      step_store: &ExtensionData,
      tool_suggest_candidates: Option<&crate::tools::router::ToolSuggestCandidates>,
  ) -> CodexResult<ToolRouter> {
@@ -1518,11 +1521,14 @@ index f5c88e3..853a569 100644
 +        );
 +        for executor in extension_tool_executors(session, step_store) {
 +            let name = executor.tool_name();
-+            if name.is_default_namespace()
++            if (name.is_default_namespace()
 +                && matches!(
 +                    name.name.as_str(),
 +                    "get_goal" | "create_goal" | "update_goal"
-+                )
++                ))
++                || (crate::remote_workspace::image_generation_enabled()
++                    && name.namespace.as_deref() == Some("image_gen")
++                    && name.name == "imagegen")
 +            {
 +                registry.register_external(Arc::new(ExtensionToolAdapter::new(executor)));
 +            }
@@ -1769,7 +1775,7 @@ index 8694817..3593bae 100644
              return PluginLoadOutcome::default();
          }
 diff --git a/codex-rs/ext/skills/src/host_service.rs b/codex-rs/ext/skills/src/host_service.rs
-index 3feda36..c35ddf7 100644
+index 3feda36..6cc85a4 100644
 --- a/codex-rs/ext/skills/src/host_service.rs
 +++ b/codex-rs/ext/skills/src/host_service.rs
 @@ -118,6 +118,107 @@ impl HostSkillsRequest<'_> {
@@ -1808,7 +1814,7 @@ index 3feda36..c35ddf7 100644
 +        let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else {
 +            return empty();
 +        };
-+        if entries.len() > 101 {
++        if entries.len() > 102 {
 +            return empty();
 +        }
 +        let mut roots = Vec::new();
@@ -2001,14 +2007,18 @@ index 3ce0431..4fd7089 100644
      #[cfg(unix)]
      command.process_group(0);
 diff --git a/codex-rs/app-server/src/extensions.rs b/codex-rs/app-server/src/extensions.rs
-index 34adaff..68a73b0 100644
+index 34adaff..9a5b1b9 100644
 --- a/codex-rs/app-server/src/extensions.rs
 +++ b/codex-rs/app-server/src/extensions.rs
-@@ -68,6 +68,37 @@ pub(crate) fn thread_extensions(
+@@ -68,6 +68,41 @@ pub(crate) fn thread_extensions(
      if let Some(admission) = turn_start_admission {
          builder.turn_start_admission(admission);
      }
 +    if codex_core::remote_workspace::enabled() {
++        if codex_core::remote_workspace::image_generation_enabled() {
++            // The extension emits inline bytes; client persistence belongs to Local Agent.
++            codex_image_generation_extension::install(&mut builder, auth_manager.clone(), |_| None);
++        }
 +        if let Some(state_db) = state_db {
 +            codex_goal_extension::install_with_backend(
 +                &mut builder,
@@ -2082,19 +2092,24 @@ index 118106d..b64b57a 100644
              let connection_initialized = self
                  .initialize_processor
 diff --git a/codex-rs/app-server/src/request_processors/initialize_processor.rs b/codex-rs/app-server/src/request_processors/initialize_processor.rs
-index 493867c..d990cba 100644
+index 493867c..c639017 100644
 --- a/codex-rs/app-server/src/request_processors/initialize_processor.rs
 +++ b/codex-rs/app-server/src/request_processors/initialize_processor.rs
-@@ -190,7 +190,15 @@ impl InitializeRequestProcessor {
+@@ -190,7 +190,20 @@ impl InitializeRequestProcessor {
              }
          }
  
 -        let user_agent = get_codex_user_agent();
 +        let user_agent = if codex_core::remote_workspace::enabled() {
 +            format!(
-+                "{} {}",
++                "{} {}{}",
 +                get_codex_user_agent(),
-+                codex_core::remote_workspace::MARKER
++                codex_core::remote_workspace::MARKER,
++                if codex_core::remote_workspace::image_generation_enabled() {
++                    " yuan-zhou-image-generation/1"
++                } else {
++                    ""
++                }
 +            )
 +        } else {
 +            get_codex_user_agent()
@@ -2102,6 +2117,44 @@ index 493867c..d990cba 100644
          let response = InitializeResponse {
              user_agent,
              codex_home,
+diff --git a/codex-rs/ext/image-generation/src/extension.rs b/codex-rs/ext/image-generation/src/extension.rs
+index 551e14f..ecc32b1 100644
+--- a/codex-rs/ext/image-generation/src/extension.rs
++++ b/codex-rs/ext/image-generation/src/extension.rs
+@@ -39,6 +39,8 @@ impl ImageGenerationExtensionConfig {
+     fn from_config(config: &Config, resolve_save_root: &SaveRootResolver) -> Self {
+         Self {
+             available: config.model_provider.is_openai()
++                || (codex_core::remote_workspace::image_generation_enabled()
++                    && config.model_provider_id == "yuan_broker")
+                 || config.model_provider.requires_openai_auth
+                 || config.model_provider.uses_openai_actor_authorization(),
+             provider: config.model_provider.clone(),
+diff --git a/codex-rs/ext/image-generation/src/tool.rs b/codex-rs/ext/image-generation/src/tool.rs
+index 66864fe..acfbd6a 100644
+--- a/codex-rs/ext/image-generation/src/tool.rs
++++ b/codex-rs/ext/image-generation/src/tool.rs
+@@ -285,6 +285,10 @@ async fn save_image_generation_result(
+     call_id: &str,
+     result: &str,
+ ) -> Option<AbsolutePathBuf> {
++    // Both LOCAL_FS and executor fallback are forbidden for remote image output.
++    if codex_core::remote_workspace::enabled() {
++        return None;
++    }
+     let (output_dir, save_result) = match save_root {
+         Some(save_root) => {
+             let path = image_generation_artifact_path(save_root, session_id, call_id);
+@@ -423,6 +427,9 @@ async fn request_for_call_args(
+     environments: &[ToolEnvironment<'_>],
+ ) -> Result<ImageRequest, FunctionCallError> {
+     let paths = args.referenced_image_paths.as_deref().unwrap_or_default();
++    if codex_core::remote_workspace::enabled() && !paths.is_empty() {
++        return Err(FunctionCallError::RespondToModel("REMOTE_IMAGE_PATH_DENIED: attach client images through Local Agent and use num_last_images_to_include".into()));
++    }
+     if paths.len() > MAX_EDIT_IMAGES {
+         return Err(FunctionCallError::RespondToModel(format!(
+             "`referenced_image_paths` must contain at most {MAX_EDIT_IMAGES} paths"
 diff --git a/codex-rs/models-manager/src/manager.rs b/codex-rs/models-manager/src/manager.rs
 index 7b4d613..2b309a4 100644
 --- a/codex-rs/models-manager/src/manager.rs
@@ -2162,7 +2215,7 @@ diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_wo
 new file mode 100644
 --- /dev/null
 +++ b/codex-rs/core/src/remote_workspace.rs
-@@ -0,0 +1,315 @@
+@@ -0,0 +1,322 @@
 +//! Yuan Zhou's process-wide, fail-closed workspace boundary.
 +//! This module is added to the pinned upstream codex-core by the patch generator.
 +use serde_json::Value;
@@ -2182,6 +2235,13 @@ new file mode 100644
 +pub fn enabled() -> bool {
 +    static ENABLED: OnceLock<bool> = OnceLock::new();
 +    *ENABLED.get_or_init(|| std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1"))
++}
++
++/// Only the reviewed Mac credential-broker transport may advertise native images.
++pub fn image_generation_enabled() -> bool {
++    enabled() && cfg!(target_os = "macos")
++        && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++        && std::env::var("CODEX_REMOTE_IMAGE_GENERATION").as_deref() == Ok("1")
 +}
 +
 +pub fn device_tool(name: &str) -> bool {

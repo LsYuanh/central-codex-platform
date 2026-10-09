@@ -322,7 +322,7 @@ export interface OutputArtifact {
   source: "generatedImage" | "deviceFile";
   name: string;
   kind: "image" | "text" | "document" | "unknown";
-  status: "saving" | "saved" | "failed";
+  status: "generating" | "generationFailed" | "saving" | "saved" | "failed";
   path?: string;
   mimeType?: string;
   bytes?: number;

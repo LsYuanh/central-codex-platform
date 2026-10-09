@@ -19,6 +19,13 @@ pub fn enabled() -> bool {
     *ENABLED.get_or_init(|| std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1"))
 }
 
+/// Only the reviewed Mac credential-broker transport may advertise native images.
+pub fn image_generation_enabled() -> bool {
+    enabled() && cfg!(target_os = "macos")
+        && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
+        && std::env::var("CODEX_REMOTE_IMAGE_GENERATION").as_deref() == Ok("1")
+}
+
 pub fn device_tool(name: &str) -> bool {
     matches!(
         name,

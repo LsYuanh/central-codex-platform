@@ -2365,7 +2365,7 @@ button.composer-remove-button { display: grid; place-items: center; flex: none; 
   background: var(--surface-inset);
 }
 
-.output-failed {
+.output-failed, .output-generationFailed {
   border-color: var(--danger);
 }
 

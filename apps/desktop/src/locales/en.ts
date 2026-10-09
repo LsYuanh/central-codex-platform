@@ -508,6 +508,8 @@ export const en = {
   "图片预览无法加载，请重新读取": "Image preview could not load. Reload it",
   "已保存到本机": "Saved to this device",
   "正在保存到本机…": "Saving to this device…",
+  "正在生成图片…": "Generating image…",
+  "图片生成失败或已中断": "Image generation failed or was interrupted",
   "保存失败": "Save failed",
   "查看大图": "View full-size image",
   "重新读取": "Reload",

@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-09",
+  "scope": "Native image generation development; no production deployment or installer release",
+  "upstream": "rust-v0.156.1",
+  "upstreamCommit": "b412ff32c417f855c2b2d1581b77058eed87c84b",
+  "patchSha256": "27ffe59102db6c4c32b6972e9ebff56da2230d795b2ca2d0ccc07edb766d98db",
+  "macBinarySha256": "fe9222d836a09695ebd4d6b3db3528456ad8b4b44929bf3462131af7ae04d360",
+  "capability": "yuan-zhou-image-generation/1",
+  "sourceVerification": {
+    "preparePatchSmoke": {"passed": true, "checks": 34, "report": "target/prepare-patch-xdqIAu/result.json"},
+    "macNativeBuild": "passed",
+    "nativeExecutionBoundaryAnd102SkillCatalog": "passed",
+    "nativePlanGoalRegression": {"passed": true, "modelRequests": 16},
+    "existingModelCredentialBrokerRegressionOnMac": {"passed": true, "checks": 23},
+    "gatewayTypeScript": "passed",
+    "desktopTypeScriptAndVite": "passed; existing large-chunk warning",
+    "personalSkillsRegression": "passed"
+  },
+  "nativeFixture": {
+    "script": "harness/image-generation-smoke.mjs",
+    "passed": true,
+    "checks": ["native namespace", "generate", "edit previous generated image", "reject host reference path", "no central image save", "deny foreign namespace", "plan denial", "failure terminal state", "inline history"]
+  },
+  "gatewayFixture": {
+    "script": "tests/smoke/image-generation-smoke.mjs",
+    "passed": true,
+    "checks": ["ChatGPT only", "exact routes and input validation", "user-scoped headers", "redacted errors", "lease revocation cancels request", "conditional built-in skill and independent preferences", "offline save retry", "idempotent save", "interrupted terminal state", "legacy state serialization without mutation", "previous turn completion preserves next turn"]
+  },
+  "realModelAndClient": {
+    "script": "tests/smoke/image-generation-live-smoke.mjs",
+    "central": "isolated CA-verified WSS gateway and Mac Seatbelt Worker, separate QA account and state",
+    "login": "existing central ChatGPT credential via Broker; no API key",
+    "model": "gpt-6-sol",
+    "imageModel": "gpt-image-2",
+    "client": "Windows native device-token helper and Local Agent",
+    "passed": true,
+    "report": "target/image-generation-live-yOnrGz/result.json",
+    "imageBytes": 1410939,
+    "imageSha256": "853ad395f20574c0c07f8669a4ac457d529de7ab896b78c5f5be4c907b3ebd5b",
+    "checks": ["built-in skill", "native image generation", "client-only persistence", "local SHA-256 matches output metadata", "generation and save events", "history resume preserves output version"],
+    "cleanup": "temporary device revoked; isolated gateway and diagnostic tunnel stopped",
+    "timing": "real generation preceded final legacy-state negotiation and per-turn cleanup changes, which passed local TypeScript and fixture regression"
+  },
+  "ui": {
+    "script": "tests/smoke/image-generation-ui-smoke.mjs",
+    "runtime": "isolated Windows Tauri using real OutputCard with state fixtures",
+    "passed": true,
+    "screenshots": "target/image-ui-JtmgNp",
+    "checks": ["both themes and computed colors/fonts", "generation vs save states", "save retry only", "English", "narrow layout"]
+  },
+  "unverified": ["real model editing uploaded references", "full live image turn in desktop chat UI", "Mac work client", "Windows central", "0.159.2 candidate adaptation", "production deployment and cross-version installation"],
+  "productionChanged": false,
+  "apiKeyImageBillingEnabled": false
+}

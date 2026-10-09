@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Kept in the compiled gateway so runtime packaging cannot omit the skill asset.
 export const CREATOR_ID = 'yuan-zhou-skill-creator';
-export const CREATOR_VERSION = 1;
+export const CREATOR_VERSION = 2;
 export const CREATOR_DESCRIPTION = '创建或修改远舟个人技能，将用户明确要求复用的对话流程整理为技能包。仅在用户要求创建、修改技能或把流程保存为技能时使用，普通任务执行不触发。';
 export const CREATOR_MAIN = `---
 name: yuan-zhou-skill-creator
@@ -24,11 +24,11 @@ description: "${CREATOR_DESCRIPTION}"
 
 ## 生成完整技能包
 
-必须提供 SKILL.md，YAML frontmatter 的 name 使用小写英文字母开头及数字、连字符，最多 64 字符；description 使用单行双引号字符串，清楚说明用途与触发时机。不要使用保留名称 yuan-zhou-skill-creator。
+必须提供 SKILL.md，YAML frontmatter 的 name 使用小写英文字母开头及数字、连字符，最多 64 字符；description 使用单行双引号字符串，清楚说明用途与触发时机。不要使用保留名称 yuan-zhou-skill-creator 或 yuan-zhou-imagegen。
 正文写实际需要的操作知识和边界，避免泛泛说明。按需添加 references/、assets/、scripts/，不用为了凑目录生成空文件。正文说明资源何时使用，使用相对路径；脚本写清输入、输出、参数和失败处理。不要依赖当前机器的绝对路径。
 有系统或命令依赖时添加 runtime.json，例如 {"platforms":["windows"],"programs":["powershell"]}；platforms 仅接受 windows、macos、linux，programs 填命令名，没有限制使用空数组。
 最多 64 个文件、共 8 MiB，SKILL.md 不超过 64 KiB。文件路径必须可跨平台，不使用路径穿越、符号链接或系统保留文件名。
-远舟当前不支持插件、MCP、子代理、原生图片生成，不能将这些能力作为技能执行前提。不要复制凭据、登录信息或本机私有数据到技能包。
+远舟当前不支持插件、MCP、子代理，不能将这些能力作为技能执行前提。图片生成只有当前工具列表包含 image_gen.imagegen 时可用；使用远舟内置图片生成技能的客户端保存流程，不引用中央图片路径。不要复制凭据、登录信息或本机私有数据到技能包。
 
 ## 预览和保存
 

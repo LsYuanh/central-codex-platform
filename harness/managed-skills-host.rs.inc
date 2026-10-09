@@ -12,7 +12,7 @@
         let Ok(bytes) = std::fs::read(root.join("catalog.json")) else { return empty(); };
         if bytes.len() > 32768 { return empty(); }
         let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else { return empty(); };
-        if entries.len() > 101 { return empty(); }
+        if entries.len() > 102 { return empty(); }
         let mut roots = Vec::new();
         for entry in entries {
             let relative = std::path::Path::new(&entry);

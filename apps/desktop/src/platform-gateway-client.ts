@@ -139,6 +139,7 @@ export class PlatformGatewayClient implements RpcClient {
 
       const initialized = await this.request("initialize", {
         clientInfo: this.clientInfo,
+        imageOutputStates: 1,
         capabilities: {},
       });
       this.emit({method:"gateway/capabilities", params:asRecord(initialized.result).platformCapabilities});

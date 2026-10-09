@@ -46,6 +46,7 @@ try{
   const probe=(command,args)=>{try{run(command,args);}catch{probeFailed=true;}};
   probe(process.execPath,['harness/runtime-smoke.mjs',binary]);
   probe(process.execPath,['harness/plan-goal-smoke.mjs',binary]);
+  probe(process.execPath,['harness/image-generation-smoke.mjs',binary]);
   probe(process.execPath,['harness/model-catalog-smoke.mjs',binary,join(report.source,'codex-rs/models-manager/models.json'),report.latestVersion]);
   probe(process.execPath,['harness/thread-delete-smoke.mjs',binary]);
   probe(process.execPath,['harness/worker-isolation-smoke.mjs']);

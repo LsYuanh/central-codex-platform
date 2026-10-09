@@ -127,7 +127,7 @@ export function normalizeGatewayUiEvent(message: AppServerMessage, now = Date.no
   if (message.method === "output/state") {
     const output = record(p.output);
     if (!["id", "threadId", "deviceId", "name"].every(key => typeof output[key] === "string")
-      || !["saving", "saved", "failed"].includes(String(output.status))
+      || !["generating", "generationFailed", "saving", "saved", "failed"].includes(String(output.status))
       || !["generatedImage", "deviceFile"].includes(String(output.source))
       || !["image", "text", "document", "unknown"].includes(String(output.kind))) return invalid();
     return event({kind:"output", output:output as unknown as OutputArtifact});

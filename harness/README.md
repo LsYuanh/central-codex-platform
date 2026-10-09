@@ -15,6 +15,28 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+### Native image generation (2026-10-09, development only)
+
+The pinned 0.156.1 extension is installed with no filesystem executor in remote
+mode. Only `image_gen.imagegen` is allowed, gated by macOS, remote mode, Broker
+authentication and `CODEX_REMOTE_IMAGE_GENERATION=1`; initialization advertises
+`yuan-zhou-image-generation/1`. Central reference paths and both native save paths
+are blocked. Inline conversation references (1–5) remain available. The gateway
+Broker handles only the pinned JSON image contract using existing ChatGPT login;
+Local Agent receives result bytes through the established output transfer flow.
+
+Run `node harness/image-generation-smoke.mjs BINARY` on Mac: the deterministic
+probe checks generation, inline-history editing, path/namespace/plan denial,
+failure, history and absence of host image writes. The release build gate runs
+this probe. The managed catalog limit is now 102 (100 personal and two built-in
+skills), superseding the 101-entry historical note below. Patch/source hashes
+were updated together; upstream version and other extension denials are unchanged.
+
+Fresh Mac compilation, native boundary regressions and a real ChatGPT → Windows
+Local Agent image save passed. See `verification/image-generation-20261009.json`.
+This development capability supersedes the initial blanket image denial described
+below; it has not been deployed or ported to the 0.159.2 candidate branch.
+
 ### Native plan and goals (2026-09-24, not deployed)
 
 `yuan-zhou-plan-goal/1` advertises built-in collaboration modes and native goal

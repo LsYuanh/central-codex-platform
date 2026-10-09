@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { CREATOR_ID, CREATOR_VERSION, CREATOR_MAIN, CREATOR_DESCRIPTION } from './builtin-creator.js';
+import { IMAGEGEN_ID, IMAGEGEN_VERSION, IMAGEGEN_MAIN, IMAGEGEN_DESCRIPTION } from './builtin-imagegen.js';
 import { writeGatewayState } from "./gateway-state.js";
 
 type Json = Record<string, unknown>;
@@ -57,6 +58,8 @@ export function validateSkillFiles(files:SkillFile[]) {
   return {name,description,platforms,programs,text};
 }
 export class SkillStore {
+  private imageUsers=new Set<string>();
+  setImageGeneration(userId:string,enabled:boolean){if(enabled)this.imageUsers.add(userId);else this.imageUsers.delete(userId);}
   private rows:Stored[]=[];
   private drafts:Draft[]=[];
   private previews=new Map<string,Preview>();
@@ -78,24 +81,26 @@ export class SkillStore {
     }
   }
   private persist(rows=this.rows,drafts=this.drafts,preferences=this.builtinPreferences){writeGatewayState(this.file,{version:1,skills:rows,drafts,builtinPreferences:preferences});this.rows=rows;this.drafts=drafts;this.builtinPreferences=preferences;}
-  private builtin(userId:string):Stored {
+  private builtin(userId:string,skillId=CREATOR_ID):Stored {
     // Preference changes and content releases both get immutable projection paths.
-    const pref=this.builtinPreferences[skillScope(userId)]??{automatic:true,revision:0};
-    const bytes=Buffer.from(CREATOR_MAIN);
-    return {id:CREATOR_ID,name:CREATOR_ID,displayName:CREATOR_ID,source:'builtin',description:CREATOR_DESCRIPTION,userId,
-      revision:CREATOR_VERSION*1_000_000+pref.revision,enabled:true,automatic:pref.automatic,updatedAt:'',platforms:[],programs:[],
+    const image=skillId===IMAGEGEN_ID;
+    const pref=this.builtinPreferences[this.preferenceKey(userId,skillId)]??{automatic:true,revision:0};
+    const bytes=Buffer.from(image?IMAGEGEN_MAIN:CREATOR_MAIN);
+    return {id:skillId,name:skillId,displayName:image?'图片生成':CREATOR_ID,source:'builtin',description:image?IMAGEGEN_DESCRIPTION:CREATOR_DESCRIPTION,userId,
+      revision:(image?IMAGEGEN_VERSION:CREATOR_VERSION)*1_000_000+pref.revision,enabled:true,automatic:pref.automatic,updatedAt:'',platforms:[],programs:[],
       files:[{path:'SKILL.md',bytes:bytes.length,sha256:hash(bytes),data:bytes.toString('base64')}]};
   }
-  list(userId:string){return [...this.rows.filter(r=>r.userId===userId).map(r=>({...info(r),source:'personal' as const,...(r.name===CREATOR_ID?{enabled:false,nameConflict:true}:{})})),info(this.builtin(userId))];}
-  get(userId:string,skillId:unknown){if(skillId===CREATOR_ID)return this.builtin(userId);const row=this.rows.find(r=>r.id===id(skillId)&&r.userId===userId);if(!row)throw Error('SKILL_NOT_FOUND');return row;}
-  resolve(userId:string,skillId:unknown,revision?:unknown){const row=this.get(userId,skillId);if(row.source!=='builtin'&&row.name===CREATOR_ID)throw Error('SKILL_NAME_RESERVED: 请通过对话修改个人技能名称');if(!row.enabled)throw Error('SKILL_DISABLED');if(revision!==undefined&&revision!==row.revision)throw Error('SKILL_VERSION_CONFLICT: 技能已更新，请重新选择');return structuredClone(row);}
+  private preferenceKey(userId:string,skillId:string){return skillId===CREATOR_ID?skillScope(userId):skillScope(userId)+':'+skillId;}
+  list(userId:string){return [...this.rows.filter(r=>r.userId===userId).map(r=>({...info(r),source:'personal' as const,...([CREATOR_ID,IMAGEGEN_ID].includes(r.name)?{enabled:false,nameConflict:true}:{})})),info(this.builtin(userId)),...(this.imageUsers.has(userId)?[info(this.builtin(userId,IMAGEGEN_ID))]:[])];}
+  get(userId:string,skillId:unknown){if(skillId===CREATOR_ID)return this.builtin(userId);if(skillId===IMAGEGEN_ID){if(!this.imageUsers.has(userId))throw Error('IMAGE_GENERATION_UNAVAILABLE: 当前中央或账号尚未启用图片生成');return this.builtin(userId,IMAGEGEN_ID);}const row=this.rows.find(r=>r.id===id(skillId)&&r.userId===userId);if(!row)throw Error('SKILL_NOT_FOUND');return row;}
+  resolve(userId:string,skillId:unknown,revision?:unknown){const row=this.get(userId,skillId);if(row.source!=='builtin'&&[CREATOR_ID,IMAGEGEN_ID].includes(row.name))throw Error('SKILL_NAME_RESERVED: 请通过对话修改个人技能名称');if(!row.enabled)throw Error('SKILL_DISABLED');if(revision!==undefined&&revision!==row.revision)throw Error('SKILL_VERSION_CONFLICT: 技能已更新，请重新选择');return structuredClone(row);}
   byName(userId:string,name:unknown){const rows=this.list(userId).filter(r=>r.name===name&&!r.nameConflict);if(rows.length!==1)throw Error('SKILL_NOT_FOUND');return this.resolve(userId,rows[0]!.id);}
   draftList(owner:SkillOwner){return this.drafts.filter(d=>d.userId===owner.userId&&d.deviceKey===owner.deviceKey).map(d=>({id:d.id,path:d.path,skillId:d.skillId,revision:d.revision}));}
   async createDraft(owner:SkillOwner,p:Json,call:SkillAgent){
     const original=p.skillId?this.get(owner.userId,p.skillId):undefined;
     if(original?.source==='builtin')throw Error('SKILL_BUILTIN_READONLY: 内置技能由平台维护');
     const draftId=id(p.creationKey);
-    if(draftId===CREATOR_ID)throw Error('SKILL_ID_RESERVED');
+    if([CREATOR_ID,IMAGEGEN_ID].includes(draftId))throw Error('SKILL_ID_RESERVED');
     if(this.rows.some(r=>r.id===draftId))throw Error('SKILL_DRAFT_ALREADY_SAVED: 该创建请求已保存；修改请使用新的 requestKey 和 skillId');
     const previous=this.drafts.find(d=>d.id===draftId);
     if(previous){if(previous.userId!==owner.userId||previous.deviceKey!==owner.deviceKey||previous.skillId!==original?.id)throw Error('SKILL_DRAFT_CONFLICT');return this.draftResponse(previous);}
@@ -106,7 +111,7 @@ export class SkillStore {
     const draft:Draft={...owner,id:draftId,path:made.path,...(original?{skillId:original.id,revision:original.revision}:{})};
     this.persist(this.rows,[...this.drafts,draft]);return this.draftResponse(draft);
   }
-  private draftResponse(d:Draft){return {draft:{id:d.id,path:d.path,skillId:d.skillId,revision:d.revision},prompt:`请协助${d.skillId?'修改':'创建'}一个个人技能。先逐个澄清用途、触发条件、输入、输出和依赖，再生成完整技能包。草稿目录在当前客户端：${JSON.stringify(d.path)}。所有文件通过 device 工具在该目录创建或修改；不要在中央机操作。SKILL.md 需要 YAML frontmatter，name 使用小写英文连字符，description 使用单行双引号字符串。可包含 references/、assets/、scripts/。若需要系统或命令依赖，写入 runtime.json，例如 {"platforms":["windows"],"programs":["python"]}；没有限制则使用空数组。使用可移植相对路径，脚本参数与输入输出说明要完整。不要添加依赖插件、MCP、子代理或原生图片生成的步骤，这些能力尚不可用。最多 64 个文件、共 8 MiB，SKILL.md 不超过 64 KiB。不要执行生成的脚本，除非用户明确要求试运行。生成后提醒用户打开“我的技能”，在本机草稿中预览并保存。用户需求：`};}
+  private draftResponse(d:Draft){return {draft:{id:d.id,path:d.path,skillId:d.skillId,revision:d.revision},prompt:`请协助${d.skillId?'修改':'创建'}一个个人技能。先逐个澄清用途、触发条件、输入、输出和依赖，再生成完整技能包。草稿目录在当前客户端：${JSON.stringify(d.path)}。所有文件通过 device 工具在该目录创建或修改；不要在中央机操作。SKILL.md 需要 YAML frontmatter，name 使用小写英文连字符，description 使用单行双引号字符串。可包含 references/、assets/、scripts/。若需要系统或命令依赖，写入 runtime.json，例如 {"platforms":["windows"],"programs":["python"]}；没有限制则使用空数组。使用可移植相对路径，脚本参数与输入输出说明要完整。不要添加依赖插件、MCP、子代理的步骤。原生图片生成仅在当前工具列表包含 image_gen.imagegen 时可用，遵循内置图片技能的客户端保存流程。最多 64 个文件、共 8 MiB，SKILL.md 不超过 64 KiB。不要执行生成的脚本，除非用户明确要求试运行。生成后提醒用户打开“我的技能”，在本机草稿中预览并保存。用户需求：`};}
   private draft(owner:SkillOwner,key:unknown){const d=this.drafts.find(d=>d.id===id(key)&&d.userId===owner.userId&&d.deviceKey===owner.deviceKey);if(!d)throw Error('SKILL_DRAFT_NOT_FOUND');return d;}
   async preview(owner:SkillOwner,key:unknown,call:SkillAgent){
     for(const [k,v] of this.previews)if(v.expires<Date.now())this.previews.delete(k);
@@ -135,7 +140,7 @@ export class SkillStore {
     if(old?.source==='builtin')throw Error('SKILL_BUILTIN_READONLY');
     if(old&&old.revision!==draft.revision)throw Error('SKILL_VERSION_CONFLICT: 其他客户端已修改此技能，请重新创建修改草稿');
     if(!old&&this.rows.filter(r=>r.userId===owner.userId).length>=100)throw Error('SKILL_LIMIT');
-    if(name===CREATOR_ID)throw Error('SKILL_NAME_RESERVED: 该名称由远舟内置技能保留，请修改个人技能名称');
+    if([CREATOR_ID,IMAGEGEN_ID].includes(name))throw Error('SKILL_NAME_RESERVED: 该名称由远舟内置技能保留，请修改个人技能名称');
     if(this.rows.some(r=>r.userId===owner.userId&&r.name===name&&r.id!==old?.id))throw Error('SKILL_NAME_EXISTS');
     const size=files.reduce((n,f)=>n+f.bytes,0);
     if(this.rows.filter(r=>r.userId===owner.userId&&r.id!==old?.id).reduce((n,r)=>n+r.files.reduce((v,f)=>v+f.bytes,0),size)>32*1024*1024)throw Error('SKILL_STORAGE_LIMIT: 个人技能总容量上限 32 MiB');
@@ -146,10 +151,11 @@ export class SkillStore {
     if(row.source==='builtin'){
       if(remove||p.enabled!==true||typeof p.automatic!=='boolean')throw Error('SKILL_BUILTIN_READONLY: 内置技能仅支持修改自动匹配设置');
       if(row.revision!==p.revision)throw Error('SKILL_VERSION_CONFLICT');
-      const revision=(this.builtinPreferences[skillScope(userId)]?.revision??0)+1;
+      const key=this.preferenceKey(userId,row.id);
+      const revision=(this.builtinPreferences[key]?.revision??0)+1;
       if(revision>=1_000_000)throw Error('SKILL_VERSION_LIMIT');
-      this.persist(this.rows,this.drafts,{...this.builtinPreferences,[skillScope(userId)]:{automatic:p.automatic,revision}});
-      return {skill:info(this.builtin(userId))};
+      this.persist(this.rows,this.drafts,{...this.builtinPreferences,[key]:{automatic:p.automatic,revision}});
+      return {skill:info(this.builtin(userId,row.id))};
     }
     if(row.revision!==p.revision)throw Error('SKILL_VERSION_CONFLICT');if(!remove&&(typeof p.enabled!=='boolean'||(p.automatic!==undefined&&typeof p.automatic!=='boolean')))throw Error('SKILL_STATE_INVALID');const next={...row,enabled:p.enabled as boolean,automatic:p.automatic===undefined?row.automatic:p.automatic as boolean,revision:row.revision+1,updatedAt:new Date().toISOString()};this.persist(remove?this.rows.filter(r=>r.id!==row.id):this.rows.map(r=>r.id===row.id?next:r));return remove?{removed:true}:{skill:info(next)};}
   discard(owner:SkillOwner,key:unknown){const draft=this.draft(owner,key);for(const [id,p] of this.previews)if(p.draft.id===draft.id)this.previews.delete(id);this.persist(this.rows,this.drafts.filter(d=>d.id!==draft.id));return {removed:true};}
