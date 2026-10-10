@@ -29,7 +29,7 @@ try{
     }
   });
   const namespace='com.centralcodex.harnessqa.central-live';client.stdin.write(JSON.stringify({gateway,caPath,code,tokenRoot,namespace})+'\n');await until(()=>connected,'native pairing',20000);
-  const agent=start('target/debug/local-agent.exe',['--workspace-root',workspace,'--gateway-url',gateway.replace('/ws','/ws/agent')+'?deviceId='+deviceId],{YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_DATA_DIR:tokenRoot,YUAN_PLATFORM_CA:caPath});
+  const agent=start('target/debug/local-agent.exe',['--workspace-root',workspace,'--attachment-stdio','--gateway-url',gateway.replace('/ws','/ws/agent')+'?deviceId='+deviceId],{YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_DATA_DIR:tokenRoot,YUAN_PLATFORM_CA:caPath});
   const localPending=new Map();
   createInterface({input:agent.stdout}).on('line',line=>{const reply=JSON.parse(line);localPending.get(reply.id)?.(reply);});
   const local=(method,params)=>new Promise((resolve,reject)=>{const id=randomUUID(),timer=setTimeout(()=>{localPending.delete(id);reject(Error('LOCAL_RPC_TIMEOUT'));},20000);localPending.set(id,r=>{clearTimeout(timer);localPending.delete(id);r.ok?resolve(r.result):reject(Error(r.error));});agent.stdin.write(JSON.stringify({id,method,params})+'\n');});

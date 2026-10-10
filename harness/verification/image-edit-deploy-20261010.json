@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-10",
+  "authorization": "User confirmed image error fix and central update in this conversation",
+  "sourceBaseCommit": "80df2ab",
+  "sourceOverlays": [
+    "generated runtime catalog pin"
+  ],
+  "deployed": true,
+  "appVersion": "0.1.5",
+  "runtimeVersion": "0.156.1",
+  "configurationRevision": 16,
+  "packageId": "macos-arm64-node24-qa1-764c44015095c306",
+  "manifest": {
+    "files": 872,
+    "path": "manifest.json",
+    "bytes": 179604,
+    "sha256": "764c44015095c306ee733ee7ef11e607b2805ecdc7526e54985a1b919121d6ff"
+  },
+  "dmg": {
+    "bytes": 200734348,
+    "sha256": "c54fbe730446cad39dbec3e0352546983503ebf999c80316cd62218b7fc091f3"
+  },
+  "rootCause": {
+    "providerCode": "moderation_blocked",
+    "priorError": "MODEL_PROVIDER_HTTP_400",
+    "newError": "IMAGE_CONTENT_REJECTED",
+    "providerDetailsRedacted": true
+  },
+  "checksPassed": [
+    "gateway build and bounded error classification smoke",
+    "complete central build, signature, DMG and manifest",
+    "packaged image, remote boundary, plan and goal probes",
+    "gateway image and credential broker regressions",
+    "native preflight and formal switch",
+    "configuration and credential-reference preservation",
+    "Windows LAN TLS with existing CA"
+  ],
+  "realEdit": {
+    "report": "target/image-generation-live-YGKxiN/result.json",
+    "bytes": 1415548,
+    "sha256": "bdaa83cd9cac34b05ff83c9b69f1348d503ff8614087f1d209d4456619077ed2",
+    "checks": [
+      "authenticated-WSS",
+      "native-device-token",
+      "real-central-image-edit-with-client-attachment",
+      "builtin-skill",
+      "Windows-Local-Agent-save",
+      "client-SHA256",
+      "live-generation-and-save-states",
+      "history-resume"
+    ],
+    "visualInspection": "blue hull changed to red; composition preserved",
+    "testDeviceRevoked": true
+  },
+  "finalObservation": {
+    "ok": true,
+    "devices": 3,
+    "clients": 3,
+    "workers": 4,
+    "activeTurns": 0,
+    "model": "ready"
+  },
+  "centralBackup": "/Users/operator/central-codex-platform/artifacts/image-edit-deploy-20261010",
+  "backupContents": [
+    "previous.app (0.1.4)",
+    "complete stopped profile-before"
+  ],
+  "automaticRollbackTriggered": false,
+  "privateBackupsDownloaded": false,
+  "clientInstallerReleased": false,
+  "clientUpdateChannelVersion": "0.2.9",
+  "pushedToGitRemote": false,
+  "remainingLimitations": [
+    "historical failure cards unchanged",
+    "new moderation text verified by protocol fixture, not blocked-content replay on deployed UI",
+    "Mac work client",
+    "full installed-client chat UI",
+    "0.159.2 image adaptation"
+  ]
+}
