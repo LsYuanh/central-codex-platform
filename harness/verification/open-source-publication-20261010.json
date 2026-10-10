@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-10",
+  "repository": "https://github.com/LsYuanh/central-codex-platform",
+  "visibility": "public",
+  "sourcePublicationCommit": "ed79c07292cecf39f30db940c42003134e87c47c",
+  "defaultBranch": "main",
+  "license": "AGPL-3.0-only",
+  "uploadedReleaseAssetsRemoved": 44,
+  "releaseCount": 7,
+  "oldWorkflowRunsRemoved": 9,
+  "originalFullWorkflowLogsBackedUp": false,
+  "releaseAssetBackup": {
+    "files": 44,
+    "bytes": 625801568,
+    "allSha256Verified": true,
+    "location": "maintainer-private-outside-repository"
+  },
+  "initialAnonymousClone": {
+    "commits": 146,
+    "objectsScanned": 3334,
+    "knownPrivateIdentityFindings": 0,
+    "fsckClean": true,
+    "completeAGPLLicense": true
+  },
+  "sourceArchives": [
+    {
+      "tag": "v0.2.3",
+      "format": "zip",
+      "files": 458,
+      "bytes": 6539117,
+      "sha256": "6c0fdcdcff919f3b4c8744377bcd5ef913ac3433015660516742fc3785e178f9",
+      "commit": "578944968437eb5813c0cbaacdb03c6274435617",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.3",
+      "format": "tar",
+      "files": 458,
+      "bytes": 6221671,
+      "sha256": "83991807a2b60328c5cf4210df1eaa795f5b8c1712e7f27789c1d2a9e4a7469a",
+      "commit": "578944968437eb5813c0cbaacdb03c6274435617",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.4",
+      "format": "zip",
+      "files": 467,
+      "bytes": 6572629,
+      "sha256": "3b12e6fc7c0b0e05557ac0d30eb0b93de640557529a229f5b4ec5eaa79c7619e",
+      "commit": "ae427a021d4be7f10790ca5d7811008a89a9304b",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.4",
+      "format": "tar",
+      "files": 467,
+      "bytes": 6248933,
+      "sha256": "c1c4a452a23a02a0b2ddc930ffcbb2894aaf4840f2dc351a82103e7f6cc17061",
+      "commit": "ae427a021d4be7f10790ca5d7811008a89a9304b",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.5",
+      "format": "zip",
+      "files": 471,
+      "bytes": 6587784,
+      "sha256": "af000ab108ba19bd4f75ba9641083d7c537aa2970ad0303da1b781873491f2c1",
+      "commit": "007bd17b1ddb260d38b8e28e1b81eecb8cf1146f",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.5",
+      "format": "tar",
+      "files": 471,
+      "bytes": 6259116,
+      "sha256": "0e82c6e8ec21e238f9a4eaa3e4f1806e366415e49cb7e751fc9f0cd53592fca6",
+      "commit": "007bd17b1ddb260d38b8e28e1b81eecb8cf1146f",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.6",
+      "format": "zip",
+      "files": 493,
+      "bytes": 6671628,
+      "sha256": "4e01409d4f07d066bcad0d3ec21d05739d133954b1dbbe2a1200105506480648",
+      "commit": "bd6e6e43a50d80ae2c3403f3b800b7f479bb0f61",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.6",
+      "format": "tar",
+      "files": 493,
+      "bytes": 6344588,
+      "sha256": "a7c1cac3fc222b005af5d4a35bc1e78bc404af6973fd98b594ecef4b3a317cad",
+      "commit": "bd6e6e43a50d80ae2c3403f3b800b7f479bb0f61",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.7",
+      "format": "zip",
+      "files": 501,
+      "bytes": 8779159,
+      "sha256": "1c301a774c28043a5910784b815d9c0711a0573ca30c90aa14c1b071bc8aabe8",
+      "commit": "43451db893a905e1aa637aecf34d219193a4b469",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.7",
+      "format": "tar",
+      "files": 501,
+      "bytes": 8451107,
+      "sha256": "517ef7c0d68730e5b4076c4de24b18371a5dc81e2156609ad84ad0f0f9d4136b",
+      "commit": "43451db893a905e1aa637aecf34d219193a4b469",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.8",
+      "format": "zip",
+      "files": 526,
+      "bytes": 8889255,
+      "sha256": "e710232d4eeaca39b5044285e64e28a1837b2c161323d9420bfa9f5169282030",
+      "commit": "732170e0e6fb47e36a9043001a15e13ace3e8b69",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.8",
+      "format": "tar",
+      "files": 526,
+      "bytes": 8542467,
+      "sha256": "7c256b9976a0e177c4db3f371ea2d5c08e3ea59716ee38a881b2908a2dab9585",
+      "commit": "732170e0e6fb47e36a9043001a15e13ace3e8b69",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.9",
+      "format": "zip",
+      "files": 553,
+      "bytes": 9009839,
+      "sha256": "5983461591617ff087e27408abc78e0c9402333552efc4238fe4935a9f3b80d3",
+      "commit": "42a2445cc22aaeb9d627dcb072a1725b52364666",
+      "treeMatches": true
+    },
+    {
+      "tag": "v0.2.9",
+      "format": "tar",
+      "files": 553,
+      "bytes": 8646414,
+      "sha256": "aae44ff4552a3a897f02b3e5949535685a60877195d6642fccd22d39cf715723",
+      "commit": "42a2445cc22aaeb9d627dcb072a1725b52364666",
+      "treeMatches": true
+    }
+  ],
+  "knownLimitations": {
+    "oldCommitStillAddressableByKnownSha": true,
+    "oldCommitAnonymousHttpStatus": 200,
+    "serverSideOldObjectPurgeCompleted": false,
+    "githubSupportContacted": false,
+    "unknownSecretsExhaustivelyExcluded": false
+  },
+  "centralDeploymentChanged": false,
+  "clientPackagesRebuilt": false
+}
