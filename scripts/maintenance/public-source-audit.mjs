@@ -14,7 +14,11 @@ const rules = {
   'private-network': /\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/g,
   'literal-secret': /(?:password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|device[_-]?token|private[_-]?key)\s*["']?\s*[:=]\s*["'][^"'\r\n]{8,}["']/gi,
 };
-const history = process.argv.includes('--history');
+// A local clone may intentionally retain private stash/worktree/remote refs.
+// Audit only the refs intended for publication when checking a rewrite.
+const publishableHistory = process.argv.includes('--publishable-history');
+const history = publishableHistory || process.argv.includes('--history');
+const historyRefs = publishableHistory ? ['--branches', '--tags'] : ['--all'];
 const findings = [];
 let scanned = 0, binarySkipped = 0;
 function scan(bytes, location) {
@@ -31,8 +35,8 @@ const tracked = git(['ls-files', '-z']).toString('utf8').split('\0').filter(Bool
 for (const file of tracked) scan(readFileSync(file), {scope: 'worktree', file});
 let commits = 0, objects = 0;
 if (history) {
-  commits = Number(git(['rev-list', '--count', '--all']).toString().trim());
-  const entries = git(['rev-list', '--objects', '--all']).toString('utf8').trim().split('\n').map(line => {
+  commits = Number(git(['rev-list', '--count', ...historyRefs]).toString().trim());
+  const entries = git(['rev-list', '--objects', ...historyRefs]).toString('utf8').trim().split('\n').map(line => {
     const space = line.indexOf(' ');
     return {id: space < 0 ? line : line.slice(0, space), file: space < 0 ? undefined : line.slice(space + 1)};
   });
@@ -55,8 +59,8 @@ if (history) {
 }
 const counts = {};
 for (const f of findings) counts[`${f.scope}:${f.category}`] = (counts[`${f.scope}:${f.category}`] ?? 0) + 1;
-const report = {heuristicOnly: true, trackedFiles: tracked.length, commits, objects, scanned, binarySkipped, counts, findings};
-const output = path.resolve('artifacts/open-source-private', history ? 'history-audit.json' : 'worktree-audit.json');
+const report = {heuristicOnly: true, historyScope: history ? (publishableHistory ? 'branches-and-tags' : 'all-local-refs') : null, trackedFiles: tracked.length, commits, objects, scanned, binarySkipped, counts, findings};
+const output = path.resolve('artifacts/open-source-private', publishableHistory ? 'publishable-history-audit.json' : history ? 'history-audit.json' : 'worktree-audit.json');
 mkdirSync(path.dirname(output), {recursive: true});
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify({...report, findings: undefined, output: path.relative(process.cwd(), output)}));
