@@ -1,0 +1,37 @@
+name: Runtime signing checks
+
+on:
+  push:
+    paths:
+      - .github/workflows/runtime-signing-check.yml
+      - scripts/release/publish-runtime-update.mjs
+      - scripts/release/runtime-publisher.mjs
+      - scripts/release/runtime-release-artifact.mjs
+      - scripts/release/runtime-signature.mjs
+      - tests/smoke/runtime-release.test.mjs
+      - tests/smoke/runtime-publisher.test.mjs
+  pull_request:
+    paths:
+      - .github/workflows/runtime-signing-check.yml
+      - scripts/release/**
+      - tests/smoke/runtime-release.test.mjs
+      - tests/smoke/runtime-publisher.test.mjs
+  workflow_dispatch:
+
+# Disposable keys only. No protected environment, inherited secrets or publishing.
+permissions:
+  contents: read
+jobs:
+  signing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - name: Real signing and offline publication fault checks
+        run: node --test tests/smoke/runtime-release.test.mjs tests/smoke/runtime-publisher.test.mjs
