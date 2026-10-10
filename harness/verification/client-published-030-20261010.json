@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-10",
+  "version": "0.3.0",
+  "sourceCommit": "44b2c458588d5e965a47d49d9ed739f71af08780",
+  "tag": "v0.3.0",
+  "releaseUrl": "https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.0",
+  "assets": [
+    {
+      "file": "yuanzhou-0.3.0-windows-x64-setup.exe",
+      "bytes": 7061471,
+      "sha256": "f367571f28641d888877558cb2ee9e00c4711030b4f6650edf7ea01bb829e9f1",
+      "anonymousDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.0-windows-x64-setup.exe.sig",
+      "bytes": 416,
+      "sha256": "bf7ef151fb14544345abc87335f852395a3f4b25a56d68e372366e54d092fd43",
+      "anonymousDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.0-aarch64.app.tar.gz",
+      "bytes": 9542874,
+      "sha256": "9caed9afe903260cadc755549d8520f84a7dd72d56fd7563da38db6afdb5d00b",
+      "anonymousDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.0-aarch64.app.tar.gz.sig",
+      "bytes": 424,
+      "sha256": "6a552e21c1a61eabf0a834c7b29d00e4a9c1f7d0029bfaf6da50304747f8b9fc",
+      "anonymousDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.0-macos-aarch64.dmg",
+      "bytes": 10365821,
+      "sha256": "7a50385480e5ad6ee28300a59981eac4cce1f193896e4060b3042a0d66a54c54",
+      "anonymousDownloadVerified": true
+    },
+    {
+      "file": "SHA256SUMS.txt",
+      "bytes": 513,
+      "sha256": "ae68a5d0152672260c04c08d35c3e43d135d452ebafd51e2ccd95add46febd07",
+      "anonymousDownloadVerified": true
+    }
+  ],
+  "checks": {
+    "desktopTypecheck": true,
+    "desktopViteBuild": true,
+    "clientUpdateProtocolSmoke": true,
+    "clientUpdateUiSmoke": true,
+    "taskControlUiSmoke": true,
+    "imageStateUiSmoke": true,
+    "windowsReleaseBuild": true,
+    "windowsStaticCrtAndGuiSubsystem": true,
+    "macosArm64ReleaseBuild": true,
+    "macosAdhocCodesignAndDmgVerification": true,
+    "fixedUpdaterPublicKeyVerification": true,
+    "knownPrivateBuildPatternScan": true,
+    "gitTagMatchesBuildSource": true,
+    "githubAnonymousDownloads": true,
+    "centralAuthenticatedDownloads": true,
+    "lanCaAndAuthenticatedDownloads": true,
+    "temporaryDevicesRevoked": true
+  },
+  "deployment": {
+    "clientUpdateChannelVersion": "0.3.0",
+    "centralServiceRestarted": false,
+    "previousVersionPrivatelyArchived": "0.2.9"
+  },
+  "limits": [
+    "Windows installer has no OS publisher signature.",
+    "macOS uses ad-hoc signing and is not notarized.",
+    "No new installed-client end-to-end upgrade, full chat or lifecycle acceptance in this release task.",
+    "Private build pattern checks are heuristic, not a proof of absence of secrets."
+  ]
+}
