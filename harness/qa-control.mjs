@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaRoot, remoteNode, qaHost, qaAuthFile} from '../scripts/maintenance/operator-config.mjs';
 // Developer-only lifecycle control for the explicitly authorized central 4529 QA.
 // This is never part of client execution or the product routing path.
 import assert from 'node:assert/strict';
@@ -9,8 +10,8 @@ import { join } from 'node:path';
 import https from 'node:https';
 
 assert.equal(process.platform, 'darwin', 'Run on the central Mac only');
-const qa = '/Users/operator/central-harness-qa-20260909';
-const node = '/Users/operator/central-codex-platform/artifacts/macos-tools/node/bin/node';
+const qa = qaRoot();
+const node = remoteNode();
 const binary = join(qa, 'codex-3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/target/debug/codex-app-server');
 const rc = process.argv.includes('--rc');
 const tokenQa = process.argv.includes('--token');
@@ -40,8 +41,8 @@ const children = pid => pids(command('/usr/bin/pgrep',['-P',String(pid)]));
 const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
 const health = async port => {
   const mtls = action.startsWith('start') ? action === 'start-mtls' : (load()?.mtls || load()?.token);
-  if(port===4529 && (['start-secure','start-workers','start-isolated','start-mtls'].includes(action)||load()?.secure))return new Promise(resolve=>{const req=https.get(`https://192.0.2.10:${port}/healthz`,{ca:readFileSync(join(qa,mtls?`${mtlsSecurity}/server-ca.pem`:'p5-security/cert.pem')),timeout:3000},res=>{let raw='';res.on('data',d=>raw+=d);res.on('end',()=>{try{resolve(JSON.parse(raw));}catch{resolve(null);}});});req.on('error',()=>resolve(null));req.on('timeout',()=>{req.destroy();resolve(null);});});
-  try { return await (await fetch(`http://192.0.2.10:${port}/healthz`,{signal:AbortSignal.timeout(3000)})).json(); } catch { return null; }
+  if(port===4529 && (['start-secure','start-workers','start-isolated','start-mtls'].includes(action)||load()?.secure))return new Promise(resolve=>{const req=https.get(`https://${qaHost()}:${port}/healthz`,{ca:readFileSync(join(qa,mtls?`${mtlsSecurity}/server-ca.pem`:'p5-security/cert.pem')),timeout:3000},res=>{let raw='';res.on('data',d=>raw+=d);res.on('end',()=>{try{resolve(JSON.parse(raw));}catch{resolve(null);}});});req.on('error',()=>resolve(null));req.on('timeout',()=>{req.destroy();resolve(null);});});
+  try { return await (await fetch(`http://${qaHost()}:${port}/healthz`,{signal:AbortSignal.timeout(3000)})).json(); } catch { return null; }
 };
 const load = () => existsSync(statePath) ? JSON.parse(readFileSync(statePath,'utf8')) : null;
 const save = state => writeFileSync(statePath,JSON.stringify(state,null,2)+'\n',{mode:0o600});
@@ -72,13 +73,13 @@ if(['start','start-secure','start-workers','start-isolated','start-mtls'].includ
   assert.equal(createHash('sha256').update(readFileSync(binary)).digest('hex'),'673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88','Fork fingerprint mismatch');
   const log=openSync(join(qa,'live-gateway.log'),'a',0o600);
   const processHandle=spawn(node,['services/central-gateway/dist/index.js'],{cwd,detached:true,stdio:['ignore',log,log],env:{...process.env,
-    TEST_GATEWAY_HOST:'192.0.2.10',TEST_GATEWAY_PORT:'4529',TEST_GATEWAY_STATE_FILE:join(qa,action==='start-mtls'?mtlsState:action==='start-isolated'?'live-data/p5-isolated-state.json':action==='start-workers'?'live-data/p5-workers-state.json':action==='start-secure'?'live-data/p5-state.json':'live-data/state.json'),
+    TEST_GATEWAY_HOST:qaHost(),TEST_GATEWAY_PORT:'4529',TEST_GATEWAY_STATE_FILE:join(qa,action==='start-mtls'?mtlsState:action==='start-isolated'?'live-data/p5-isolated-state.json':action==='start-workers'?'live-data/p5-workers-state.json':action==='start-secure'?'live-data/p5-state.json':'live-data/state.json'),
     ...(['start-secure','start-workers','start-isolated','start-mtls'].includes(action)?{PLATFORM_AUTH_FILE:join(qa,action==='start-mtls'?`${mtlsSecurity}/auth.json`:action==='start-isolated'?'p5-isolated-security/auth.json':action==='start-workers'?'p5-workers-security/auth.json':'p5-security/auth.json'),PLATFORM_TLS_CERT:join(qa,'p5-security/cert.pem'),PLATFORM_TLS_KEY:join(qa,'p5-security/key.pem')}:{}),
     ...(action==='start-workers'?{PLATFORM_WORKER_ROOT:join(qa,'live-data/workers'),PLATFORM_AUDIT_DIR:join(qa,'live-data/p5-workers-audit'),PLATFORM_USER_TURNS:'1',PLATFORM_TOTAL_TURNS:'2',PLATFORM_MAX_WORKERS:'3'}:{}),
     ...(action==='start-isolated'?{PLATFORM_WORKER_ROOT:join(qa,'live-data/isolated-workers'),PLATFORM_AUDIT_DIR:join(qa,'live-data/p5-isolated-audit'),PLATFORM_MODEL_BINDINGS:join(qa,'p5-isolated-security/models.json'),PLATFORM_WORKER_BINARY:binary,PLATFORM_WORKER_BINARY_SHA256:'673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88',PLATFORM_USER_TURNS:'1',PLATFORM_TOTAL_TURNS:'2',PLATFORM_MAX_WORKERS:'3'}:{}),
     ...(action==='start-mtls'?{PLATFORM_TLS_CERT:join(qa,`${mtlsSecurity}/server.pem`),PLATFORM_TLS_KEY:join(qa,`${mtlsSecurity}/server-key.pem`),PLATFORM_WORKER_ROOT:join(qa,mtlsWorkers),PLATFORM_AUDIT_DIR:join(qa,mtlsAudit),PLATFORM_MODEL_BINDINGS:join(qa,`${mtlsSecurity}/models.json`),PLATFORM_DEVICE_AUTH_MODE:tokenQa?'device-token-v1':'legacy-mtls-v1',...(!tokenQa?{PLATFORM_DEVICE_CA_CONFIG:join(qa,`${mtlsSecurity}/device-ca/device-ca.json`)}:{}),PLATFORM_WORKER_BINARY:binary,PLATFORM_WORKER_BINARY_SHA256:'673a2705de80016e2a61ecd7f7f469532bc650bf8b5bf827b4c1fc1f753d9d88',PLATFORM_USER_TURNS:'1',PLATFORM_TOTAL_TURNS:'2',PLATFORM_MAX_WORKERS:'3'}:{}),
     TEST_GATEWAY_ENABLE_CONTROLS:'1',TEST_GATEWAY_ENABLE_HISTORY_FIXTURES:'1',CODEX_BIN:join(qa,'launch-central.sh'),CODEX_REMOTE_BINARY:binary,
-    CODEX_HOME:join(qa,'live-home'),CODEX_REMOTE_WORKER_DIR:worker,CODEX_REMOTE_AUTH_FILE:'/Users/operator/.codex/auth.json',
+    CODEX_HOME:join(qa,'live-home'),CODEX_REMOTE_WORKER_DIR:worker,CODEX_REMOTE_AUTH_FILE:qaAuthFile(),
     CODEX_REFRESH_TOKEN_URL_OVERRIDE:'disabled://read-only-shared-auth',CODEX_REVOKE_TOKEN_URL_OVERRIDE:'disabled://read-only-shared-auth'}});
   closeSync(log); processHandle.unref();
   await new Promise((resolve,reject)=>{processHandle.once('spawn',resolve);processHandle.once('error',reject);});

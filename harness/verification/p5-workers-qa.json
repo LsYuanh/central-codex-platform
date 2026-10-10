@@ -155,5 +155,6 @@
     "Legacy shared history requires explicit recoverable migration",
     "Audit is single-writer and has no automated retention policy",
     "macOS native client was not tested in this Windows acceptance"
-  ]
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

@@ -1,5 +1,7 @@
 # Central QA authentication lifecycle
 
+> 公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。
+
 > This describes the historical read-only QA authentication mode. Current managed central authentication and shared-login renewal are documented in the [model authentication manual](../docs/模型认证维护手册.md).
 
 This is the 2026-09-09 fixed-source follow-up, not production credential management.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Actual App + adapter; loopback protocol fixture, never a production Thread.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/thread-delete-ui-'));
 let mode='legacy',deleted=false,pendingDelete;let threadName='删除回归临时对话';const calls=[],unexpected=[];
 const gateway=new WebSocketServer({host:'127.0.0.1',port:0});await new Promise(r=>gateway.once('listening',r));

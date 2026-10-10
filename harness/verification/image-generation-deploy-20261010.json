@@ -2,7 +2,10 @@
   "date": "2026-10-10",
   "authorization": "User requested updating the central service in this conversation",
   "sourceBaseCommit": "8a74404",
-  "sourceOverlays": ["central application version 0.1.4", "generated runtime catalog pin"],
+  "sourceOverlays": [
+    "central application version 0.1.4",
+    "generated runtime catalog pin"
+  ],
   "deployed": true,
   "appVersion": "0.1.4",
   "runtimeVersion": "0.156.1",
@@ -36,16 +39,37 @@
     "report": "target/image-generation-live-mUKKc1/result.json",
     "bytes": 1253015,
     "sha256": "188f2ae37d11270b7424badfe681989aab06b5c936aab83653a5bf2a0c711173",
-    "checks": ["builtin skill available", "generation and save states", "local file hash matches", "history resume preserves version"],
+    "checks": [
+      "builtin skill available",
+      "generation and save states",
+      "local file hash matches",
+      "history resume preserves version"
+    ],
     "testDeviceRevoked": true
   },
-  "finalObservation": {"devices": 3, "clients": 3, "activeTurns": 0, "model": "ready"},
-  "centralBackup": "/Users/operator/central-codex-platform/artifacts/imagegen-deploy-20261010",
-  "backupContents": ["previous.app (0.1.3)", "complete stopped profile-before", "build and deployment reports"],
+  "finalObservation": {
+    "devices": 3,
+    "clients": 3,
+    "activeTurns": 0,
+    "model": "ready"
+  },
+  "centralBackup": "/Users/operator/central-codex-platform/artifacts/private-deployment",
+  "backupContents": [
+    "previous.app (0.1.3)",
+    "complete stopped profile-before",
+    "build and deployment reports"
+  ],
   "automaticRollbackTriggered": false,
   "privateBackupsDownloaded": false,
   "clientInstallerReleased": false,
   "clientUpdateChannelVersion": "0.2.9",
   "pushedToGitRemote": false,
-  "remainingLimitations": ["real uploaded-reference editing", "Mac work client", "full live desktop chat UI", "0.159.2 image adaptation", "client installer upgrade"]
+  "remainingLimitations": [
+    "real uploaded-reference editing",
+    "Mac work client",
+    "full live desktop chat UI",
+    "0.159.2 image adaptation",
+    "client installer upgrade"
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

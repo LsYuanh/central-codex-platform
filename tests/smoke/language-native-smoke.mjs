@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Run only with an isolated com.centralcodex.harnessqa.language development binary.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
@@ -9,7 +10,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 const exe=process.env.LANGUAGE_NATIVE_EXE;assert(exe,'Set LANGUAGE_NATIVE_EXE to the isolated QA executable');
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 async function chooseLanguage(page, label) {
  await page.locator('#desktop-language').click();
  await page.getByRole('option',{name:label,exact:true}).click();

@@ -112,13 +112,14 @@ fn prepare_formal_macos_profile() {
         config::read(&root).unwrap().config.is_none(),
         "existing configuration must be managed through UI"
     );
-    let certificate =
-        tls::import_directory(&root, &tls_dir, "wss://192.0.2.10:4510/ws").unwrap();
+    let gateway =
+        std::env::var("CENTRAL_FORMAL_GATEWAY").expect("explicit formal gateway required");
+    let certificate = tls::import_directory(&root, &tls_dir, &gateway).unwrap();
     let account = model_accounts::import_existing(&root).unwrap();
     let data = root.join("central-data");
     let _saved=config::save(&root,"macos-formal-first-config".into(),0,serde_json::json!({
         "schemaVersion":1,"revision":0,"dataDirectory":data,"listen":{"host":"0.0.0.0","port":4510},
-        "clientUrl":"wss://192.0.2.10:4510/ws","tls":{"certificateId":certificate.certificate_id},"runtimePackageId":package,
+        "clientUrl":gateway,"tls":{"certificateId":certificate.certificate_id},"runtimePackageId":package,
         "limits":{"maxWorkers":8,"perUserTurns":2,"totalTurns":8},"shutdown":{"graceMs":20000,"forceMs":5000}
     })).unwrap();
     let _data_lock = platform_security::central_secret_store::lock_runtime_root(&data).unwrap();

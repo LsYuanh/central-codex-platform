@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaHost, sshKey, sshTarget, remoteCommand, remoteRoot} from '../../scripts/maintenance/operator-config.mjs';
 // Real Windows credential vault + TLS + Agent; local App Server is an explicitly labelled protocol fixture.
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
@@ -28,7 +29,7 @@ await writeFile(extensions,'basicConstraints=critical,CA:FALSE\nkeyUsage=critica
 openssl(['req','-new','-newkey','rsa:2048','-nodes','-keyout',key,'-out',csr,'-subj','/CN=localhost']);
 openssl(['x509','-req','-in',csr,'-CA',cert,'-CAkey',rootKey,'-set_serial','1','-days','2','-out',serverCert,'-extfile',extensions]);
 }
-const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const localPort=probe.address().port;await new Promise(r=>probe.close(r));const port=central?4529:localPort,host=central?'192.0.2.10':'localhost';const gateway=`wss://${host}:${port}/ws`;
+const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const localPort=probe.address().port;await new Promise(r=>probe.close(r));const port=central?4529:localPort,host=central?qaHost():'localhost';const gateway=`wss://${host}:${port}/ws`;
 if(central){cert=resolve(mtlsQa?'target/harness-deploy/p5-mtls-server-ca.pem':'target/harness-deploy/p5-central-ca.pem');const read=spawnSync(resolve('target/harness-agent/debug/examples/platform-acceptance.exe'),[],{input:JSON.stringify({namespace:'com.centralcodex.harnessqa.p5.bootstrap',gateway,action:'fixture-get'}),encoding:'utf8',windowsHide:true});assert.equal(read.status,0,read.stderr);password=JSON.parse(read.stdout).data.password;}
 const ca=await readFile(cert);
 const localUsers=[];
@@ -47,7 +48,7 @@ const record=name=>{checks.push(name);console.log('PASS '+name);};
 function getAdmin(path,token){return new Promise((resolve,reject)=>{const req=https.get(`https://${host}:${port}${path}`,{ca,agent:false,headers:{Authorization:'Bearer '+token}},res=>{let raw='';res.on('data',d=>raw+=d);res.on('end',()=>{try{const v=JSON.parse(raw);if(!v.ok)throw Error(v.error);resolve(v);}catch(e){reject(e);}});});req.on('error',reject);});}
 function control(action,userId=''){
  assert(central&&workerQa);assert(['crash-user','stop','start-workers','start-isolated','start-mtls','model-disable','model-enable'].includes(action));if(userId)assert(/^[a-f0-9-]{36}$/.test(userId));
- const result=spawnSync('ssh.exe',['-i','C:/Users/developer/.ssh/id_ed25519','-o','BatchMode=yes','operator@192.0.2.10',`/Users/operator/central-codex-platform/artifacts/macos-tools/node/bin/node /Users/operator/central-harness-qa-20260909/qa-control.mjs ${action} ${userId}`],{encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);
+ const result=spawnSync('ssh.exe',['-i',sshKey(),'-o','BatchMode=yes',sshTarget(),remoteCommand(`${remoteRoot()}/harness/qa-control.mjs`, [action, ...(userId ? [userId] : [])])],{encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);
 }
 try{
  if(!central){start();await until(()=>gatewayLog.includes('listening'),'TLS gateway ready');}

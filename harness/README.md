@@ -1,5 +1,7 @@
 # Central Codex harness fork
 
+> 公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。
+
 > Maintenance note (2026-09-20): build and probe details below include historical P0/QA stages. Windows central integration now exists; current deployment and unresolved qualification limits are in the [central manual](../docs/中央管理维护手册.md) and [validation guide](../docs/验证与已知限制.md).
 
 This is a fixed-source dependency and an auditable patch for the existing gateway,

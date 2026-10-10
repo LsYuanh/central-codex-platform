@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Actual Tauri WebView; use a debug binary built with the isolated QA identifier.
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
@@ -7,7 +8,7 @@ import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
 export async function runSkillsUi({root,client,bundle}){
- const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
  const output=join(root,'ui');await mkdir(output);
  const env={...process.env,WEBVIEW2_USER_DATA_FOLDER:join(root,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:'--remote-debugging-port=19337',CODEXIA_WORKSPACE_ROOT:client.workspace,CODEXIA_LOCAL_AGENT_PATH:resolve('target/debug/local-agent.exe')};delete env.CODEXIA_GATEWAY_AGENT_URL;
  const app=spawn(resolve('target/debug/desktop-spike.exe'),[],{env,windowsHide:true,stdio:'ignore'});let browser,page,closed=false;app.once('exit',()=>closed=true);

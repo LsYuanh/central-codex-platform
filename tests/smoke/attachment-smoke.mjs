@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {required} from '../../scripts/maintenance/operator-config.mjs';
 // Real gateway only. Fixture files live OUTSIDE the configured workspace.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -10,7 +11,7 @@ import { deflateSync } from "node:zlib";
 import { WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 import { localAgentExecutable } from "./client-smoke-platform.mjs";
-const url=new URL(process.env.ATTACHMENT_GATEWAY_URL??"ws://192.0.2.10:4510/ws");
+const url=new URL(required('ATTACHMENT_GATEWAY_URL'));
 const deviceId=`attachment-smoke-${randomUUID()}`;url.searchParams.set("deviceId",deviceId);url.searchParams.set("userId",deviceId);
 const agentUrl=new URL(url);agentUrl.pathname="/ws/agent";
 const dir=mkdtempSync(join(tmpdir(),"codexia-attachment-smoke-"));

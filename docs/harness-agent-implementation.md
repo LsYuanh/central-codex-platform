@@ -1,5 +1,7 @@
 # Harness Local Agent implementation and verification — 2026-09-09
 
+> 公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。
+
 > Historical implementation reference. For client-paths/v1 Agents, workspaceRoot is a default output directory, not an access boundary. Current path/patch negotiation is specified in [AgentRPC](../AGENTRPC.md) and the [client manual](客户端维护手册.md).
 
 Implementation is integrated into the existing `crates/local-agent`.

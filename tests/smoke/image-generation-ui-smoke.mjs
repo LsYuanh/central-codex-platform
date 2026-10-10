@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Actual OutputCard in browser or isolated Tauri WebView; state fixtures only.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
@@ -8,7 +9,7 @@ import {spawn} from 'node:child_process';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 const native=process.env.IMAGE_NATIVE_EXE;
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/image-ui-')),source=resolve('apps/desktop/src').replaceAll('\\','/');
 await writeFile(join(output,'index.html'),'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/fixture.tsx"></script></html>');
 await writeFile(join(output,'fixture.tsx'),`import React from 'react';import{createRoot}from'react-dom/client';import{OutputCard}from'${source}/outputs.tsx';import{i18n}from'${source}/i18n.ts';import '${source}/styles.css';window.setLanguage=l=>i18n.changeLanguage(l);document.documentElement.dataset.theme='light';document.body.style.overflow='auto';document.body.style.background='var(--canvas)';window.retries=0;const data={threadId:'t',deviceId:'d',source:'generatedImage',kind:'image',name:'generated-image.png'};createRoot(document.getElementById('root')).render(<main style={{maxWidth:700,padding:24,margin:'auto'}}>{['generating','generationFailed','saving','failed'].map((status,i)=><div key={status} style={{marginBottom:24}}><OutputCard output={{...data,id:String(i),status,error:status==='generationFailed'?'图片生成已中断，请在对话中重新提出生成请求':status==='failed'?'来源设备离线，请连接后重试保存':undefined}} retry={async()=>{window.retries++}}/></div>)}</main>);`);

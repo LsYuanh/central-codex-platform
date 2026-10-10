@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {remoteRoot, sshTarget, formalGateway, sshKey, remoteCommand} from '../../scripts/maintenance/operator-config.mjs';
 // Explicit operator acceptance against the authorized central LAN endpoint.
 // SSH manages test pairing only; inference/client runtime still uses WSS+Local Agent.
 import {spawn,execFileSync} from 'node:child_process';
@@ -9,15 +10,15 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 if(process.platform!=='win32')throw Error('WINDOWS_REQUIRED');
 const model=process.env.CENTRAL_QA_MODEL??'gpt-6-astra';
 if(!['gpt-6-astra','gpt-6-sol'].includes(model))throw Error('INVALID_QA_MODEL');
-const remote='/Users/operator/central-codex-platform';
+const remote=remoteRoot();
 // The deployed Mac checkout is migrated separately from this local workspace.
-const remoteLayout=process.env.CENTRAL_REMOTE_SOURCE_LAYOUT??'legacy';
+const remoteLayout=process.env.CENTRAL_REMOTE_SOURCE_LAYOUT??'root';
 if(!['legacy','root'].includes(remoteLayout))throw Error('INVALID_REMOTE_SOURCE_LAYOUT');
 const remoteManagement=remoteLayout==='root'?'scripts/maintenance/macos-formal-management.mjs':'spikes/local-dev/scripts/macos-formal-management.mjs';
-const sshArgs=['-i',path.join(process.env.USERPROFILE,'.ssh/id_ed25519'),'-o','BatchMode=yes','operator@192.0.2.10'];
+const sshArgs=['-i',sshKey(),'-o','BatchMode=yes',sshTarget()];
 function management(action,id){
   if(id&&!/^[a-f0-9-]{36}$/.test(id))throw Error('INVALID_DEVICE_ID');
-  const command=`${remote}/artifacts/macos-tools/node/bin/node ${remote}/${remoteManagement} ${action}${id?' '+id:''}`;
+  const command=remoteCommand(`${remote}/${remoteManagement}`, [action, ...(id ? [id] : [])], {formal:true});
   const bytes=execFileSync('ssh.exe',[...sshArgs,command],{windowsHide:true,timeout:30000,maxBuffer:65536});
   try{return JSON.parse(bytes);}finally{bytes.fill(0);}
 }
@@ -38,7 +39,7 @@ const pair=management(bundled?'pair-bundle':'pair');
 // for the observed sub-second central clock lead without changing code expiry.
 if(bundled)await new Promise(resolve=>setTimeout(resolve,2000));
 const child=spawn(process.execPath,[path.join(root,'scripts/maintenance/central-live-client-qa.mjs'),'--formal-4510'],{cwd:root,stdio:['pipe','pipe','pipe'],windowsHide:true});
-const config={gateway:'wss://192.0.2.10:4510/ws',caPath:bundled?'':path.join(root,'target/central-macos/formal-ca.pem'),code:pair.code,agentBinary:legacyWorkspace?path.resolve(root,'artifacts/client-paths-20260914/windows-installed-before/local-agent.exe'):installed?path.join(process.env.LOCALAPPDATA,'远舟/local-agent.exe'):path.join(root,'target/debug/local-agent.exe'),helperBinary:path.join(root,'target/debug/examples/central-live-client.exe'),workspace:path.join(output,'workspace'),output:path.join(output,'client-result.json'),model,legacyWorkspace};
+const config={gateway:formalGateway(),caPath:bundled?'':path.join(root,'target/central-macos/formal-ca.pem'),code:pair.code,agentBinary:legacyWorkspace?path.resolve(root,'artifacts/client-paths-20260914/windows-installed-before/local-agent.exe'):installed?path.join(process.env.LOCALAPPDATA,'远舟/local-agent.exe'):path.join(root,'target/debug/local-agent.exe'),helperBinary:path.join(root,'target/debug/examples/central-live-client.exe'),workspace:path.join(output,'workspace'),output:path.join(output,'client-result.json'),model,legacyWorkspace};
 if(projects)config.projects=true;
 if(skills)config.skills=true;
 if(creator)config.creator=creator;

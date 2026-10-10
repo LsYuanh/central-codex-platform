@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Real desktop App and RPC adapter, isolated protocol fixture (no model/real files).
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/task-control-ui-'));
 let capabilities={planMode:true,goals:true};
 let delayGoalRead=false;

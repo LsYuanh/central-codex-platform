@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
@@ -12,7 +13,7 @@ import { localAgentExecutable } from './client-smoke-platform.mjs';
 
 // Native mode requires a development binary built with an isolated TAURI_CONFIG identifier.
 const native = process.argv.includes('--native');
-const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE ?? 'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target', { recursive: true });
 const output = await mkdtemp(resolve('target/markdown-ui-'));
 const source = resolve('apps/desktop/src').replaceAll('\\', '/');

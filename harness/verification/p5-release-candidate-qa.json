@@ -2,7 +2,14 @@
   "date": "2026-09-09",
   "status": "historical-windows-complete-macos-mtls-superseded-by-device-token-direction",
   "supersededBy": "docs/简化设备认证实施与验收-2026-09-09.md",
-  "qaCleanup": {"gateway904Stopped": true, "port4529Closed": true, "qaSessionsRevoked": 7, "qaDevicesRevoked": 2, "production4510Pid": 90685, "productionSequenceAtCleanup": 6987},
+  "qaCleanup": {
+    "gateway904Stopped": true,
+    "port4529Closed": true,
+    "qaSessionsRevoked": 7,
+    "qaDevicesRevoked": 2,
+    "production4510Pid": 90685,
+    "productionSequenceAtCleanup": 6987
+  },
   "artifacts": [
     {
       "name": "远舟 RC 20260909_0.2.0-rc.1_x64-setup.exe",
@@ -73,5 +80,6 @@
     "new device-token native Windows/macOS and real isolated gateway acceptance tracked separately",
     "real shared-history import and confirmed account/device ownership mapping",
     "remaining development QA bootstrap cleanup (central RC sessions/devices already revoked)"
-  ]
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

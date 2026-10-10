@@ -3,11 +3,18 @@
 """Capture/restore only the known pre-migration central gateway. Never print environment values."""
 import ctypes, json, os, pathlib, struct, subprocess, sys
 root = pathlib.Path(__file__).resolve().parents[2]
-directory = root / 'artifacts/central-macos/formal-migration-20260911'
+directory = pathlib.Path(os.environ['CENTRAL_FORMAL_DIRECTORY'])
+if not directory.is_absolute() or directory == pathlib.Path('/') or '..' in directory.parts:
+    raise RuntimeError('CENTRAL_FORMAL_DIRECTORY_INVALID')
 record = directory / 'rollback.json'
 assert sys.platform == 'darwin' and len(sys.argv) == 2
 if sys.argv[1] == 'capture':
-    pid = 90685
+    # Capture only the explicitly selected legacy process and working directory.
+    pid = int(os.environ['CENTRAL_LEGACY_GATEWAY_PID'])
+    if pid <= 1: raise RuntimeError('CENTRAL_LEGACY_GATEWAY_PID_INVALID')
+    cwd = pathlib.Path(os.environ['CENTRAL_LEGACY_GATEWAY_CWD'])
+    if not cwd.is_absolute() or not (cwd / 'dist/index.js').is_file():
+        raise RuntimeError('CENTRAL_LEGACY_GATEWAY_CWD_INVALID')
     libc = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)
     mib = (ctypes.c_int * 3)(1, 49, pid)  # CTL_KERN / KERN_PROCARGS2
     size = ctypes.c_size_t()
@@ -27,7 +34,7 @@ if sys.argv[1] == 'capture':
             env[key] = value.decode()
     assert env.get('TEST_GATEWAY_PORT', '4510') == '4510'
     # Historical deployment directory, independent of the current source layout.
-    value = {'pid':pid,'argv':argv,'env':env,'cwd':str(root / 'services/test-gateway')}
+    value = {'pid':pid,'argv':argv,'env':env,'cwd':str(cwd)}
     fd = os.open(record, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd,'w') as f: json.dump(value, f); f.flush(); os.fsync(f.fileno())
     print(json.dumps({'captured':True,'pid':pid,'environmentValuesPrinted':False}))

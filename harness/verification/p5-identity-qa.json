@@ -104,5 +104,6 @@
     "OS worker isolation and formal model credentials deferred",
     "durable comprehensive auth audit deferred",
     "installer and release deferred"
-  ]
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

@@ -320,5 +320,6 @@
     "Model configuration changes require a single serial operator writer",
     "Full mTLS, production history migration, installer/release and other central OS support remain separate",
     "No native desktop GUI launch this batch; native credential probes and real Agents tested, UI lifecycle evidence belongs to prior batch"
-  ]
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

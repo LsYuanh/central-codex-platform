@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {formalDirectory} from './operator-config.mjs';
 // Authorized installed-App quit/restart acceptance. Run only after test turns finish.
 import {readFile,writeFile,open,rename,copyFile} from 'node:fs/promises';
 import {execFileSync,spawn} from 'node:child_process';
@@ -8,7 +9,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const dir=path.join(root,'artifacts/central-macos/formal-migration-20260911');
+const dir=formalDirectory();
 const running=JSON.parse(await readFile(path.join(dir,'running-app.json'),'utf8'));
 const deployment=JSON.parse(await readFile(path.join(dir,'deployment.json'),'utf8'));
 const ca=await readFile(deployment.caPath);

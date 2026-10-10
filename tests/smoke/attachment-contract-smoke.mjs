@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {required} from '../../scripts/maintenance/operator-config.mjs';
 // Negative protocol cases against the REAL gateway; synthetic devices never execute a model turn.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import { createEnvelope } from "../../packages/agentrpc-types/dist/index.js";
-const base=process.env.ATTACHMENT_GATEWAY_URL??"ws://192.0.2.10:4510/ws";
+const base=required('ATTACHMENT_GATEWAY_URL');
 const userId=`attachment-contract-${randomUUID()}`;const deviceId=userId;
 const clients=[];const timeout=setTimeout(()=>{for(const client of clients)client.close();throw new Error("Contract smoke timed out");},30000);
 async function connect(device,agent=false){

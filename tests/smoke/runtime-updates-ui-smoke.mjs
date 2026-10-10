@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Isolated native Windows UI only: no config, account, runtime download or service launch.
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile} from 'node:fs/promises';
@@ -9,7 +10,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 assert(process.env.RUNTIME_UPDATE_QA_EXE,'Use a development binary with identifier com.centralcodex.harnessqa.runtimeupdates');
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/runtime-updates-ui-'));
 const server=await createServer({root:resolve('apps/central'),configFile:false,plugins:[react()],cacheDir:join(output,'.vite'),server:{host:'127.0.0.1',port:1424,strictPort:true,fs:{allow:[resolve('.')]}}});
 await server.listen();let child,browser;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Real skills UI with an in-memory service; no central changes or script execution.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
@@ -6,7 +7,7 @@ import {resolve,join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/skills-panel-'));
 const source=resolve('apps/desktop/src').replaceAll('\\','/');
 const description='扫描 Windows 系统盘常见垃圾，评估清理风险，生成待确认计划，并在明确授权后执行。';

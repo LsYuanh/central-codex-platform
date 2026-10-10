@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Exercises the existing settings components with memory-only synthetic IPC.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
-const {chromium}=await import(pathToFileURL(path.resolve(process.argv[2]??process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs')).href);
+const {chromium}=await loadPlaywright(process.argv[2] ?? process.env.PLAYWRIGHT_MODULE);
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 await mkdir(path.join(root,'target'),{recursive:true});const output=await mkdtemp(path.join(root,'target/pairing-ui-'));
 await writeFile(path.join(output,'index.html'),'<div id="root"></div><script type="module" src="/entry.tsx"></script>');

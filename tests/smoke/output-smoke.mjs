@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {required} from '../../scripts/maintenance/operator-config.mjs';
 // Real central gateway + independent native Agent. Only test files are used.
 import assert from "node:assert/strict";
 import {spawn} from "node:child_process";
@@ -13,7 +14,7 @@ import {deflateSync} from "node:zlib";
 import {localAgentExecutable,locationCommand,failureCommand} from "./client-smoke-platform.mjs";
 const deviceId=`output-smoke-${randomUUID()}`;
 const dir=mkdtempSync(join(tmpdir(),"codexia-output-smoke-"));const root=join(dir,"workspace");mkdirSync(root);
-const url=new URL(process.env.OUTPUT_GATEWAY_URL??"ws://192.0.2.10:4510/ws");url.searchParams.set("userId",deviceId);url.searchParams.set("deviceId",deviceId);
+const url=new URL(required('OUTPUT_GATEWAY_URL'));url.searchParams.set("userId",deviceId);url.searchParams.set("deviceId",deviceId);
 const agentUrl=new URL(url);agentUrl.pathname="/ws/agent";
 const agent=spawn(localAgentExecutable(),["--workspace-root",root,"--gateway-url",agentUrl.href,"--allow-insecure-lan","--attachment-stdio"],{stdio:["pipe","pipe","pipe"],windowsHide:true});
 let next=0;const localPending=new Map();const pending=new Map();const events=[];

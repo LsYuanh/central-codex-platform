@@ -1,5 +1,7 @@
 # Windows P0 网络观察探针
 
+> 公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。
+
 `windows-network-probe.cpp` 和 `windows-network-smoke.mjs` 仅用于 QA，不接入正式 Worker。每个目标先由宿主连接并验证合成 TCP echo，再由一次性 AppContainer 连接同一个数字 IP 和端口。受限进程的 token 必须为 AppContainer、capability 数量为 0；Job 配置 kill-on-close 与活动进程上限 1。只授予新建 QA 树的权限，不改祖先 ACL、防火墙、网络 capability 或 loopback exemption。
 
 宿主发送 ASCII `HOST_BASELINE_NETWORK_QA`，受限进程若连通则发送 `APPCONTAINER_NETWORK_QA`，均无换行。服务端原样回显。网络探针只接受 IPv4/IPv6 数字地址，未测试 DNS、UDP、任意互联网目标或所有网络接口。

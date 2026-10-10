@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {required} from '../../scripts/maintenance/operator-config.mjs';
 // Real Windows Agent + real gateway. No model turn and no encoding workaround
 // in the default PowerShell/cmd cases that originally produced garbled output.
 import assert from "node:assert/strict";
@@ -14,7 +15,7 @@ if (process.platform !== "win32") throw new Error("Run this Windows encoding acc
 const temp = mkdtempSync(join(tmpdir(), "codexia-command-encoding-"));
 const root = join(temp, "中文工作区"); mkdirSync(root);
 const deviceId = `encoding-smoke-${randomUUID()}`;
-const url = new URL(process.env.DEVICE_GATEWAY_URL ?? "ws://192.0.2.10:4510/ws");
+const url = new URL(required('DEVICE_GATEWAY_URL'));
 url.searchParams.set("userId", deviceId); url.searchParams.set("deviceId", deviceId);
 const agentUrl = new URL(url); agentUrl.pathname = "/ws/agent";
 const agent = spawn(localAgentExecutable(), ["--workspace-root", root, "--gateway-url", agentUrl.href, "--allow-insecure-lan"], { stdio:"ignore", windowsHide:true, detached:true });

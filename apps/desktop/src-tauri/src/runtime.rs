@@ -238,7 +238,8 @@ impl DesktopRuntime {
             computer
         };
         let default = DesktopConfig {
-            gateway_url: "ws://192.0.2.10:4510/ws".into(),
+            // Pairing replaces this documentation-only address before any Agent starts.
+            gateway_url: "wss://central.example:4510/ws".into(),
             user_id,
             device_id: format!("{computer}-{short_key}"),
             workspace_root: env::current_exe()
@@ -249,7 +250,7 @@ impl DesktopRuntime {
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_else(|| suggested_workspace.to_string_lossy().into_owned()),
         };
-        Self::with_options(path, default, suggested_workspace, !cfg!(debug_assertions))
+        Self::with_options(path, default, suggested_workspace, true)
     }
 
     #[cfg(test)]
@@ -533,7 +534,7 @@ mod tests {
     use super::*;
     #[test]
     fn route_and_identity_stay_together() {
-        let gateway_url = normalize_gateway(" ws://192.0.2.10:4510/ ", false).unwrap();
+        let gateway_url = normalize_gateway(" ws://central.example:4510/ ", false).unwrap();
         let config = DesktopConfig {
             gateway_url,
             user_id: "alice".into(),
@@ -542,11 +543,11 @@ mod tests {
         };
         assert_eq!(
             ui_url(&config),
-            "ws://192.0.2.10:4510/ws?userId=alice&deviceId=workstation-a"
+            "ws://central.example:4510/ws?userId=alice&deviceId=workstation-a"
         );
         assert_eq!(
             agent_url(&config),
-            "ws://192.0.2.10:4510/ws/agent?deviceId=workstation-a"
+            "ws://central.example:4510/ws/agent?deviceId=workstation-a"
         );
         let config = DesktopConfig {
             gateway_url: normalize_gateway("ws://localhost:4510/ws", false).unwrap(),
@@ -622,6 +623,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn first_configuration_does_not_start_agent_or_create_workspace() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("runtime.json");
+        let workspace = temp.path().join("workspace");
+        // Initial setup must remain passive even when the suggested fields are complete.
+        let runtime = DesktopRuntime::with_options(
+            config_path.clone(),
+            DesktopConfig {
+                gateway_url: "wss://central.example:4510/ws".into(),
+                user_id: "test-user".into(),
+                device_id: "test-device".into(),
+                workspace_root: workspace.to_string_lossy().into_owned(),
+            },
+            workspace.clone(),
+            true,
+        );
+        let view = runtime.view().await;
+        assert!(view.needs_setup && !view.running && !view.has_saved);
+        assert!(!config_path.exists() && !workspace.exists());
+    }
+
+    #[tokio::test]
     #[ignore = "requires built Local Agent via CODEXIA_LOCAL_AGENT_PATH; launches a distinct test device"]
     async fn runtime_process_integration() {
         assert!(env::var_os("CODEXIA_LOCAL_AGENT_PATH").is_some());
@@ -637,7 +660,7 @@ mod tests {
         let suggested_runtime = DesktopRuntime::with_options(
             suggested_path.clone(),
             DesktopConfig {
-                gateway_url: "ws://192.0.2.10:4510/ws".into(),
+                gateway_url: "ws://central.example:4510/ws".into(),
                 user_id: "automatic-user".into(),
                 device_id: format!("automatic-device-{}", std::process::id()),
                 workspace_root: suggested_root.to_string_lossy().into_owned(),
@@ -654,7 +677,7 @@ mod tests {
         drop(suggested_runtime);
         let path = temp.path().join("desktop-runtime-v1.json");
         let config = DesktopConfig {
-            gateway_url: "ws://192.0.2.10:4510/ws".into(),
+            gateway_url: "ws://central.example:4510/ws".into(),
             user_id: "runtime-smoke".into(),
             device_id: format!("runtime-smoke-{}", std::process::id()),
             workspace_root: root_a.to_string_lossy().into_owned(),

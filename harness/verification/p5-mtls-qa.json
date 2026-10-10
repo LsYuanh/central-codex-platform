@@ -409,5 +409,6 @@
     "Not deployed to formal4510 or installed clients",
     "macOS native desktop client not rerun in this batch; macOS central CA/permissions/TLS and Windows native client were verified",
     "CA trust-chain rotation and distribution remain an operator task"
-  ]
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

@@ -11,7 +11,6 @@ use std::{
 use tokio::{io::AsyncWriteExt, sync::mpsc, time};
 use tokio_tungstenite::tungstenite::Message;
 
-const GATEWAY: &str = "wss://192.0.2.10:4529/ws";
 const MAX_LINE: usize = 1024 * 1024;
 type Result<T> = std::result::Result<T, &'static str>;
 
@@ -83,7 +82,10 @@ async fn run() -> Result<()> {
         .ok_or("TOKEN_SOCKET_QA_SETUP_REQUIRED")??;
     let config: Config =
         serde_json::from_slice(&first).map_err(|_| "TOKEN_SOCKET_QA_SETUP_INVALID")?;
-    if config.gateway != GATEWAY
+    let host = std::env::var("CENTRAL_QA_HOST").map_err(|_| "CENTRAL_QA_HOST_REQUIRED")?;
+    let _: std::net::Ipv4Addr = host.parse().map_err(|_| "CENTRAL_QA_HOST_INVALID")?;
+    let gateway = format!("wss://{host}:4529/ws");
+    if config.gateway != gateway
         || !config.namespace.starts_with("com.centralcodex.harnessqa")
         || config.namespace.len() > 128
         || !config.directory.is_absolute()
@@ -93,9 +95,9 @@ async fn run() -> Result<()> {
         return Err("TOKEN_SOCKET_QA_SCOPE_REJECTED");
     }
     let credential =
-        platform_security::device_token::load(&config.directory, &config.namespace, GATEWAY)
+        platform_security::device_token::load(&config.directory, &config.namespace, &gateway)
             .map_err(|_| "TOKEN_SOCKET_QA_LOCAL_IDENTITY_UNAVAILABLE")?;
-    let mut socket = platform_security::socket(GATEWAY, &config.ca, credential.bearer())
+    let mut socket = platform_security::socket(&gateway, &config.ca, credential.bearer())
         .await
         .map_err(|_| "TOKEN_SOCKET_QA_CONNECT_FAILED")?;
     emit(&json!({"type":"qa.relay.ready","authMode":"device-token-v1","deviceId":credential.device_id,"deviceKey":credential.device_key,"userId":credential.user.id}), credential.bearer()).await?;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaGateway} from '../scripts/maintenance/operator-config.mjs';
 // Developer QA only. This process never reads/decrypts a device token and never
 // starts/stops an application/Agent or changes its pairing. The native relay owns WSS.
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ import {dirname,isAbsolute,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const namespace='com.centralcodex.harnessqa.rc20260909',gateway='wss://192.0.2.10:4529/ws';
+const namespace='com.centralcodex.harnessqa.rc20260909',gateway=qaGateway();
 const platform=process.platform,checks=[];
 const options={};
 for(let i=2;i<process.argv.length;i+=2){const key=process.argv[i];assert(['--helper','--phase'].includes(key)&&!(key in options)&&process.argv[i+1],'Usage: node harness/token-device-acceptance.mjs --helper /absolute/token-socket-qa --phase create|resume|repaired');options[key]=process.argv[i+1];}

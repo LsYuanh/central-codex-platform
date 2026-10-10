@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaGateway, qaOrigin, qaRoot} from '../scripts/maintenance/operator-config.mjs';
 // Developer QA only. This script never reads credential contents via security(1).
 // Usage: node rc-native-macos-qa.mjs prepare|start|status|cleanup
 //   --qa-root /absolute/new-run-directory --app /absolute/RC.app
@@ -13,7 +14,7 @@ import {homedir} from 'node:os';
 import {basename,dirname,isAbsolute,join,resolve} from 'node:path';
 
 const namespace='com.centralcodex.harnessqa.rc20260909';
-const gateway='wss://192.0.2.10:4529/ws',origin='https://192.0.2.10:4529';
+const gateway=qaGateway(),origin=qaOrigin();
 const names=['desktop-runtime-v1.json','platform-ca-v1.json'];
 const services=['platform-v1','device-tls-v1.key','device-tls-v1.certificate'].map(s=>`${namespace}.${s}`);
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -32,7 +33,7 @@ function certificate(value){return Object.fromEntries(['state','expiresAt','rene
 async function main(){
   assert.equal(process.platform,'darwin','This support script is macOS only');
   const {action,root,app,helper,ca}=parseArgs();
-  assert(root.startsWith('/Users/operator/central-harness-qa-20260909/'),'QA run directory must stay inside the approved isolated central QA root');
+  assert(root.startsWith(`${qaRoot()}/`),'QA run directory must stay inside the approved isolated central QA root');
   assert(basename(root).startsWith('rc-native-'),'Use a distinct rc-native-* run directory');
   directory(dirname(root));directory(app);regular(helper);regular(ca);
   const info=join(app,'Contents','Info.plist');regular(info);

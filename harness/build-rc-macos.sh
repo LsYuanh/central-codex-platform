@@ -3,13 +3,14 @@
 set -euo pipefail
 TOKEN_QA=false
 if [ "${1:-}" = "--token" ] && [ "$#" = 1 ]; then TOKEN_QA=true; elif [ "$#" != 0 ]; then exit 2; fi
-QA=/Users/operator/central-harness-qa-20260909
+QA="${CENTRAL_QA_ROOT:?Set an absolute isolated QA root}"
+[[ "$QA" = /* && "$QA" != / && "$QA" != *".."* ]] || exit 2
 cd "$QA/rc-client-source"
 test "$(pwd -P)" = "$QA/rc-client-source"
 export DEVELOPER_DIR=/Library/Developer/CommandLineTools
-export CARGO_HOME=/Users/operator/central-codex-platform/artifacts/macos-tools/cargo
-export RUSTUP_HOME=/Users/operator/central-codex-platform/artifacts/macos-tools/rustup
-export PATH=/Users/operator/central-codex-platform/artifacts/macos-tools/node/bin:$CARGO_HOME/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# Use the operator-provided Node/Rust toolchain on PATH.
+command -v node >/dev/null
+command -v cargo >/dev/null
 export CARGO_BUILD_JOBS=2
 export CARGO_TARGET_DIR="$QA/rc-client-source/target/desktop-rc-20260909"
 npm ci --ignore-scripts --no-audit --no-fund

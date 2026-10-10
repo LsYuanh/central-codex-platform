@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Frontend IPC regression; native tray/single-instance lifecycle also requires Windows/macOS QA.
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { pathToFileURL } from 'node:url';
-const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE ?? 'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 const built = await build({ entryPoints: ['tests/fixtures/tray-new-conversation-qa.tsx'], bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic' });
 const browser = await chromium.launch({ headless: true, channel: 'msedge' });
 try {

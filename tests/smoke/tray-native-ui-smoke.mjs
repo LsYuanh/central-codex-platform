@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Explicitly targets a running development WebView. Sends no model task, saves no settings.
 // Covers real Tauri event delivery/navigation; OS tray clicks are a separate manual check.
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 const endpoint = process.argv[2];
 assert(endpoint, 'Pass the development WebView CDP endpoint');
-const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE ?? 'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 const browser = await chromium.connectOverCDP(endpoint);
 try {
   const page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes('127.0.0.1:1420'));

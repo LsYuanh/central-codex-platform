@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Real App and adapter with an isolated loopback fixture; no user history is deleted.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/archived-chats-ui-'));
 const project={id:'project-qa',name:'设计项目',folders:['C:\\qa'],revision:1};
 let rows=Array.from({length:102},(_,i)=>({id:`archive-${i}`,name:i===101?'第二页项目聊天':i===0?'无项目聊天':`历史聊天 ${i}`,updatedAt:1758540000-i*60,archived:true,clientProject:i===101?project:undefined}));

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaGateway} from '../scripts/maintenance/operator-config.mjs';
 // Windows developer QA only. Executes only when explicitly invoked.
 // The native relay owns the token. This script reads no token/bootstrap contents.
 import assert from 'node:assert/strict';
@@ -13,7 +14,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 assert.equal(process.platform,'win32','Windows live revocation QA only');
 assert(process.argv.length===4&&process.argv[2]==='--helper','Usage: node harness/token-live-revocation.mjs --helper target/debug/examples/token-socket-qa.exe');
 const helper=resolve(root,process.argv[3]);assert.equal(helper,join(root,'target/debug/examples/token-socket-qa.exe'),'Use the fixed local QA relay helper');
-const namespace='com.centralcodex.harnessqa.rc20260909',gateway='wss://192.0.2.10:4529/ws';
+const namespace='com.centralcodex.harnessqa.rc20260909',gateway=qaGateway();
 assert(process.env.APPDATA&&isAbsolute(process.env.APPDATA),'Absolute APPDATA required');
 const qaRoot=join(root,'target/token-native-win32'),recordPath=join(qaRoot,'record.json'),workspace=join(qaRoot,'workspace');
 const directory=join(process.env.APPDATA,namespace),ca=join(root,'target/harness-deploy/p5-token-server-ca.pem');

@@ -60,7 +60,7 @@
     "activeTurns": 0,
     "model": "ready"
   },
-  "centralBackup": "/Users/operator/central-codex-platform/artifacts/image-edit-deploy-20261010",
+  "centralBackup": "/Users/operator/central-codex-platform/artifacts/private-deployment",
   "backupContents": [
     "previous.app (0.1.4)",
     "complete stopped profile-before"
@@ -76,5 +76,6 @@
     "Mac work client",
     "full installed-client chat UI",
     "0.159.2 image adaptation"
-  ]
+  ],
+  "publicationNote": "公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。"
 }

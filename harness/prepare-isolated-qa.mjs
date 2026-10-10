@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaRoot, qaAuthFile} from '../scripts/maintenance/operator-config.mjs';
 // Fixed central QA only: model login is read in place by the broker, never copied into a Worker.
 import {mkdirSync,existsSync,writeFileSync,lstatSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-const qa='/Users/operator/central-harness-qa-20260909',dir=qa+'/p5-isolated-security';
+const qa=qaRoot(),dir=qa+'/p5-isolated-security';
 assert.equal(process.platform,'darwin');assert(!existsSync(dir+'/auth.json'),'Preserve existing QA identities');
 mkdirSync(dir,{recursive:true,mode:0o700});
 let raw='';for await(const chunk of process.stdin){raw+=chunk;assert(raw.length<=8192);}
 const {PlatformAuth}=await import(qa+'/gateway/services/central-gateway/dist/platform-auth.js');
 const auth=new PlatformAuth(dir+'/auth.json'),input=JSON.parse(raw),users=[];
-const credential='/Users/operator/.codex/auth.json',stat=lstatSync(credential);
+const credential=qaAuthFile(),stat=lstatSync(credential);
 assert.equal(realpathSync(credential),credential);assert(stat.isFile()&&stat.nlink===1&&(stat.mode&0o077)===0);
 try{
  for(const username of ['isoalice','isobob']){

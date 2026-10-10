@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaGateway, qaOrigin} from '../scripts/maintenance/operator-config.mjs';
 // Developer QA only: native secrets stay in helper stdin and the Windows vault.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
@@ -9,7 +10,7 @@ import {fileURLToPath} from 'node:url';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const namespace='com.centralcodex.harnessqa.rc20260909';
-const gateway='wss://192.0.2.10:4529/ws',origin='https://192.0.2.10:4529';
+const gateway=qaGateway(),origin=qaOrigin();
 const username='rcwindows',productName='远舟 RC 20260909';
 const helper=join(root,'target/harness-agent/debug/examples/platform-acceptance.exe');
 const ca=join(root,'target/harness-deploy/p5-rc-server-ca.pem');

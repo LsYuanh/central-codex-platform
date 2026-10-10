@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {remoteRoot, sshTarget, formalGateway, sshKey, remoteCommand} from '../../scripts/maintenance/operator-config.mjs';
 // Opt-in Windows Wry acceptance. Build with the isolated QA identifier first.
 // SSH is used only to issue/revoke the synthetic operator test device.
 import assert from 'node:assert/strict';
@@ -14,13 +15,13 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const output=path.join(root,executionLayout?'target/desktop-execution-layout-20260911':sendTurn?'target/desktop-first-send-20260911':'target/pairing-native-ui');
 const workspace=path.join(output,'workspace');await mkdir(workspace,{recursive:true});
 const executable=path.join(root,'target/desktop-package/x86_64-pc-windows-msvc/debug/desktop-spike.exe');
-const remote='/Users/operator/central-codex-platform';
-const remoteLayout=process.env.CENTRAL_REMOTE_SOURCE_LAYOUT??'legacy';
+const remote=remoteRoot();
+const remoteLayout=process.env.CENTRAL_REMOTE_SOURCE_LAYOUT??'root';
 if(!['legacy','root'].includes(remoteLayout))throw Error('INVALID_REMOTE_SOURCE_LAYOUT');
 const remoteManagement=remoteLayout==='root'?'scripts/maintenance/macos-formal-management.mjs':'spikes/local-dev/scripts/macos-formal-management.mjs';
 function management(action,id=''){
   if(id&&!/^[a-f0-9-]{36}$/.test(id))throw Error('INVALID_QA_DEVICE');
-  const bytes=execFileSync('ssh.exe',['-i',path.join(process.env.USERPROFILE,'.ssh/id_ed25519'),'-o','BatchMode=yes','operator@192.0.2.10',`${remote}/artifacts/macos-tools/node/bin/node ${remote}/${remoteManagement} ${action}${id?' '+id:''}`],{windowsHide:true,timeout:30000,maxBuffer:131072});
+  const bytes=execFileSync('ssh.exe',['-i',sshKey(),'-o','BatchMode=yes',sshTarget(),remoteCommand(`${remote}/${remoteManagement}`, [action, ...(id ? [id] : [])], {formal:true})],{windowsHide:true,timeout:30000,maxBuffer:131072});
   try{return JSON.parse(bytes);}finally{bytes.fill(0);}
 }
 const env={...process.env,WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:'--remote-debugging-port=19331',CODEXIA_WORKSPACE_ROOT:workspace,CODEXIA_LOCAL_AGENT_PATH:path.join(root,'target/debug/local-agent.exe')};
@@ -50,7 +51,7 @@ try{
   await page.getByRole('button',{name:'配对并连接',exact:true}).click();
   await page.getByText(/配置已保存并应用。中央网关已连接/).waitFor({timeout:60000});
   const view=await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('desktop_config'));
-  const status=await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('platform_account',{gateway:'wss://192.0.2.10:4510/ws',action:'status',input:{}}));
+  const status=await page.evaluate(gateway=>window.__TAURI_INTERNALS__.invoke('platform_account',{gateway,action:'status',input:{}}),formalGateway());
   deviceId=status.deviceId;assert.equal(view.effective.workspaceRoot.toLowerCase(),workspace.toLowerCase());
   assert.equal(view.effective.deviceId,deviceId);assert(view.hasSaved&&view.running);
   assert(status.paired&&status.remoteAvailable);assert.equal(status.deviceId,deviceId);

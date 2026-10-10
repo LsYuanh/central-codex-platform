@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {formalDirectory} from './operator-config.mjs';
 // Explicit authorized 4510 migration. The previous gateway remains intact on disk.
 import {readFile,writeFile,mkdir,access,open} from 'node:fs/promises';
 import {spawn,execFileSync} from 'node:child_process';
@@ -8,7 +9,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const dir=path.join(root,'artifacts/central-macos/formal-migration-20260911');
+const dir=formalDirectory();
 if(process.platform!=='darwin')throw Error('MACOS_REQUIRED');
 const rollback=JSON.parse(await readFile(path.join(dir,'rollback.json'),'utf8'));
 const deployment=JSON.parse(await readFile(path.join(dir,'deployment.json'),'utf8'));

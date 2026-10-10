@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {formalHost} from './operator-config.mjs';
 // Opt-in real Local Agent + native authenticated UI socket + one real model Turn.
 // The native controller owns the Job, credential import and device revocation.
 import {spawn} from 'node:child_process';
@@ -95,7 +96,7 @@ try{
   await Promise.race([bootstrap,new Promise((_,reject)=>setTimeout(()=>reject(Error('QA_BOOTSTRAP_TIMEOUT')),15000).unref())]);
   check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills','creator'].includes(key)),'QA_BOOTSTRAP_FIELDS');
   check(config.creator===undefined||['explicit','implicit'].includes(config.creator)&&!config.skills&&!config.projects&&!config.legacyWorkspace,'QA_CREATOR_MODE_INVALID');
-  const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname==='192.0.2.10'&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
+  const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname===formalHost()&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
   check(path.isAbsolute(config.workspace)&&path.isAbsolute(config.output)&&!existsSync(config.output),'QA_OUTPUT_INVALID');
   check(['gpt-6-astra','gpt-6-sol'].includes(config.model),'QA_MODEL_INVALID');

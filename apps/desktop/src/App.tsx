@@ -95,8 +95,8 @@ interface BackgroundNotice {
 
 const gatewayUrl = "ws://127.0.0.1:4310/ws/ui";
 const configuredGatewayUrl = import.meta.env.VITE_PLATFORM_GATEWAY_URL?.trim();
-const defaultCentralHost = import.meta.env.VITE_CENTRAL_HOST?.trim() || "192.0.2.10";
-const defaultGatewayUrl = configuredGatewayUrl || `ws://${defaultCentralHost}:4510/ws`;
+const defaultCentralHost = import.meta.env.VITE_CENTRAL_HOST?.trim() || "central.example";
+const defaultGatewayUrl = configuredGatewayUrl || `wss://${defaultCentralHost}:4510/ws`;
 const defaultAppServerUrl = import.meta.env.VITE_CODEX_APP_SERVER_URL ?? "ws://127.0.0.1:4501";
 const defaultAppServerCwd = import.meta.env.VITE_CODEX_APP_SERVER_CWD ?? "";
 const desktopRuntime = isTauri();

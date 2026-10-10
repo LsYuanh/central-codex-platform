@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> 公开副本已脱敏：文中的示例主机、用户目录和私有部署路径不是可直接执行的现场配置；原始记录由维护者私有保管。测试结论与未验收项保持原意。
+
 本文件适用于整个仓库。后续自动化开发代理在修改代码前应先阅读本文件，并遵守其中的架构边界和验收要求。
 
 ## 项目目标
@@ -50,13 +52,13 @@ Device Broker / dynamic tools
 客户端文件系统、Git、PowerShell、命令
 ```
 
-当前真实中央机局域网地址：
+局域网部署地址示例（请替换为自己的中央地址）：
 
-- UI 网关：`wss://192.0.2.10:4510/ws`
-- Agent 网关：`wss://192.0.2.10:4510/ws/agent`，使用已配对设备凭据，不用 URL 查询参数传身份或秘密
-- 健康检查：`https://192.0.2.10:4510/healthz`，使用既有公共 CA 验证
+- UI 网关：`wss://central.example:4510/ws`
+- Agent 网关：`wss://central.example:4510/ws/agent`，使用已配对设备凭据，不用 URL 查询参数传身份或秘密
+- 健康检查：`https://central.example:4510/healthz`，使用既有公共 CA 验证
 
-这些地址是当前可信局域网部署配置，不代表已取得完整生产发布资格。不得将 4510 端口暴露到互联网，也不得跳过 TLS 验证。
+这些地址仅说明可信局域网部署格式，不代表已取得完整生产发布资格。不得将 4510 端口暴露到互联网，也不得跳过 TLS 验证。
 
 ## Local Agent 生命周期
 
@@ -152,7 +154,7 @@ npm run build --workspace @central-codex-spike/desktop
 
 ```powershell
 npm run build --workspace @central-codex-spike/central-gateway
-curl.exe --fail --cacert 'C:\path\to\existing-public-ca.pem' https://192.0.2.10:4510/healthz
+curl.exe --fail --cacert 'C:\path\to\existing-public-ca.pem' https://central.example:4510/healthz
 ```
 
 不要在已有 Tauri/Cargo 进程占用 `target` 构建锁时反复并行启动构建；先确认运行进程和端口占用。

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaGateway, qaOrigin} from '../scripts/maintenance/operator-config.mjs';
 // Developer-only RC acceptance. Admin password/code enter stdin; device tokens
 // remain inside the native helper and its application-private storage.
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ import https from 'node:https';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const namespace='com.centralcodex.harnessqa.rc20260909';
-const gateway='wss://192.0.2.10:4529/ws',origin='https://192.0.2.10:4529';
+const gateway=qaGateway(),origin=qaOrigin();
 const platform=process.platform;
 assert(['win32','darwin'].includes(platform));
 const directory=platform==='win32'?join(process.env.APPDATA,namespace):join(process.env.HOME,'Library/Application Support',namespace);

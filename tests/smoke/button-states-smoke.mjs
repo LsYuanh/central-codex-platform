@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 // Exercise the real desktop stylesheet in the browser, including cascade order.
 import assert from 'node:assert/strict';
 import {readFile,mkdir,mkdtemp,writeFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {pathToFileURL} from 'node:url';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 const css=await readFile('apps/desktop/src/styles.css','utf8');
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/button-states-'));
 const cases=[

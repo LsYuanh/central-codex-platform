@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {loadPlaywright} from '../support/playwright.mjs';
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
@@ -6,7 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE??'C:/Users/developer/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/model-picker-ui-'));
 const efforts=['low','medium','high','xhigh','max','ultra'].map(reasoningEffort=>({reasoningEffort}));
 const models=[{id:'gpt-6-astra',model:'gpt-6-astra',displayName:'GPT-6-Astra',isDefault:true,defaultReasoningEffort:'low',supportedReasoningEfforts:efforts,serviceTiers:[{id:'priority',name:'Fast'},{id:'flex',name:'Flex'}]},

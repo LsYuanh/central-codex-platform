@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {formalDirectory} from './operator-config.mjs';
 // Explicit operator deployment for the authorized central Mac; not a product runtime.
 import {readFile,writeFile,mkdir,rename,open,access,realpath} from 'node:fs/promises';
 import {execFileSync,spawn} from 'node:child_process';
@@ -15,10 +16,10 @@ const work=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 if(process.env.CENTRAL_MACOS_DEPLOY_ROOT&&!path.isAbsolute(process.env.CENTRAL_MACOS_DEPLOY_ROOT))throw Error('ABSOLUTE_DEPLOY_ROOT_REQUIRED');
 const repo=process.env.CENTRAL_MACOS_DEPLOY_ROOT??work;
 // Separate each release's immutable staging/backup evidence from earlier deployments.
-const runName=process.env.CENTRAL_MACOS_DEPLOY_NAME??'shared-login-deploy-20260920';
+const runName=process.env.CENTRAL_MACOS_DEPLOY_NAME??'';
 if(!/^[a-z0-9][a-z0-9-]{2,79}$/.test(runName))throw Error('INVALID_DEPLOY_NAME');
 const runDir=path.join(repo,'artifacts',runName);
-const formal=path.join(repo,'artifacts/central-macos/formal-migration-20260911');
+const formal=formalDirectory();
 const profile=path.join(homedir(),'Library/Application Support/com.yuanzhou.central');
 const installed=path.join(homedir(),'Applications/远舟中央管理.app');
 const staged=path.join(runDir,'next.app'),backup=path.join(runDir,'previous.app');

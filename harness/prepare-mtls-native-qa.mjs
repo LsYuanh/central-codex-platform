@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaGateway, qaOrigin} from '../scripts/maintenance/operator-config.mjs';
 // Local QA only. Passwords enter the native helper over stdin, never the renderer.
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -8,8 +9,8 @@ import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 
 export const namespace='com.centralcodex.harnessqa20260909';
-export const gateway='wss://192.0.2.10:4529/ws';
-export const origin='https://192.0.2.10:4529';
+export const gateway=qaGateway();
+export const origin=qaOrigin();
 export const ca=resolve('target/harness-deploy/p5-mtls-server-ca.pem');
 export const binary=resolve('target/harness-agent/debug/examples/platform-acceptance.exe');
 export const desktop=resolve('target/harness-agent/debug/desktop-spike.exe');

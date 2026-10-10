@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaOrigin, qaGateway} from '../scripts/maintenance/operator-config.mjs';
 // Restore only the configuration prepared by prepare-platform-native-qa.mjs.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, copyFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -6,7 +7,7 @@ import { resolve, join } from 'node:path';
 import assert from 'node:assert/strict';
 const record = JSON.parse(readFileSync(resolve('target/harness-p5-native.json'), 'utf8'));
 assert.equal(record.namespace, 'com.centralcodex.harnessqa20260909');
-assert.equal(record.gateway, 'wss://192.0.2.10:4529/ws');
+assert.equal(record.gateway, qaGateway());
 const directory = join(process.env.APPDATA, record.namespace);
 const backup = resolve('target/harness-p5-native-backup');
 assert.equal(record.backup, backup);
@@ -29,7 +30,7 @@ for (const name of ['desktop-runtime-v1.json', 'platform-ca-v1.json']) {
   else {
     assert.equal(name, 'platform-ca-v1.json');
     const map = JSON.parse(readFileSync(current, 'utf8'));
-    assert.deepEqual(map, { 'https://192.0.2.10:4529': record.ca }, 'QA CA settings changed; preserve them');
+    assert.deepEqual(map, { [qaOrigin()]: record.ca }, 'QA CA settings changed; preserve them');
     unlinkSync(current);
   }
 }

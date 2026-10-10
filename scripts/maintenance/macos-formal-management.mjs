@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {formalGateway, formalDirectory} from './operator-config.mjs';
 // Operator-side test controller. Pair output is secret: pipe directly to the client,
 // never show stdout in agent logs. Passwords stay on the central Mac.
 import {readFile,writeFile} from 'node:fs/promises';
@@ -6,7 +7,8 @@ import {request} from 'node:https';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-const dir=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../artifacts/central-macos/formal-migration-20260911');
+formalGateway(); // Fail before credential reads or API calls when not configured.
+const dir=formalDirectory();
 const ca=await readFile(path.join(dir,'ca.pem'));
 const login=JSON.parse(await readFile(path.join(dir,'admin-login.json'),'utf8'));
 async function api(route,body,token){return new Promise((resolve,reject)=>{
@@ -23,7 +25,7 @@ if(process.argv[2]==='pair'||process.argv[2]==='pair-bundle'){
   if(!user){const created=await api('/auth/admin/user/create-pairing',{requestId:randomUUID(),username},token);user=created.user??created;}
   const pair=await api('/auth/admin/pair-code',{requestId:randomUUID(),userId:user.id},token);
   await writeFile(path.join(dir,'client-test-user.json'),JSON.stringify({userId:user.id}),{mode:0o600});
-  const code=process.argv[2]==='pair-bundle'?'yzpair1.'+Buffer.from(JSON.stringify({version:1,gateway:'wss://192.0.2.10:4510/ws',caPem:ca.toString(),token:pair.code,expiresAt:pair.expiresAt})).toString('base64url'):pair.code;
+  const code=process.argv[2]==='pair-bundle'?'yzpair1.'+Buffer.from(JSON.stringify({version:1,gateway:formalGateway(),caPem:ca.toString(),token:pair.code,expiresAt:pair.expiresAt})).toString('base64url'):pair.code;
   process.stdout.write(JSON.stringify({code}));
 }else if(process.argv[2]==='revoke'){
   if(!user)throw Error('TEST_USER_MISSING');

@@ -1,25 +1,20 @@
 # Licensing
 
-## Planned dual-license model
+Project-owned code is available under the GNU Affero General Public License,
+version 3 only (AGPL-3.0-only). The complete, unmodified text is in [LICENSE](LICENSE).
+This license applies unless a file or directory identifies a different license.
 
-Code for which the project owner holds sufficient copyright will be offered under either:
+The project owner may also offer a separate written commercial license for code
+for which they hold sufficient rights. No commercial license is granted merely
+by downloading this repository. In existing SPDX headers,
+`LicenseRef-Commercial` refers to that separately negotiated agreement; it does
+not replace or restrict the AGPL option. Package metadata identifies the public
+AGPL license. No finalized commercial contract or CLA is published here.
 
-1. GNU Affero General Public License v3.0 only (`AGPL-3.0-only`); or
-2. a separate commercial license agreed in writing with the project owner.
+Third-party components retain their own licenses, copyrights and notices;
+the project owner does not relicense them under the commercial option.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The AGPL path permits commercial use subject to its terms. The commercial license is an alternative for proprietary, hosted, SaaS, OEM, white-label, redistribution, support, warranty, or indemnity requirements that are not handled under the AGPL path.
-
-## Important status
-
-This repository is in pre-release planning. A lawyer-approved commercial agreement, CLA, trademark policy, and verbatim AGPL license file must be added before public release or acceptance of external contributions.
-
-Until the CLA is finalized, do not merge non-employee code contributions.
-
-## Third-party code
-
-Third-party components remain under their original licenses. Their copyright and license notices must be retained in `THIRD_PARTY_NOTICES.md` and, where required, in distributed products.
-
-Do not copy third-party GPL/AGPL code into the commercially licensed core unless the project has obtained the necessary commercial rights or legal counsel has approved the exact integration.
-
-Codexia must be pinned to a specific commit and its license state must be archived and verified before code is imported.
-
+External code contributions are not currently accepted. See
+[CONTRIBUTING.md](CONTRIBUTING.md). Project names and logos identify this project;
+no additional trademark license is offered by this document.

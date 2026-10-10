@@ -77,7 +77,12 @@ async fn run() -> Result<(), &'static str> {
     let formal = std::env::args().nth(1).as_deref() == Some("--formal-4510")
         && std::env::args().count() == 2;
     let target_valid = if formal {
-        url.host_str() == Some("192.0.2.10") && url.port() == Some(4510)
+        // The operator pins the exact formal endpoint separately from stdin.
+        std::env::var("CENTRAL_FORMAL_GATEWAY")
+            .ok()
+            .and_then(|value| url::Url::parse(&value).ok())
+            .is_some_and(|expected| expected == url)
+            && url.port() == Some(4510)
     } else {
         matches!(url.host_str(), Some("localhost" | "127.0.0.1"))
             && url.port().is_some_and(|p| p != 4510)

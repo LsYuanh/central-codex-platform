@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial -->
 
-# 技术 Spike 第三方依赖记录
+# 第三方依赖记录
 
-以下依赖仅通过 npm 或 crates.io 包注册表安装，没有把上游源代码复制进产品主线。精确解析结果以 `package-lock.json` 和 `Cargo.lock` 为准。
+以下表格记录通过 npm 或 crates.io 安装的直接依赖；另有已引入的 Codex 与 Tauri 源码，详见 THIRD_PARTY_NOTICES.md。精确解析结果以 `package-lock.json` 和 `Cargo.lock` 为准。
 
 | 直接依赖 | 版本 | 来源 | 许可证 | 用途 |
 |---|---:|---|---|---|
@@ -32,4 +32,6 @@
 | futures-util | 0.3.34 | crates.io | MIT OR Apache-2.0 | WebSocket 流处理 |
 | Serde / serde_json | 1.0.229 / 1.0.151 | crates.io | MIT OR Apache-2.0 | AgentRPC Spike 消息 |
 
-此清单不替代正式 SBOM。进入产品主线前必须重新生成完整传递依赖清单并检查 NOTICE 要求。
+此清单不替代正式 SBOM。发布二进制前须核对完整传递依赖与实际随包 NOTICE。
+
+开发测试另使用 Playwright 1.64.0（Apache-2.0），仅作为根工作区 devDependency；浏览器按测试需求单独安装。

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+import {qaOrigin, qaGateway} from '../scripts/maintenance/operator-config.mjs';
 // Run on the developer Windows worktree. Credentials enter stdin and stay in memory.
 // Never starts/stops a desktop or Agent and never logs out its native session.
 import assert from 'node:assert/strict';
@@ -8,7 +9,7 @@ import {randomUUID} from 'node:crypto';
 import https from 'node:https';
 import {WebSocket} from 'ws';
 
-const origin='https://192.0.2.10:4529',gateway='wss://192.0.2.10:4529/ws';
+const origin=qaOrigin(),gateway=qaGateway();
 const ca=await readFile(resolve('target/harness-deploy/p5-rc-server-ca.pem'));
 const checks=[],sockets=[];let token,resultPath,result,input;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
