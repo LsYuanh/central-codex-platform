@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-import {formalHost} from './operator-config.mjs';
+import {formalHost, formalGateway} from './operator-config.mjs';
 // Opt-in real Local Agent + native authenticated UI socket + one real model Turn.
 // The native controller owns the Job, credential import and device revocation.
 import {spawn} from 'node:child_process';
@@ -99,7 +99,7 @@ try{
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname===formalHost()&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
   check(path.isAbsolute(config.workspace)&&path.isAbsolute(config.output)&&!existsSync(config.output),'QA_OUTPUT_INVALID');
-  check(['gpt-6-astra','gpt-6-sol'].includes(config.model),'QA_MODEL_INVALID');
+  check(['gpt-6-astra','gpt-6-sol','gpt-6.1-sol'].includes(config.model),'QA_MODEL_INVALID');
   check(typeof config.code==='string'&&(/^[A-Za-z0-9_-]{43}$/.test(config.code)||config.code.length<=98304&&/^yzpair1\.[A-Za-z0-9_-]+$/.test(config.code)),'QA_PAIR_CODE_INVALID');
   const workspace=realpathSync(config.workspace),root=path.dirname(workspace),tokenRoot=path.join(root,'central-live-token-data');
   check(lstatSync(workspace).isDirectory()&&!lstatSync(config.workspace).isSymbolicLink()&&!existsSync(tokenRoot),'QA_WORKSPACE_INVALID');
@@ -116,7 +116,10 @@ try{
   const proofScript="$ErrorActionPreference='Stop'\n$proof='QA_EXEC_'+[Guid]::NewGuid().ToString('N')\n[IO.File]::WriteAllText((Join-Path (Get-Location).Path 'proof.txt'),$proof)\n[Console]::Out.WriteLine($proof)\n";
   writeFileSync(path.join(project,'input.txt'),inputMarker,{flag:'wx'});writeFileSync(path.join(project,'proof.ps1'),proofScript,{flag:'wx'});
   const env={};for(const name of ['SystemRoot','WINDIR','SystemDrive','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA'])if(process.env[name])env[name]=process.env[name];
-  ({child:helper,exit:helperExit}=launch(config.helperBinary,formal4510?['--formal-4510']:[],{cwd:workspace,env}));
+  // Forward only the validated operator endpoint; the native helper independently
+  // compares it with stdin before pairing. Do not inherit unrelated credentials.
+  const helperEnv=formal4510?{...env,CENTRAL_FORMAL_GATEWAY:formalGateway()}:env;
+  ({child:helper,exit:helperExit}=launch(config.helperBinary,formal4510?['--formal-4510']:[],{cwd:workspace,env:helperEnv}));
   let output=Buffer.alloc(0),outputBytes=0;
   helper.stdout.on('data',chunk=>{
     outputBytes+=chunk.length;if(outputBytes>8*1024*1024){fail('QA_HELPER_TOTAL_OUTPUT_LIMIT');return;}
@@ -275,5 +278,7 @@ try{
 }catch(error){
   // Diagnostic persistence must not prevent the controller from revoking the test device.
   try{if(config?.output&&!existsSync(config.output))writeFileSync(config.output,JSON.stringify({passed:false,assistant,turnDone,tools:[...toolCalls.values()]},null,2),{flag:'wx'});}catch{}
-  const code=/^QA_[A-Z0-9_]+$/.test(error?.message??'')?error.message:'QA_LIVE_CLIENT_FAILED';emit({phase:'failed',code});process.exitCode=1;
+  // A catalog/connection failure can happen after pairing but before ready. Give
+  // the operator the non-secret device ID so that this device can still be revoked.
+  const code=/^QA_[A-Z0-9_]+$/.test(error?.message??'')?error.message:'QA_LIVE_CLIENT_FAILED';emit({phase:'failed',code,...(deviceId?{deviceId}:{})});process.exitCode=1;
 }finally{clearTimeout(watchdog);await cleanup();process.stdin.pause();}

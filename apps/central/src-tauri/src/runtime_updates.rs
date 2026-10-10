@@ -257,17 +257,42 @@ pub(crate) fn selection(app_data: &Path) -> Result<Option<Selection>> {
     Ok(Some(value))
 }
 fn copy_tree(source: &Path, destination: &Path, total: &mut u64) -> Result<()> {
-    copy_tree_inner(source, destination, total, false)
+    copy_tree_inner(source, destination, total, None)
+}
+fn worker_launch_cache(relative: &Path) -> bool {
+    let Some(parts): Option<Vec<_>> = relative.iter().map(|p| p.to_str()).collect() else {
+        return false;
+    };
+    parts.len() == 5
+        && parts[0] == "workers"
+        && parts[1].len() == 64
+        && parts[1]
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+        && parts[2..] == ["home", "tmp", "arg0"]
 }
 fn copy_tree_inner(
     source: &Path,
     destination: &Path,
     total: &mut u64,
-    skip_runtime_lock: bool,
+    snapshot_root: Option<&Path>,
 ) -> Result<()> {
     let meta = fs::symlink_metadata(source).map_err(|_| "UPDATE_BACKUP_FAILED")?;
     if meta.file_type().is_symlink() {
         return Err("UPDATE_BACKUP_UNSAFE");
+    }
+    // App Server recreates these executable aliases on every worker launch.
+    // Exclude only its exact cache directory, after rejecting a linked root;
+    // history, credentials and all other paths retain the strict copy policy.
+    if snapshot_root
+        .and_then(|root| source.strip_prefix(root).ok())
+        .is_some_and(worker_launch_cache)
+    {
+        return if meta.is_dir() {
+            Ok(())
+        } else {
+            Err("UPDATE_BACKUP_UNSAFE")
+        };
     }
     if meta.is_dir() {
         fs::create_dir(destination).map_err(|_| "UPDATE_BACKUP_FAILED")?;
@@ -279,10 +304,15 @@ fn copy_tree_inner(
         }
         for entry in fs::read_dir(source).map_err(|_| "UPDATE_BACKUP_FAILED")? {
             let entry = entry.map_err(|_| "UPDATE_BACKUP_FAILED")?;
-            if skip_runtime_lock && entry.file_name() == ".central-service.lock" {
+            if snapshot_root == Some(source) && entry.file_name() == ".central-service.lock" {
                 continue;
             }
-            copy_tree(&entry.path(), &destination.join(entry.file_name()), total)?;
+            copy_tree_inner(
+                &entry.path(),
+                &destination.join(entry.file_name()),
+                total,
+                snapshot_root,
+            )?;
         }
         sync_directory(destination)?;
     } else if meta.is_file() {
@@ -323,7 +353,7 @@ pub(crate) fn backup(app_data: &Path, data: &Path) -> Result<String> {
     let id = format!("backup-{}", now());
     let destination = root.join(&id);
     // The owner lock stays held and is never part of a data snapshot.
-    copy_tree_inner(data, &destination, &mut 0, true)?;
+    copy_tree_inner(data, &destination, &mut 0, Some(data))?;
     sync_directory(&root)?;
     Ok(id)
 }
@@ -646,6 +676,59 @@ mod tests {
             b"history sentinel"
         );
         assert!(copy_tree(&source, &target, &mut 0).is_err());
+    }
+    #[test]
+    #[cfg(unix)]
+    fn snapshot_excludes_worker_launch_aliases_but_rejects_data_links() {
+        use std::os::unix::fs::symlink;
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("data");
+        let home = data.join("workers").join("a".repeat(64)).join("home");
+        let aliases = home.join("tmp/arg0");
+        fs::create_dir_all(aliases.join("codex-arg0-test")).unwrap();
+        symlink(
+            "/outside/app-server",
+            aliases.join("codex-arg0-test/apply_patch"),
+        )
+        .unwrap();
+        fs::write(home.join("history.json"), b"history").unwrap();
+        fs::write(home.join("tmp/keep"), b"keep").unwrap();
+        let target = temp.path().join("snapshot");
+        copy_tree_inner(&data, &target, &mut 0, Some(&data)).unwrap();
+        let saved_home = target.join(home.strip_prefix(&data).unwrap());
+        assert!(!saved_home.join("tmp/arg0").exists());
+        assert_eq!(
+            fs::read(saved_home.join("history.json")).unwrap(),
+            b"history"
+        );
+        assert_eq!(fs::read(saved_home.join("tmp/keep")).unwrap(), b"keep");
+        symlink("/outside/history", home.join("data-link")).unwrap();
+        assert_eq!(
+            copy_tree_inner(&data, &temp.path().join("bad-data"), &mut 0, Some(&data)),
+            Err("UPDATE_BACKUP_UNSAFE")
+        );
+        fs::remove_file(home.join("data-link")).unwrap();
+        fs::remove_dir_all(&aliases).unwrap();
+        symlink("/outside/cache", &aliases).unwrap();
+        assert_eq!(
+            copy_tree_inner(&data, &temp.path().join("bad-cache"), &mut 0, Some(&data)),
+            Err("UPDATE_BACKUP_UNSAFE")
+        );
+    }
+    #[test]
+    fn only_exact_worker_launch_cache_is_excluded() {
+        let id = "a".repeat(64);
+        assert!(worker_launch_cache(Path::new(&format!(
+            "workers/{id}/home/tmp/arg0"
+        ))));
+        for name in [
+            format!("other/{id}/home/tmp/arg0"),
+            "workers/user/home/tmp/arg0".into(),
+            format!("workers/{id}/home/tmp/arg0/child"),
+            format!("workers/{id}/home/tmp/other"),
+        ] {
+            assert!(!worker_launch_cache(Path::new(&name)));
+        }
     }
     #[test]
     fn data_restore_replaces_failed_history_and_can_be_retried() {
