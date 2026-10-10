@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-10",
+  "sourceCommit": "0b8447c323190d465b237b705c76e10bf4a67f0c",
+  "runUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/38017514746",
+  "jobId": "114110984756",
+  "workflow": "runtime-signing-check.yml",
+  "runner": "ubuntu-latest",
+  "status": "success",
+  "workflowDurationSeconds": 27,
+  "jobDurationSeconds": 24,
+  "tests": {
+    "local": {
+      "command": "node --test tests/smoke/runtime-trial.test.mjs tests/smoke/runtime-release.test.mjs tests/smoke/runtime-publisher.test.mjs",
+      "passed": 19,
+      "failed": 0
+    },
+    "cloud": {
+      "command": "node --test tests/smoke/runtime-release.test.mjs tests/smoke/runtime-publisher.test.mjs",
+      "passed": 13,
+      "failed": 0
+    },
+    "existingUpdateProtocol": "passed"
+  },
+  "scope": {
+    "realTauriSigner": true,
+    "keys": "disposable encrypted and empty-password test keys; files removed after generation",
+    "githubCalls": "offline executor only",
+    "productionKeyRead": false,
+    "productionTrustRootChanged": false,
+    "repositoryVisibilityChanged": false,
+    "releasePublished": false,
+    "centralDeployed": false
+  },
+  "checks": [
+    "encrypted-key-sign-and-verify",
+    "empty-password-noninteractive-sign",
+    "wrong-trust-root-rejected",
+    "artifact-and-source-provenance",
+    "expected-GitHub-destination",
+    "pre-and-post-sign-tampering-rejected",
+    "subprocess-credential-separation",
+    "missing-key-or-token-rejected",
+    "release-create-failure",
+    "channel-lookup-network-auth-timeout-failure",
+    "missing-channel-create-failure",
+    "channel-upload-failure",
+    "up-to-date-no-op"
+  ],
+  "pending": [
+    "Protected signing environment with the real release key",
+    "Real GitHub publication and interrupted-upload recovery",
+    "Public download and central automatic installation acceptance"
+  ]
+}
