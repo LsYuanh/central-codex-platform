@@ -15,7 +15,7 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
-### Native image generation (2026-10-09, development only)
+### Native image generation (2026-10-10, central deployed)
 
 The pinned 0.156.1 extension is installed with no filesystem executor in remote
 mode. Only `image_gen.imagegen` is allowed, gated by macOS, remote mode, Broker
@@ -34,8 +34,11 @@ were updated together; upstream version and other extension denials are unchange
 
 Fresh Mac compilation, native boundary regressions and a real ChatGPT → Windows
 Local Agent image save passed. See `verification/image-generation-20261009.json`.
-This development capability supersedes the initial blanket image denial described
-below; it has not been deployed or ported to the 0.159.2 candidate branch.
+This capability supersedes the initial blanket image denial described below.
+Central App 0.1.4 / revision 15 was deployed on 2026-10-10 and passed real model
+generation, Windows Agent persistence and history resume. See
+`verification/image-generation-deploy-20261010.json`. The 0.159.2 candidate image
+adaptation and client installer release remain unverified/unreleased.
 
 ### Native plan and goals (2026-09-24, not deployed)
 

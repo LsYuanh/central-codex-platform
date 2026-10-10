@@ -2,7 +2,7 @@
 
 # Local AgentRPC
 
-## Native image generation (2026-10-09, development only)
+## Native image generation (central deployed 2026-10-10; new desktop states unreleased)
 
 `session.initialize` accepts the gateway-only `imageOutputStates: 1` opt-in;
 the gateway strips it before native initialization. Opted-in clients receive

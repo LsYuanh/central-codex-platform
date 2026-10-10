@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-10",
+  "authorization": "User requested updating the central service in this conversation",
+  "sourceBaseCommit": "8a74404",
+  "sourceOverlays": ["central application version 0.1.4", "generated runtime catalog pin"],
+  "deployed": true,
+  "appVersion": "0.1.4",
+  "runtimeVersion": "0.156.1",
+  "configurationRevision": 15,
+  "packageId": "macos-arm64-node24-qa1-0650839ed2018f08",
+  "manifest": {
+    "files": 872,
+    "bytes": 179604,
+    "sha256": "0650839ed2018f0842440cf1c1a0bf5d61ac366ae4530781d09bd60fe440570c"
+  },
+  "dmg": {
+    "bytes": 200691578,
+    "sha256": "04138e0aa39b561bdec10da48a5bec5b5fca5568c3a4dcdfed745d38c05ea094"
+  },
+  "build": "debug, ad-hoc signed, not notarized; existing LAN qualification unchanged",
+  "checksPassed": [
+    "central TypeScript/Vite/Rust build",
+    "strict app signature and DMG verification",
+    "all runtime manifest file digests",
+    "packaged native image-generation smoke",
+    "packaged native remote execution boundary and 102-entry skill catalog",
+    "packaged native plan and goal regression",
+    "image gateway, skill preferences, save recovery and compatibility regression",
+    "existing credential broker regression",
+    "native preflight and formal switch",
+    "other configuration and credential-reference preservation",
+    "Windows LAN health check using existing CA"
+  ],
+  "realImage": {
+    "source": "formal central WSS, gpt-6-sol native image tool, Windows Local Agent",
+    "report": "target/image-generation-live-mUKKc1/result.json",
+    "bytes": 1253015,
+    "sha256": "188f2ae37d11270b7424badfe681989aab06b5c936aab83653a5bf2a0c711173",
+    "checks": ["builtin skill available", "generation and save states", "local file hash matches", "history resume preserves version"],
+    "testDeviceRevoked": true
+  },
+  "finalObservation": {"devices": 3, "clients": 3, "activeTurns": 0, "model": "ready"},
+  "centralBackup": "/Users/operator/central-codex-platform/artifacts/imagegen-deploy-20261010",
+  "backupContents": ["previous.app (0.1.3)", "complete stopped profile-before", "build and deployment reports"],
+  "automaticRollbackTriggered": false,
+  "privateBackupsDownloaded": false,
+  "clientInstallerReleased": false,
+  "clientUpdateChannelVersion": "0.2.9",
+  "pushedToGitRemote": false,
+  "remainingLimitations": ["real uploaded-reference editing", "Mac work client", "full live desktop chat UI", "0.159.2 image adaptation", "client installer upgrade"]
+}
