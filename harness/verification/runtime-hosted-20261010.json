@@ -1,0 +1,136 @@
+{
+  "date": "2026-10-10",
+  "scope": "Private GitHub hosted Mac build and validation; no signing, release or central deployment",
+  "sourceCommit": "08a520fcd01c9c474c1cb32a485c4b649a69fc97",
+  "runUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/38016266645",
+  "jobId": "114107101723",
+  "status": "validated",
+  "version": "0.159.2",
+  "upstreamCommit": "ff6aec96948b70d94983af2641a6b67c94faeff5",
+  "patchSha256": "00bacd6a64f4b11ff68b1b1172bbf92b8fe466afbb06a3006e0f10a869210733",
+  "workflowDurationSeconds": 647,
+  "validationDurationSeconds": 621,
+  "reportArtifact": {
+    "id": "11656451992",
+    "bytes": 8149,
+    "sha256": "fda9a77b29c4e3650544bd738bd4537189abfe5306233fbf430536c8baf008af",
+    "localArchive": "artifacts/runtime-hosted-trial-20261010/run-38016266645.zip"
+  },
+  "candidate": {
+    "archiveSha256": "40eb27cd459c679a86375e93f8bb755b0cb9b6418aa96ee49c75836a9f8f4d52",
+    "uploaded": false,
+    "signed": false,
+    "published": false
+  },
+  "steps": [
+    {
+      "command": "cargo",
+      "check": "build -p codex-app-server --bin codex-app-server --locked",
+      "exitCode": 0,
+      "durationSeconds": 493
+    },
+    {
+      "command": "node",
+      "check": "harness/runtime-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 1
+    },
+    {
+      "command": "node",
+      "check": "harness/plan-goal-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 2
+    },
+    {
+      "command": "node",
+      "check": "harness/image-generation-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 1
+    },
+    {
+      "command": "node",
+      "check": "harness/model-catalog-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 0
+    },
+    {
+      "command": "node",
+      "check": "harness/thread-delete-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 1
+    },
+    {
+      "command": "node",
+      "check": "harness/worker-isolation-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 1
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/model-credential-broker-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 2
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/image-generation-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 0
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/worker-routing-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 3
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/task-control-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 0
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/task-control-gateway-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 2
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/runtime-updates-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 0
+    },
+    {
+      "command": "node",
+      "check": "tests/smoke/native-account-update-smoke.mjs",
+      "exitCode": 0,
+      "durationSeconds": 1
+    },
+    {
+      "command": "cargo",
+      "check": "test -p central-app runtime_updates --locked",
+      "exitCode": 0,
+      "durationSeconds": 88
+    },
+    {
+      "command": "tar",
+      "check": "candidate archive",
+      "exitCode": 0,
+      "durationSeconds": 15
+    }
+  ],
+  "boundaries": {
+    "repositoryPrivate": true,
+    "secretsUploaded": false,
+    "defaultBranchChanged": false,
+    "centralDeployed": false,
+    "realModel": false,
+    "realDevice": false
+  },
+  "pending": [
+    "Protected signing environment and public download channel",
+    "Signing/release job on a configured default branch",
+    "Central automatic install, rollback and live GPT-6.1 Sol/device acceptance"
+  ]
+}

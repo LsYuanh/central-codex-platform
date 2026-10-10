@@ -37,8 +37,15 @@ Local Agent image save passed. See `verification/image-generation-20261009.json`
 This capability supersedes the initial blanket image denial described below.
 Central App 0.1.4 / revision 15 was deployed on 2026-10-10 and passed real model
 generation, Windows Agent persistence and history resume. See
-`verification/image-generation-deploy-20261010.json`. The 0.159.2 candidate image
-adaptation and client installer release remain unverified/unreleased.
+`verification/image-generation-deploy-20261010.json` (later central 0.1.5 evidence
+is in `verification/image-edit-deploy-20261010.json`). The 0.159.2 candidate now
+passes hosted Mac compilation and all 16 builder steps, including native image
+generation/editing, host file denial and gateway image regressions. Image patch
+context was narrowed without changing inserted/deleted source lines. Trial and
+release entry points share `.github/workflows/runtime-validate.yml`; the trial
+has no signing secrets or write permission. See `verification/runtime-hosted-20261010.json`.
+This is deterministic candidate QA, not a signed release or live central upgrade.
+The deployed baseline remains 0.156.1 and the client installer is unchanged.
 
 ### Native plan and goals (2026-09-24, not deployed)
 
