@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-10",
+  "scope": "Public hosted Mac build, protected signing and central automatic-update commissioning",
+  "firstPublication": {
+    "sourceCommit": "44dbf6edaa0ceb121d57fd7bde34fd0bca85f3c4",
+    "runUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/38026096860",
+    "status": "success",
+    "validationStepsPassed": 16,
+    "version": "0.159.2",
+    "releaseTag": "runtime-0.159.2-1791609213646",
+    "archiveBytes": 165386927,
+    "archiveSha256": "55240d02f31cbddd2deb8c7a1c87c46d69942050e75cde249954b93f659cc118",
+    "anonymousDownload": true,
+    "signatureVerifiedWithNodeAndNativeRust": true,
+    "manifestFileHashesVerified": 872,
+    "centralResult": "rolled-back",
+    "centralFailureCode": "UPDATE_BACKUP_UNSAFE",
+    "centralVersionAfterFailure": "0.156.1"
+  },
+  "hostFix": {
+    "sourceCommit": "b86937a7624e0cbbcd9702df8c1c18b738368ceb",
+    "appVersion": "0.1.6",
+    "baselineRuntimeVersion": "0.156.1",
+    "change": "Exclude only the exact worker arg0 launch cache from stopped-data backups; reject linked cache roots and links elsewhere",
+    "nativeMacUpdateTestsPassed": 9,
+    "formatCheck": "passed",
+    "typescriptAndViteBuild": "passed",
+    "appBuildAndAdHocSignature": "passed",
+    "deployed": true
+  },
+  "nextPublication": {
+    "sourceCommit": "b86937a7624e0cbbcd9702df8c1c18b738368ceb",
+    "runUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/38028247275",
+    "status": "success",
+    "validationStepsPassed": 16,
+    "workflowDurationSeconds": 1068,
+    "validationDurationSeconds": 986,
+    "releaseTag": "runtime-0.159.2-1791611784674",
+    "archiveBytes": 165386952,
+    "archiveSha256": "9a0ef18eedd9ee40573387d7550cacf7d2e5157bbb8da606d725e70cf0464532",
+    "signatureVerified": true,
+    "publicAssetDigestMatched": true,
+    "diagnosticArtifactSha256": "b6af36ea8bbec7e35e7103fecc0ec9490da03d9af5f10208f0c349e19c038424"
+  },
+  "automation": {
+    "signingEnvironment": "runtime-signing",
+    "allowedBranches": [
+      "main"
+    ],
+    "allowedTags": [],
+    "publishEnabled": true,
+    "dailyCheckEnabled": true,
+    "scheduleUtc": "03:25"
+  },
+  "latestUpstreamPrecheck": {
+    "version": "0.162.1",
+    "commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+    "archiveSha256": "79c8ea8547e1dd9969f63ef6b76a4fb0d1a024ef36c0c627fbcd2ffb658d9312",
+    "status": "needs-adaptation",
+    "code": "UPSTREAM_PATCH_CONFLICT",
+    "published": false
+  },
+  "limitations": [
+    "Latest upstream 0.162.1 remains blocked by compatibility review; it was not published or installed",
+    "Ad-hoc Mac signing is not Developer ID signing or notarization",
+    "Windows central and Mac work-client live acceptance were not performed in this commissioning"
+  ],
+  "centralAcceptance": {
+    "appVersion": "0.1.6",
+    "runtimeVersion": "0.159.2",
+    "configRevision": 16,
+    "configUnchanged": true,
+    "nativeAutomaticInstall": true,
+    "selectionPending": false,
+    "sequence": 1791611784674,
+    "packageId": "macos-arm64-node24-qa1-db076f3db359345a",
+    "runningGatewayMatchesSelection": true,
+    "health": true,
+    "devicesAfterQa": 3,
+    "clientsAfterQa": 3,
+    "previousFailedSequenceRetained": 1791609213646,
+    "privateProfileAndAppBackupPreserved": true
+  },
+  "realClientAcceptance": {
+    "model": "gpt-6.1-sol",
+    "passed": true,
+    "modelListed": true,
+    "toolReadCount": 2,
+    "toolExecCount": 1,
+    "runtimeMarker": "yuan-zhou-remote-workspace/1",
+    "resumeHistoryVerified": true,
+    "randomProofVerified": true,
+    "actualWindowsLocalAgent": true,
+    "externalProjectVerified": true,
+    "agentExited": true,
+    "testDeviceRevoked": true,
+    "localTokenRemoved": true
+  }
+}

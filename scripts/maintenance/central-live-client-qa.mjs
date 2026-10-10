@@ -134,7 +134,9 @@ try{
       else fail('QA_HELPER_PROTOCOL_INVALID');
     }catch{fail('QA_HELPER_PROTOCOL_INVALID');}}
   });
-  writeHelper({gateway:config.gateway,caPath:config.caPath,code:config.code,tokenRoot,namespace});config.code='';
+  // Bundled pairing resolves its CA in the helper; keep the required string field
+  // present even when the caller does not supply a separate CA file.
+  writeHelper({gateway:config.gateway,caPath:config.caPath??'',code:config.code,tokenRoot,namespace});config.code='';
   await until(()=>deviceId&&connected,25000,'QA_NATIVE_PAIR_TIMEOUT');
   const agentUrl=new URL(config.gateway);agentUrl.pathname='/ws/agent';agentUrl.searchParams.set('deviceId',deviceId);
   ({child:agent,exit:agentExit}=launch(config.agentBinary,['--workspace-root',workspace,'--gateway-url',agentUrl.toString()],{cwd:workspace,env:{...env,YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_CA:config.caPath,YUAN_PLATFORM_DATA_DIR:tokenRoot}}));
