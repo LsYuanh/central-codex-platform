@@ -1,0 +1,2530 @@
+diff --git a/codex-rs/Cargo.lock b/codex-rs/Cargo.lock
+index 52bb0e3..cc9ad06 100644
+--- a/codex-rs/Cargo.lock
++++ b/codex-rs/Cargo.lock
+@@ -416,7 +416,7 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
+ 
+ [[package]]
+ name = "app_test_support"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -2050,7 +2050,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-agent-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-core",
+@@ -2062,7 +2062,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-agent-graph-store"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "codex-state",
+@@ -2077,7 +2077,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-agent-identity"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -2097,7 +2097,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-agent-message-board-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "caseless",
+@@ -2120,7 +2120,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-agent-roles"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-config",
+  "codex-file-system",
+@@ -2133,7 +2133,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-analytics"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-app-server-protocol",
+  "codex-git-utils",
+@@ -2154,7 +2154,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-ansi-escape"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "ansi-to-tui",
+  "ratatui",
+@@ -2163,7 +2163,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-api"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "assert_matches",
+@@ -2201,7 +2201,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-app-server"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "app_test_support",
+@@ -2309,7 +2309,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-app-server-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-app-server",
+  "codex-app-server-protocol",
+@@ -2336,7 +2336,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-app-server-daemon"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "blake3",
+@@ -2361,7 +2361,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-app-server-protocol"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-app-server-protocol-noop-macros",
+@@ -2395,11 +2395,11 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-app-server-protocol-noop-macros"
+-version = "0.0.0"
++version = "0.156.1"
+ 
+ [[package]]
+ name = "codex-app-server-test-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -2421,7 +2421,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-app-server-transport"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "axum",
+@@ -2465,7 +2465,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-apply-patch"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "assert_cmd",
+@@ -2485,7 +2485,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-arg0"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-apply-patch",
+@@ -2507,7 +2507,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-async-utils"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+  "rand 0.9.3",
+@@ -2517,7 +2517,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-attachment-store"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+  "serde",
+@@ -2527,7 +2527,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-aws-auth"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "aws-config",
+  "aws-credential-types",
+@@ -2542,7 +2542,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-backend-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-api",
+@@ -2562,7 +2562,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-backend-openapi-models"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "serde",
+  "serde_json",
+@@ -2571,7 +2571,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-build-info"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-install-context",
+  "pretty_assertions",
+@@ -2584,7 +2584,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-bwrap"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "cc",
+  "libc",
+@@ -2593,7 +2593,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-chatgpt"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -2615,7 +2615,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-cli"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "app_test_support",
+@@ -2711,7 +2711,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-http-client",
+  "eventsource-stream",
+@@ -2724,7 +2724,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-cloud-config"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "chrono",
+@@ -2750,7 +2750,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-cloud-tasks"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -2783,7 +2783,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-cloud-tasks-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -2798,7 +2798,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-cloud-tasks-mock-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "chrono",
+  "codex-cloud-tasks-client",
+@@ -2807,7 +2807,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-code-mode"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-code-mode-protocol",
+  "codex-http-client",
+@@ -2830,7 +2830,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-code-mode-host"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "axum",
+@@ -2858,7 +2858,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-code-mode-protocol"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "glob",
+@@ -2876,7 +2876,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-code-mode-runtime"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-code-mode-protocol",
+@@ -2894,11 +2894,11 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-collaboration-mode-templates"
+-version = "0.0.0"
++version = "0.156.1"
+ 
+ [[package]]
+ name = "codex-config"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -2948,7 +2948,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-config-schema"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -2957,7 +2957,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-connectors"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "arc-swap",
+@@ -2979,7 +2979,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-connectors-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-connectors",
+  "codex-core-plugins",
+@@ -2993,7 +2993,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-context-fragments"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "codex-utils-string",
+@@ -3003,7 +3003,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-core"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "arc-swap",
+@@ -3140,7 +3140,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-core-api"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-analytics",
+  "codex-app-server-protocol",
+@@ -3163,7 +3163,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-core-plugins"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -3218,7 +3218,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-diagnostics"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "libc",
+  "pretty_assertions",
+@@ -3226,7 +3226,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-exec"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "assert_cmd",
+@@ -3278,7 +3278,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-exec-server"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "arc-swap",
+@@ -3339,7 +3339,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-exec-server-protocol"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-file-system",
+@@ -3355,7 +3355,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-exec-server-test-support"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-exec-server",
+@@ -3370,7 +3370,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-execpolicy"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -3388,7 +3388,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-experimental-api-macros"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+@@ -3397,7 +3397,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-extension-api"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-config",
+  "codex-context-fragments",
+@@ -3416,7 +3416,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-extension-items"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-utils-absolute-path",
+  "pretty_assertions",
+@@ -3428,7 +3428,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-external-agent-migration"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "chrono",
+  "codex-analytics",
+@@ -3458,7 +3458,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-features"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-network-proxy",
+  "codex-otel",
+@@ -3472,7 +3472,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-feedback"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "bytes",
+@@ -3496,7 +3496,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-file-search"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -3512,7 +3512,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-file-system"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "bytes",
+  "codex-protocol",
+@@ -3524,7 +3524,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-file-watcher"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "notify",
+  "pretty_assertions",
+@@ -3535,7 +3535,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-git-attribution"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-backend-client",
+  "codex-extension-api",
+@@ -3548,7 +3548,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-git-utils"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -3574,7 +3574,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-goal-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -3599,7 +3599,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-guardian-context"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-context-fragments",
+  "codex-history",
+@@ -3610,7 +3610,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-guardian-reviewer"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-analytics",
+@@ -3635,7 +3635,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-guardian-v2"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-analytics",
+@@ -3668,7 +3668,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-history"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-protocol",
+@@ -3680,7 +3680,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-history-notes-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-analytics",
+  "codex-api",
+@@ -3705,7 +3705,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-home"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-extension-api",
+  "codex-utils-absolute-path",
+@@ -3717,7 +3717,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-hooks"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "async-channel",
+@@ -3743,7 +3743,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-http-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "bytes",
+  "codex-utils-cargo-bin",
+@@ -3776,7 +3776,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-image-generation-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-api",
+@@ -3803,7 +3803,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-install-context"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-utils-absolute-path",
+  "codex-utils-home-dir",
+@@ -3816,7 +3816,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-keyring-store"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "keyring",
+  "tracing",
+@@ -3824,7 +3824,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-linux-sandbox"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "clap",
+  "codex-core",
+@@ -3852,7 +3852,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-lmstudio"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-core",
+  "codex-http-client",
+@@ -3866,7 +3866,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-login"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -3909,7 +3909,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-mcp"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "arc-swap",
+@@ -3949,7 +3949,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-mcp-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "axum",
+@@ -3982,7 +3982,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-memories-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-core",
+  "codex-extension-api",
+@@ -4004,7 +4004,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-memories-read"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "codex-shell-command",
+@@ -4014,7 +4014,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-memories-write"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -4051,7 +4051,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-mermaid"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "insta",
+  "pretty_assertions",
+@@ -4060,7 +4060,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-message-history"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-config",
+  "memchr",
+@@ -4074,7 +4074,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-model-provider"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "chrono",
+@@ -4106,7 +4106,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-model-provider-info"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-api",
+  "codex-protocol",
+@@ -4124,7 +4124,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-models-manager"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "chrono",
+  "codex-http-client",
+@@ -4143,7 +4143,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-mxc-sandbox"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "appcontainer_common",
+@@ -4165,7 +4165,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-network-proxy"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -4213,7 +4213,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-ollama"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "assert_matches",
+  "async-stream",
+@@ -4233,7 +4233,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-otel"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "chrono",
+  "codex-api",
+@@ -4266,7 +4266,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-otel-trace-websocket"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "axum",
+@@ -4277,7 +4277,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-plugin"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-config",
+  "codex-protocol",
+@@ -4291,7 +4291,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-process-hardening"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "libc",
+  "pretty_assertions",
+@@ -4299,7 +4299,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-prompts"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-collaboration-mode-templates",
+@@ -4316,7 +4316,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-protocol"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chardetng",
+@@ -4360,7 +4360,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-queue-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-core",
+@@ -4381,7 +4381,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-realtime-webrtc"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-build-info",
+@@ -4399,7 +4399,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-response-debug-context"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-api",
+@@ -4410,7 +4410,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-responses-api-proxy"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -4427,7 +4427,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-rmcp-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "axum",
+@@ -4475,7 +4475,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-rollout"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -4502,7 +4502,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-rollout-trace"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-code-mode",
+@@ -4518,7 +4518,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-sandboxing"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-mxc-sandbox",
+@@ -4545,7 +4545,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-secrets"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "age",
+  "anyhow",
+@@ -4566,7 +4566,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-shell-command"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -4589,7 +4589,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-shell-escalation"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -4609,7 +4609,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-skills"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "codex-shell-command",
+@@ -4626,7 +4626,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-skills-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "assert_matches",
+  "codex-analytics",
+@@ -4663,7 +4663,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-state"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "chrono",
+@@ -4687,7 +4687,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-stdio-to-uds"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-uds",
+@@ -4699,7 +4699,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-tcp-tunnel"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "bytes",
+@@ -4720,7 +4720,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-terminal-detection"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+  "tracing",
+@@ -4728,7 +4728,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-test-binary-support"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-arg0",
+  "tempfile",
+@@ -4736,7 +4736,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-thread-manager-sample"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "clap",
+@@ -4747,7 +4747,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-thread-store"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "chrono",
+  "codex-app-server-protocol",
+@@ -4777,7 +4777,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-tools"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "bitflags 2.13.1",
+  "codex-code-mode",
+@@ -4802,7 +4802,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-tui"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "app_test_support",
+@@ -4928,7 +4928,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-uds"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "async-io",
+  "libc",
+@@ -4942,7 +4942,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-user-verification"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "core-foundation 0.10.1",
+@@ -4962,7 +4962,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-absolute-path"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "dirs",
+  "dunce",
+@@ -4976,14 +4976,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-approval-presets"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+ ]
+ 
+ [[package]]
+ name = "codex-utils-audio"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-protocol",
+@@ -4997,7 +4997,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-cache"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "lru",
+  "sha1 0.10.6",
+@@ -5006,7 +5006,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-cargo-bin"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "assert_cmd",
+  "runfiles",
+@@ -5015,7 +5015,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-cli"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "clap",
+  "codex-protocol",
+@@ -5027,15 +5027,15 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-elapsed"
+-version = "0.0.0"
++version = "0.156.1"
+ 
+ [[package]]
+ name = "codex-utils-fuzzy-match"
+-version = "0.0.0"
++version = "0.156.1"
+ 
+ [[package]]
+ name = "codex-utils-git-discovery"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-git-utils",
+  "codex-utils-absolute-path",
+@@ -5048,7 +5048,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-home-dir"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-utils-absolute-path",
+  "dirs",
+@@ -5058,7 +5058,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-image"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-utils-cache",
+@@ -5071,7 +5071,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-json-to-toml"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+  "serde_json",
+@@ -5080,7 +5080,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-oss"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-core",
+  "codex-lmstudio",
+@@ -5090,7 +5090,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-output-truncation"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "codex-utils-string",
+@@ -5099,7 +5099,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-path"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-utils-absolute-path",
+  "dunce",
+@@ -5110,7 +5110,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-path-uri"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "base64 0.22.1",
+  "codex-utils-absolute-path",
+@@ -5126,7 +5126,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-plugins"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-exec-server",
+  "codex-exec-server-protocol",
+@@ -5140,7 +5140,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-pty"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "filedescriptor",
+@@ -5157,7 +5157,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-readiness"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "assert_matches",
+  "thiserror 2.0.18",
+@@ -5167,7 +5167,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-redacted-string"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "schemars 0.8.22",
+  "serde",
+@@ -5175,14 +5175,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-rustls-provider"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "rustls",
+ ]
+ 
+ [[package]]
+ name = "codex-utils-sandbox-summary"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-protocol",
+  "codex-utils-absolute-path",
+@@ -5192,7 +5192,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-sleep-inhibitor"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "core-foundation 0.9.4",
+  "libc",
+@@ -5202,14 +5202,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-stream-parser"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+ ]
+ 
+ [[package]]
+ name = "codex-utils-string"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+  "regex-lite",
+@@ -5219,14 +5219,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-utils-template"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+ ]
+ 
+ [[package]]
+ name = "codex-v8-poc"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "pretty_assertions",
+  "v8",
+@@ -5234,7 +5234,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-voice-host"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-install-context",
+@@ -5261,7 +5261,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-web-search-extension"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-api",
+  "codex-core",
+@@ -5282,7 +5282,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-websocket-client"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-http-client",
+  "codex-utils-rustls-provider",
+@@ -5298,7 +5298,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-windows-sandbox"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "base64 0.22.1",
+@@ -5324,7 +5324,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-windows-sandbox-service"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-cloud-config",
+@@ -5341,7 +5341,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-workload-identity"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "codex-http-client",
+  "pretty_assertions",
+@@ -5356,7 +5356,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "codex-worktree"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "codex-git-utils",
+@@ -5596,7 +5596,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "core_test_support"
+-version = "0.0.0"
++version = "0.156.1"
+ dependencies = [
+  "anyhow",
+  "assert_cmd",
+diff --git a/codex-rs/core/src/lib.rs b/codex-rs/core/src/lib.rs
+index eb1fc55..98ce2fc 100644
+--- a/codex-rs/core/src/lib.rs
++++ b/codex-rs/core/src/lib.rs
+@@ -107,6 +107,7 @@ mod mcp_skill_dependencies;
+ mod mcp_tool_approval_templates;
+ mod mcp_tool_exposure;
+ mod network_policy_decision;
++pub mod remote_workspace;
+ pub use mcp::McpManager;
+ mod original_image_detail;
+ pub use codex_mcp::CodexAppsToolsCache;
+diff --git a/codex-rs/core/src/tools/registry.rs b/codex-rs/core/src/tools/registry.rs
+index 4d3c50c..ec4cf15 100644
+--- a/codex-rs/core/src/tools/registry.rs
++++ b/codex-rs/core/src/tools/registry.rs
+@@ -54,6 +54,10 @@ pub use codex_tools::ToolExposure;
+ /// Implementers provide the shared `ToolExecutor` behavior plus optional
+ /// core-owned metadata for hooks, telemetry, tool search, and argument diffs.
+ pub(crate) trait CoreToolRuntime: ToolExecutor<ToolInvocation> {
++    /// Only the audited external device-tool runtime may opt into remote dispatch.
++    fn remote_workspace_safe(&self) -> bool {
++        false
++    }
+     /// Whether this built-in control tool needs a structured tool-call event.
+     fn is_builtin_control_tool(&self) -> bool {
+         false
+@@ -557,6 +561,26 @@ impl ToolRegistry {
+             }
+         };
+         let telemetry_tags = tool.telemetry_tags(&invocation);
++        if crate::remote_workspace::enabled() && !tool.remote_workspace_safe() {
++            return Err(FunctionCallError::RespondToModel(
++                "REMOTE_WORKSPACE_UNSUPPORTED: local or unadapted tool".into(),
++            ));
++        }
++        if crate::remote_workspace::enabled()
++            && invocation.turn.collaboration_mode().mode
++                == codex_protocol::config_types::ModeKind::Plan
++        {
++            let name = tool.tool_name();
++            if !name.is_default_namespace()
++                || !(crate::remote_workspace::plan_tool(&name.name)
++                    || matches!(
++                        name.name.as_str(),
++                        "update_plan" | "request_user_input" | "get_goal"
++                    ))
++            {
++                return Err(FunctionCallError::RespondToModel("PLAN_MODE_READ_ONLY: confirm the plan and switch to default mode before executing changes or commands".into()));
++            }
++        }
+         let mut tool_result_tags = Vec::with_capacity(2 + telemetry_tags.len() + 1);
+         let mut extra_trace_fields = Vec::new();
+         sandbox_tags.append_metric_tags(&mut tool_result_tags);
+diff --git a/codex-rs/core/src/tools/handlers/dynamic.rs b/codex-rs/core/src/tools/handlers/dynamic.rs
+index f2b7860..d128701 100644
+--- a/codex-rs/core/src/tools/handlers/dynamic.rs
++++ b/codex-rs/core/src/tools/handlers/dynamic.rs
+@@ -168,6 +168,11 @@
+ impl CoreToolRuntime for DynamicToolHandler {
++    fn remote_workspace_safe(&self) -> bool {
++        self.tool_name.is_default_namespace()
++            && crate::remote_workspace::device_tool(&self.tool_name.name)
++    }
++
+     fn is_third_party_tool(&self) -> bool {
+         true
+     }
+ }
+ 
+diff --git a/codex-rs/core/src/tools/handlers/plan.rs b/codex-rs/core/src/tools/handlers/plan.rs
+index 3495656..71d5083 100644
+--- a/codex-rs/core/src/tools/handlers/plan.rs
++++ b/codex-rs/core/src/tools/handlers/plan.rs
+@@ -100,6 +100,9 @@ impl PlanHandler {
+ }
+ 
+ impl CoreToolRuntime for PlanHandler {
++    fn remote_workspace_safe(&self) -> bool {
++        true
++    }
+     fn is_builtin_control_tool(&self) -> bool {
+         true
+     }
+diff --git a/codex-rs/core/src/tools/handlers/request_user_input.rs b/codex-rs/core/src/tools/handlers/request_user_input.rs
+index b6f4356..9ce996e 100644
+--- a/codex-rs/core/src/tools/handlers/request_user_input.rs
++++ b/codex-rs/core/src/tools/handlers/request_user_input.rs
+@@ -165,6 +165,9 @@ impl RequestUserInputHandler {
+ }
+ 
+ impl CoreToolRuntime for RequestUserInputHandler {
++    fn remote_workspace_safe(&self) -> bool {
++        true
++    }
+     fn is_builtin_control_tool(&self) -> bool {
+         true
+     }
+diff --git a/codex-rs/core/src/tools/handlers/extension_tools.rs b/codex-rs/core/src/tools/handlers/extension_tools.rs
+index ca1bc68..54e910b 100644
+--- a/codex-rs/core/src/tools/handlers/extension_tools.rs
++++ b/codex-rs/core/src/tools/handlers/extension_tools.rs
+@@ -71,6 +71,17 @@ impl ToolExecutor<ToolInvocation> for ExtensionToolAdapter {
+ }
+ 
+ impl CoreToolRuntime for ExtensionToolAdapter {
++    fn remote_workspace_safe(&self) -> bool {
++        let name = self.0.tool_name();
++        (name.is_default_namespace()
++            && matches!(
++                name.name.as_str(),
++                "get_goal" | "create_goal" | "update_goal"
++            ))
++            || (crate::remote_workspace::image_generation_enabled()
++                && name.namespace.as_deref() == Some("image_gen")
++                && name.name == "imagegen")
++    }
+     fn is_builtin_control_tool(&self) -> bool {
+         let tool_name = self.0.tool_name();
+         if tool_name.is_default_namespace() {
+diff --git a/codex-rs/core/src/tools/spec_plan.rs b/codex-rs/core/src/tools/spec_plan.rs
+index f5c88e3..b49f579 100644
+--- a/codex-rs/core/src/tools/spec_plan.rs
++++ b/codex-rs/core/src/tools/spec_plan.rs
+@@ -129,6 +129,51 @@ pub(crate) fn build_tool_router(
+     step_store: &ExtensionData,
+     tool_suggest_candidates: Option<&crate::tools::router::ToolSuggestCandidates>,
+ ) -> CodexResult<ToolRouter> {
++    if crate::remote_workspace::enabled() {
++        let mut registry = ToolRegistry::default();
++        registry.add(PlanHandler);
++        registry.add_with_exposure(
++            RequestUserInputHandler {
++                available_modes: vec![
++                    codex_protocol::config_types::ModeKind::Plan,
++                    codex_protocol::config_types::ModeKind::Default,
++                ],
++            },
++            ToolExposure::DirectModelOnly,
++        );
++        for executor in extension_tool_executors(session, step_store) {
++            let name = executor.tool_name();
++            if (name.is_default_namespace()
++                && matches!(
++                    name.name.as_str(),
++                    "get_goal" | "create_goal" | "update_goal"
++                ))
++                || (crate::remote_workspace::image_generation_enabled()
++                    && name.namespace.as_deref() == Some("image_gen")
++                    && name.name == "imagegen")
++            {
++                registry.register_external(Arc::new(ExtensionToolAdapter::new(executor)));
++            }
++        }
++        append_dynamic_tool_runtimes(&turn_context.dynamic_tools, &mut registry);
++        let denied: Vec<_> = registry
++            .entries()
++            .filter(|tool| !tool.runtime.remote_workspace_safe())
++            .map(|tool| tool.runtime.tool_name())
++            .collect();
++        for name in denied {
++            registry.remove(&name);
++        }
++        let specs = registry.entries().map(|tool| tool.runtime.spec()).collect();
++        return Ok(ToolRouter::from_parts(
++            registry,
++            specs,
++            ToolMode::Direct,
++            BTreeMap::new(),
++            None,
++            &[],
++        ));
++    }
+     let default_agent_type_description =
+         crate::agent::role::spawn_tool_spec::build(&std::collections::BTreeMap::new());
+     let wait_for_environment_tool_config = session
+diff --git a/codex-rs/features/src/lib.rs b/codex-rs/features/src/lib.rs
+index 30318ae..74e5bbf 100644
+--- a/codex-rs/features/src/lib.rs
++++ b/codex-rs/features/src/lib.rs
+@@ -504,6 +504,9 @@ impl Features {
+     }
+ 
+     pub fn enabled(&self, f: Feature) -> bool {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return matches!(f, Feature::Goals);
++        }
+         self.enabled.contains(&f)
+     }
+ 
+diff --git a/codex-rs/core/src/agents_md.rs b/codex-rs/core/src/agents_md.rs
+index 8e0c475..a4b75e2 100644
+--- a/codex-rs/core/src/agents_md.rs
++++ b/codex-rs/core/src/agents_md.rs
+@@ -61,6 +61,9 @@ pub(crate) async fn load_project_instructions(
+     environments: &TurnEnvironmentSnapshot,
+ ) -> io::Result<Option<LoadedAgentsMd>> {
+     let mut loaded = LoadedAgentsMd::from_user_instructions(user_instructions);
++    if crate::remote_workspace::enabled() {
++        return Ok((!loaded.is_empty()).then_some(loaded));
++    }
+     if config.active_project.is_untrusted() {
+         return Ok((!loaded.is_empty()).then_some(loaded));
+     }
+diff --git a/codex-rs/codex-home/src/instructions/mod.rs b/codex-rs/codex-home/src/instructions/mod.rs
+index a16ad66..1779fa7 100644
+--- a/codex-rs/codex-home/src/instructions/mod.rs
++++ b/codex-rs/codex-home/src/instructions/mod.rs
+@@ -39,6 +39,9 @@ impl CodexHomeUserInstructionsProvider {
+ 
+     #[tracing::instrument(name = "instructions.load", skip_all, fields(provider = "global"))]
+     async fn load_from_codex_home(&self) -> LoadedUserInstructions {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return LoadedUserInstructions::default();
++        }
+         let mut warnings = Vec::new();
+         for candidate in [LOCAL_AGENTS_MD_FILENAME, DEFAULT_AGENTS_MD_FILENAME] {
+             let path = self.codex_home.join(candidate);
+diff --git a/codex-rs/core/src/thread_manager.rs b/codex-rs/core/src/thread_manager.rs
+index a0d7a8c..c14c94c 100644
+--- a/codex-rs/core/src/thread_manager.rs
++++ b/codex-rs/core/src/thread_manager.rs
+@@ -1080,6 +1080,11 @@ impl ThreadManager {
+         history: InitialHistory,
+         inherited_instructions: Option<SessionInstructions>,
+     ) -> CodexResult<NewThread> {
++        if crate::remote_workspace::enabled() {
++            return Err(CodexErr::InvalidRequest(
++                "REMOTE_WORKSPACE_UNSUPPORTED: internal subagent".into(),
++            ));
++        }
+         if !matches!(options.session_source, Some(SessionSource::Internal(_))) {
+             return Err(CodexErr::InvalidRequest(
+                 "internal sessions require an internal session source".to_string(),
+@@ -1157,6 +1162,11 @@ impl ThreadManager {
+         forked_from_thread_id: ThreadId,
+         mut options: StartThreadOptions,
+     ) -> CodexResult<NewThread> {
++        if crate::remote_workspace::enabled() {
++            return Err(CodexErr::InvalidRequest(
++                "REMOTE_WORKSPACE_UNSUPPORTED: subagent".into(),
++            ));
++        }
+         let fork_source = self.get_thread(forked_from_thread_id).await?;
+         // Persist queued rollout updates before reading the fork snapshot.
+         fork_source.ensure_rollout_materialized().await;
+diff --git a/codex-rs/core/src/exec_policy.rs b/codex-rs/core/src/exec_policy.rs
+index 21e414e..639a973 100644
+--- a/codex-rs/core/src/exec_policy.rs
++++ b/codex-rs/core/src/exec_policy.rs
+@@ -660,6 +660,9 @@ pub(crate) async fn load_exec_policy_with_warning(
+ }
+ 
+ pub async fn load_exec_policy(config_stack: &ConfigLayerStack) -> Result<Policy, ExecPolicyError> {
++    if crate::remote_workspace::enabled() {
++        return Ok(PolicyParser::new().build());
++    }
+     // Disabled project layers already represent the trust decision, so hooks
+     // and exec-policy loading can reuse the normal trusted-layer view.
+     // Iterate the layers in increasing order of precedence, adding the *.rules
+diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.rs
+index 8dbaad2..42aa3f0 100644
+--- a/codex-rs/config/src/loader/mod.rs
++++ b/codex-rs/config/src/loader/mod.rs
+@@ -146,6 +146,11 @@ pub async fn load_config_layers_state(
+     options: impl Into<ConfigLoadOptions>,
+     thread_config_loader: &dyn ThreadConfigLoader,
+ ) -> io::Result<ConfigLayerStack> {
++    let cwd = if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++        None
++    } else {
++        cwd
++    };
+     let ConfigLoadOptions {
+         loader_overrides: overrides,
+         strict_config,
+diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
+index e71ad88..5974a01 100644
+--- a/codex-rs/core/src/config/mod.rs
++++ b/codex-rs/core/src/config/mod.rs
+@@ -1469,6 +1469,9 @@ impl ConfigBuilder {
+         };
+         let cli_overrides = cli_overrides.unwrap_or_default();
+         let mut harness_overrides = harness_overrides.unwrap_or_default();
++        if crate::remote_workspace::enabled() {
++            harness_overrides.cwd = Some(std::env::current_dir()?);
++        }
+         let loader_overrides = loader_overrides.unwrap_or_default();
+         let cwd_override = harness_overrides.cwd.as_deref().or(fallback_cwd.as_deref());
+         let cwd = match cwd_override {
+@@ -3181,6 +3184,11 @@ impl Config {
+     ) -> std::io::Result<Self> {
+         // Keep the large config-construction future off small test thread stacks.
+         Box::pin(async move {
++        if crate::remote_workspace::enabled() {
++            cfg.notify = None;
++            cfg.model_instructions_file = None;
++            cfg.mcp_servers.clear();
++        }
+         if cfg.experimental_thread_store_endpoint.is_some() {
+             return Err(std::io::Error::new(
+                 std::io::ErrorKind::InvalidInput,
+@@ -3729,8 +3737,9 @@ impl Config {
+             .unwrap_or_default();
+         let terminal_resize_reflow = resolve_terminal_resize_reflow_config(&cfg);
+ 
+-        let agent_roles =
+-            load_agent_roles(fs, &cfg, &config_layer_stack, &mut startup_warnings).await?;
++        let agent_roles = if crate::remote_workspace::enabled() { Default::default() } else {
++            load_agent_roles(fs, &cfg, &config_layer_stack, &mut startup_warnings).await?
++        };
+ 
+         let openai_base_url = cfg
+             .openai_base_url
+diff --git a/codex-rs/core/src/session/mod.rs b/codex-rs/core/src/session/mod.rs
+index a4b4ba0..0458d0e 100644
+--- a/codex-rs/core/src/session/mod.rs
++++ b/codex-rs/core/src/session/mod.rs
+@@ -4981,6 +4981,9 @@ async fn build_hooks_config(
+     environment: Option<&TurnEnvironment>,
+     disabled_plugin_ids: &[String],
+ ) -> HooksConfig {
++    if crate::remote_workspace::enabled() {
++        return HooksConfig::default();
++    }
+     let (hook_shell_program, hook_shell_argv) = environment
+         .and_then(|environment| environment.shell.as_ref())
+         .map(|shell| {
+diff --git a/codex-rs/core/src/session/session.rs b/codex-rs/core/src/session/session.rs
+index 92c1481..fead5f0 100644
+--- a/codex-rs/core/src/session/session.rs
++++ b/codex-rs/core/src/session/session.rs
+@@ -633,6 +633,9 @@ async fn warm_plugins_and_skills_for_session_init(
+     extensions: &codex_extension_api::ExtensionRegistry<Config>,
+     session_source: &SessionSource,
+ ) -> Vec<SkillError> {
++    if crate::remote_workspace::enabled() {
++        return Vec::new();
++    }
+     // Guardian does not consume skills, including the legacy empty-registry catalog.
+     if crate::guardian::is_basic_session_source(session_source) {
+         return Vec::new();
+@@ -1319,7 +1322,9 @@ impl Session {
+             );
+ 
+             let use_zsh_fork_shell = config.features.enabled(Feature::ShellZshFork);
+-            let default_shell = if let Some(user_shell_override) =
++            let default_shell = if crate::remote_workspace::enabled() {
++                shell::Shell { shell_type: shell::ShellType::Bash, shell_path: std::path::PathBuf::from("/bin/false") }
++            } else if let Some(user_shell_override) =
+                 session_configuration.user_shell_override.clone()
+             {
+                 user_shell_override
+diff --git a/codex-rs/core/src/context/world_state/environment.rs b/codex-rs/core/src/context/world_state/environment.rs
+index c165686..5a65c35 100644
+--- a/codex-rs/core/src/context/world_state/environment.rs
++++ b/codex-rs/core/src/context/world_state/environment.rs
+@@ -43,6 +43,9 @@ impl EnvironmentsState {
+         environments: &TurnEnvironmentSnapshot,
+         current_date: Option<String>,
+     ) -> Self {
++        if crate::remote_workspace::enabled() {
++            return Self::default();
++        }
+         let shell_version = if turn_context
+             .config
+             .features
+diff --git a/codex-rs/codex-mcp/src/connection_manager.rs b/codex-rs/codex-mcp/src/connection_manager.rs
+index dda2edd..7fe3611 100644
+--- a/codex-rs/codex-mcp/src/connection_manager.rs
++++ b/codex-rs/codex-mcp/src/connection_manager.rs
+@@ -205,6 +205,9 @@ impl McpConnectionSet {
+         input: McpRuntimeInput,
+         elicitation_router: ElicitationRequestRouter,
+     ) -> Self {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return Self::empty(input.config.prefix_mcp_tool_names);
++        }
+         let trusted_access = TrustedAccessContext::from_runtime(&input);
+         let McpRuntimeInput {
+             startup_policy,
+diff --git a/codex-rs/core-plugins/src/manager.rs b/codex-rs/core-plugins/src/manager.rs
+index 8694817..3593bae 100644
+--- a/codex-rs/core-plugins/src/manager.rs
++++ b/codex-rs/core-plugins/src/manager.rs
+@@ -770,6 +770,9 @@ impl PluginsManager {
+         )
+     )]
+     pub async fn plugins_for_config(&self, config: &PluginsConfigInput) -> PluginLoadOutcome {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return PluginLoadOutcome::default();
++        }
+         if !config.plugins_enabled {
+             return PluginLoadOutcome::default();
+         }
+diff --git a/codex-rs/ext/skills/src/host_service.rs b/codex-rs/ext/skills/src/host_service.rs
+index 3feda36..6cc85a4 100644
+--- a/codex-rs/ext/skills/src/host_service.rs
++++ b/codex-rs/ext/skills/src/host_service.rs
+@@ -118,6 +118,107 @@ impl HostSkillsRequest<'_> {
+ }
+ 
+ impl HostSkillsService {
++    // Platform-owned projections contain only SKILL.md and invocation metadata.
++    // They never contain executable scripts or business files. Read a fresh
++    // catalog for every turn: disabled/deleted skills cannot survive a cache hit.
++    async fn managed_snapshot(&self, input: &HostSkillsLoadInput) -> HostSkillsSnapshot {
++        let empty = || HostSkillsSnapshot::new(Arc::new(Default::default()));
++        let Ok(cwd) = std::env::current_dir() else {
++            return empty();
++        };
++        let root = cwd.join("managed-skills");
++        let Ok(canonical_root) = std::fs::canonicalize(&root) else {
++            return empty();
++        };
++        let Ok(canonical_cwd) = std::fs::canonicalize(&cwd) else {
++            return empty();
++        };
++        if canonical_root != canonical_cwd.join("managed-skills") {
++            return empty();
++        }
++        if std::fs::canonicalize(root.join("catalog.json")).ok()
++            != Some(canonical_root.join("catalog.json"))
++        {
++            return empty();
++        }
++        let Ok(bytes) = std::fs::read(root.join("catalog.json")) else {
++            return empty();
++        };
++        if bytes.len() > 32768 {
++            return empty();
++        }
++        let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else {
++            return empty();
++        };
++        if entries.len() > 102 {
++            return empty();
++        }
++        let mut roots = Vec::new();
++        for entry in entries {
++            let relative = std::path::Path::new(&entry);
++            if relative.components().count() != 2
++                || relative
++                    .components()
++                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
++            {
++                return empty();
++            }
++            let path = root.join(relative);
++            let Ok(canonical) = std::fs::canonicalize(&path) else {
++                return empty();
++            };
++            if canonical != canonical_root.join(relative) {
++                return empty();
++            }
++            // Reject links and unexpected files before the upstream recursive scanner.
++            let Ok(children) = std::fs::read_dir(&path) else {
++                return empty();
++            };
++            for child in children {
++                let Ok(child) = child else {
++                    return empty();
++                };
++                let Ok(kind) = child.file_type() else {
++                    return empty();
++                };
++                if kind.is_file() && child.file_name() == "SKILL.md" {
++                    if child.metadata().map(|m| m.len() > 65536).unwrap_or(true) {
++                        return empty();
++                    }
++                } else if kind.is_dir() && child.file_name() == "agents" {
++                    let Ok(metadata) = std::fs::read_dir(child.path()) else {
++                        return empty();
++                    };
++                    for item in metadata {
++                        let Ok(item) = item else {
++                            return empty();
++                        };
++                        if item.file_name() != "openai.yaml"
++                            || !item.file_type().map(|t| t.is_file()).unwrap_or(false)
++                            || item.metadata().map(|m| m.len() > 4096).unwrap_or(true)
++                        {
++                            return empty();
++                        }
++                    }
++                } else {
++                    return empty();
++                }
++            }
++            let Ok(path) = AbsolutePathBuf::try_from(path) else {
++                return empty();
++            };
++            roots.push(HostSkillRoot::host(
++                path,
++                SkillScope::User,
++                Arc::clone(&LOCAL_FS),
++            ));
++        }
++        let rules = skill_config_rules_from_stack(&input.config_layer_stack);
++        HostSkillsSnapshot::new(Arc::new(
++            self.build_skill_outcome(input, roots, &rules, None).await,
++        ))
++    }
++
+     pub fn new(codex_home: AbsolutePathBuf, bundled_skills_enabled: bool) -> Self {
+         Self::new_with_restriction_product(codex_home, bundled_skills_enabled, Some(Product::Codex))
+     }
+@@ -179,6 +280,9 @@ impl HostSkillsService {
+         input: &HostSkillsLoadInput,
+         fs: Option<Arc<dyn ExecutorFileSystem>>,
+     ) -> HostSkillsSnapshot {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return self.managed_snapshot(input).await;
++        }
+         let roots = self.skill_roots_for_config(input, fs).await;
+         let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
+         let cache_key = config_skills_cache_key(
+@@ -206,6 +310,9 @@ impl HostSkillsService {
+         input: &HostSkillsLoadInput,
+         fs: Arc<dyn ExecutorFileSystem>,
+     ) -> Vec<AbsolutePathBuf> {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return Vec::new();
++        }
+         self.skill_roots_for_config(input, Some(fs))
+             .await
+             .into_iter()
+@@ -244,6 +351,9 @@ impl HostSkillsService {
+         fs: Option<Arc<dyn ExecutorFileSystem>>,
+         request_root_snapshots: Option<&RequestSkillRootSnapshots>,
+     ) -> HostSkillsSnapshot {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return self.managed_snapshot(input).await;
++        }
+         let bundled_skills_enabled = bundled_skills_enabled_from_stack(&input.config_layer_stack);
+         if bundled_skills_enabled {
+             self.ensure_system_skills_installed();
+@@ -410,6 +520,9 @@ impl HostSkillsService {
+     }
+ 
+     fn ensure_system_skills_installed(&self) {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return;
++        }
+         if let Err(err) = install_system_skills(&self.codex_home) {
+             tracing::error!("failed to install system skills: {err}");
+         }
+diff --git a/codex-rs/exec-server/src/environment.rs b/codex-rs/exec-server/src/environment.rs
+index c2cd738..59e98c5 100644
+--- a/codex-rs/exec-server/src/environment.rs
++++ b/codex-rs/exec-server/src/environment.rs
+@@ -183,6 +183,13 @@ impl EnvironmentManager {
+     pub async fn prepare_from_codex_home(
+         codex_home: impl AsRef<std::path::Path>,
+     ) -> Result<PreparedEnvironmentManager, ExecServerError> {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return Ok(PreparedEnvironmentManager {
++                source: PreparedEnvironmentSource::Snapshot(
++                    DefaultEnvironmentProvider::new(Some("none".into())).snapshot_inner(),
++                ),
++            });
++        }
+         let source = if let Some(config) = noise_environment_config_from_env()? {
+             PreparedEnvironmentSource::Noise(config)
+         } else {
+@@ -205,6 +212,13 @@ impl EnvironmentManager {
+ 
+     /// Discovers environment-variable environments without starting connections.
+     pub async fn prepare_from_env() -> Result<PreparedEnvironmentManager, ExecServerError> {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++            return Ok(PreparedEnvironmentManager {
++                source: PreparedEnvironmentSource::Snapshot(
++                    DefaultEnvironmentProvider::new(Some("none".into())).snapshot_inner(),
++                ),
++            });
++        }
+         let source = if let Some(config) = noise_environment_config_from_env()? {
+             PreparedEnvironmentSource::Noise(config)
+         } else {
+diff --git a/codex-rs/git-utils/src/info.rs b/codex-rs/git-utils/src/info.rs
+index 092acd0..87b3c30 100644
+--- a/codex-rs/git-utils/src/info.rs
++++ b/codex-rs/git-utils/src/info.rs
+@@ -28,6 +28,9 @@ use crate::git_process::run_git_command_with_timeout_output;
+ /// directory. If you need Codex to work from such a checkout simply pass the
+ /// `--allow-no-git-exec` CLI flag that disables the repo requirement.
+ pub fn get_git_repo_root(base_dir: &Path) -> Option<PathBuf> {
++    if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++        return None;
++    }
+     let base = if base_dir.is_dir() {
+         base_dir
+     } else {
+@@ -64,6 +67,9 @@ pub struct GitDiffToRemote {
+ /// Uses timeouts to prevent freezing on large repositories.
+ /// All git commands (except the initial repo check) run in parallel for better performance.
+ pub async fn collect_git_info(cwd: &Path) -> Option<GitInfo> {
++    if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++        return None;
++    }
+     // Check if we're in a git repository first
+     let is_git_repo = run_git_command_with_timeout(&["rev-parse", "--git-dir"], cwd)
+         .await?
+@@ -768,6 +774,9 @@ async fn diff_against_sha(cwd: &Path, sha: &GitSha) -> Option<String> {
+ }
+ 
+ fn find_ancestor_git_entry(base_dir: &Path) -> Option<(PathBuf, PathBuf)> {
++    if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++        return None;
++    }
+     let mut dir = base_dir.to_path_buf();
+ 
+     loop {
+diff --git a/codex-rs/git-utils/src/git_process.rs b/codex-rs/git-utils/src/git_process.rs
+index 3ce0431..4fd7089 100644
+--- a/codex-rs/git-utils/src/git_process.rs
++++ b/codex-rs/git-utils/src/git_process.rs
+@@ -30,6 +30,9 @@ impl Drop for KillGitProcessTreeOnDrop {
+ }
+ 
+ fn spawn_git_command(command: &mut Command) -> Option<(Child, KillGitProcessTreeOnDrop)> {
++    if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1") {
++        return None;
++    }
+     scrub_non_inheritable_env_vars(command.as_std_mut());
+     #[cfg(unix)]
+     command.process_group(0);
+diff --git a/codex-rs/app-server/src/extensions.rs b/codex-rs/app-server/src/extensions.rs
+index 34adaff..9a5b1b9 100644
+--- a/codex-rs/app-server/src/extensions.rs
++++ b/codex-rs/app-server/src/extensions.rs
+@@ -68,6 +68,41 @@ pub(crate) fn thread_extensions(
+     if let Some(admission) = turn_start_admission {
+         builder.turn_start_admission(admission);
+     }
++    if codex_core::remote_workspace::enabled() {
++        if codex_core::remote_workspace::image_generation_enabled() {
++            // The extension emits inline bytes; client persistence belongs to Local Agent.
++            codex_image_generation_extension::install(&mut builder, auth_manager.clone(), |_| None);
++        }
++        if let Some(state_db) = state_db {
++            codex_goal_extension::install_with_backend(
++                &mut builder,
++                state_db,
++                analytics_events_client,
++                codex_otel::global(),
++                thread_manager.clone(),
++                goal_service,
++                |config: &Config| GoalExtensionConfig {
++                    enabled: config.features.enabled(codex_features::Feature::Goals),
++                    max_goal_token_budget: config.max_goal_token_budget,
++                },
++            );
++        }
++        let providers = codex_skills_extension::SkillProviders::new()
++            .with_host_provider(Arc::new(codex_skills_extension::HostSkillProvider::new()));
++        codex_skills_extension::install_with_providers_and_metrics(
++            &mut builder,
++            providers,
++            codex_otel::global(),
++            |config: &Config| codex_skills_extension::SkillsExtensionConfig {
++                include_instructions: config.include_skill_instructions,
++                max_context_tokens: config.skill_max_context_tokens,
++                bundled_skills_enabled: false,
++                orchestrator_skills_enabled: false,
++                shadow_selection_enabled: false,
++            },
++        );
++        return Arc::new(builder.build());
++    }
+     if let Some(queue_service) = queue_service {
+         codex_queue_extension::install(&mut builder, queue_service);
+     }
+diff --git a/codex-rs/app-server/src/lib.rs b/codex-rs/app-server/src/lib.rs
+index fc11b83..86f43cf 100644
+--- a/codex-rs/app-server/src/lib.rs
++++ b/codex-rs/app-server/src/lib.rs
+@@ -498,4 +498,9 @@ pub async fn run_main_with_transport_options(
+     runtime_options: AppServerRuntimeOptions,
+ ) -> IoResult<AppServerExit> {
++    let mut runtime_options = runtime_options;
++    if codex_core::remote_workspace::enabled() {
++        runtime_options.plugin_startup_tasks = PluginStartupTasks::Skip;
++        runtime_options.remote_control_startup_mode = RemoteControlStartupMode::DisabledEphemeral;
++    }
+     #[cfg(target_os = "windows")]
+     let _registered_core = codex_windows_sandbox::registered_core_requested();
+diff --git a/codex-rs/app-server/src/message_processor.rs b/codex-rs/app-server/src/message_processor.rs
+index 118106d..b64b57a 100644
+--- a/codex-rs/app-server/src/message_processor.rs
++++ b/codex-rs/app-server/src/message_processor.rs
+@@ -927,6 +927,20 @@ impl MessageProcessor {
+         request_context: RequestContext,
+     ) -> Result<(), JSONRPCErrorError> {
+         let connection_id = connection_request_id.connection_id;
++        if codex_core::remote_workspace::enabled() {
++            let value = serde_json::to_value(&codex_request).map_err(|e| JSONRPCErrorError {
++                code: -32602,
++                message: e.to_string(),
++                data: None,
++            })?;
++            codex_core::remote_workspace::validate_request(&value).map_err(|message| {
++                JSONRPCErrorError {
++                    code: -32602,
++                    message,
++                    data: None,
++                }
++            })?;
++        }
+         if let ClientRequest::Initialize { request_id, params } = codex_request {
+             let connection_initialized = self
+                 .initialize_processor
+diff --git a/codex-rs/app-server/src/request_processors/initialize_processor.rs b/codex-rs/app-server/src/request_processors/initialize_processor.rs
+index 493867c..c639017 100644
+--- a/codex-rs/app-server/src/request_processors/initialize_processor.rs
++++ b/codex-rs/app-server/src/request_processors/initialize_processor.rs
+@@ -190,7 +190,20 @@ impl InitializeRequestProcessor {
+             }
+         }
+ 
+-        let user_agent = get_codex_user_agent();
++        let user_agent = if codex_core::remote_workspace::enabled() {
++            format!(
++                "{} {}{}",
++                get_codex_user_agent(),
++                codex_core::remote_workspace::MARKER,
++                if codex_core::remote_workspace::image_generation_enabled() {
++                    " yuan-zhou-image-generation/1"
++                } else {
++                    ""
++                }
++            )
++        } else {
++            get_codex_user_agent()
++        };
+         let response = InitializeResponse {
+             user_agent,
+             codex_home,
+diff --git a/codex-rs/ext/image-generation/src/extension.rs b/codex-rs/ext/image-generation/src/extension.rs
+index 551e14f..ecc32b1 100644
+--- a/codex-rs/ext/image-generation/src/extension.rs
++++ b/codex-rs/ext/image-generation/src/extension.rs
+@@ -41,2 +41,4 @@ impl ImageGenerationExtensionConfig {
+             available: config.model_provider.is_openai()
++                || (codex_core::remote_workspace::image_generation_enabled()
++                    && config.model_provider_id == "yuan_broker")
+                 || config.model_provider.requires_openai_auth
+diff --git a/codex-rs/ext/image-generation/src/tool.rs b/codex-rs/ext/image-generation/src/tool.rs
+index 66864fe..acfbd6a 100644
+--- a/codex-rs/ext/image-generation/src/tool.rs
++++ b/codex-rs/ext/image-generation/src/tool.rs
+@@ -287,2 +287,6 @@ async fn save_image_generation_result(
+ ) -> Option<AbsolutePathBuf> {
++    // Both LOCAL_FS and executor fallback are forbidden for remote image output.
++    if codex_core::remote_workspace::enabled() {
++        return None;
++    }
+     let (output_dir, save_result) = match save_root {
+@@ -425,2 +429,5 @@ async fn request_for_call_args(
+     let paths = args.referenced_image_paths.as_deref().unwrap_or_default();
++    if codex_core::remote_workspace::enabled() && !paths.is_empty() {
++        return Err(FunctionCallError::RespondToModel("REMOTE_IMAGE_PATH_DENIED: attach client images through Local Agent and use num_last_images_to_include".into()));
++    }
+     if paths.len() > MAX_EDIT_IMAGES {
+diff --git a/codex-rs/models-manager/src/manager.rs b/codex-rs/models-manager/src/manager.rs
+index 7b4d613..2b309a4 100644
+--- a/codex-rs/models-manager/src/manager.rs
++++ b/codex-rs/models-manager/src/manager.rs
+@@ -172,7 +172,13 @@ pub trait ModelsManager: fmt::Debug + Send + Sync {
+         let uses_codex_backend = self
+             .auth_manager()
+             .is_some_and(AuthManager::current_auth_uses_codex_backend);
+-        presets = ModelPreset::filter_by_auth(presets, uses_codex_backend);
++        presets = ModelPreset::filter_by_auth(
++            presets,
++            uses_codex_backend
++                || (std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++                    && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++                    && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")),
++        );
+ 
+         ModelPreset::mark_default_by_picker_visibility(&mut presets);
+ 
+@@ -563,6 +572,12 @@ impl OpenAiModelsManager {
+     }
+ 
+     async fn should_refresh_models(&self) -> bool {
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++            && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++            && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")
++        {
++            return true;
++        }
+         self.endpoint_client.uses_codex_backend().await
+             || self.endpoint_client.has_command_auth()
+             || self.supports_api_key_discovery()
+@@ -579,7 +594,10 @@ impl OpenAiModelsManager {
+             .models
+             .iter()
+             .any(|model| model.visibility == ModelVisibility::List)
+-            && (self.supports_api_key_discovery()
++            && ((std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++                && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++                && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1"))
++                || self.supports_api_key_discovery()
+                 || self.auth_manager.as_ref().is_some_and(|auth_manager| {
+                     auth_manager
+                         .auth_mode()
+@@ -659,6 +674,15 @@ impl OpenAiModelsManager {
+     // A runtime opt-out must hide catalogs fetched before the flag was disabled, too.
+     fn api_key_discovery_disabled(&self) -> bool {
++        // Broker catalogs serve remote clients; apply the exception to both refresh
++        // and cache reads, while retaining the caller's provider identity checks.
++        if std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1")
++            && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++            && std::env::var("CODEX_REMOTE_MODEL_CATALOG").as_deref() == Ok("1")
++        {
++            return false;
++        }
++
+         self.uses_api_key_auth()
+             && !self.endpoint_client.has_command_auth()
+             && (!self.endpoint_client.supports_api_key_models()
+                 || !self.api_key_model_discovery_enabled.load(Ordering::SeqCst))
+diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_workspace.rs
+new file mode 100644
+--- /dev/null
++++ b/codex-rs/core/src/remote_workspace.rs
+@@ -0,0 +1,322 @@
++//! Yuan Zhou's process-wide, fail-closed workspace boundary.
++//! This module is added to the pinned upstream codex-core by the patch generator.
++use serde_json::Value;
++use std::sync::OnceLock;
++
++pub const MARKER: &str =
++    "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1 yuan-zhou-plan-goal/1";
++
++/// These device operations inspect client state. General exec is deliberately
++/// excluded: a shell string cannot reliably prove that it has no side effects.
++pub fn plan_tool(name: &str) -> bool {
++    matches!(name, "device_workspace_list" | "device_read_file" | "device_read_text"
++        | "device_workspace_context" | "device_workspace_search" | "device_workspace_read_text"
++        | "device_workspace_git_status" | "device_workspace_git_diff" | "conversation_read")
++}
++
++pub fn enabled() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| std::env::var("CODEX_REMOTE_WORKSPACE").as_deref() == Ok("1"))
++}
++
++/// Only the reviewed Mac credential-broker transport may advertise native images.
++pub fn image_generation_enabled() -> bool {
++    enabled() && cfg!(target_os = "macos")
++        && std::env::var("CODEX_REMOTE_AUTH_MODE").as_deref() == Ok("broker")
++        && std::env::var("CODEX_REMOTE_IMAGE_GENERATION").as_deref() == Ok("1")
++}
++
++pub fn device_tool(name: &str) -> bool {
++    matches!(
++        name,
++        "device_workspace_list"
++            | "device_read_file"
++            | "device_exec"
++            | "device_read_text"
++            | "device_write_file"
++            | "device_copy_file"
++            | "device_publish_file"
++            | "device_output_paths"
++            | "device_list_outputs"
++            | "device_workspace_context"
++            | "device_workspace_search"
++            | "device_workspace_read_text"
++            | "device_workspace_git_status"
++            | "device_workspace_git_diff"
++            | "device_workspace_apply_patch"
++            | "device_skill_load"
++            | "device_skill_draft"
++            | "conversation_read"
++    )
++}
++
++pub fn validate_request(request: &Value) -> Result<(), String> {
++    let method = request.get("method").and_then(Value::as_str).unwrap_or("");
++    if !matches!(
++        method,
++        "initialize"
++            | "thread/start"
++            | "thread/resume"
++            | "thread/read"
++            | "thread/list"
++            | "thread/loaded/list"
++            | "thread/name/set"
++            | "thread/archive"
++            | "thread/delete"
++            | "thread/unarchive"
++            | "thread/unsubscribe"
++            | "turn/start"
++            | "turn/steer"
++            | "turn/interrupt"
++            | "model/list"
++            | "account/read"
++            | "account/rateLimits/read"
++            | "skills/list"
++            | "collaborationMode/list"
++            | "thread/goal/get"
++            | "thread/goal/set"
++            | "thread/goal/clear"
++    ) {
++        return Err(format!("REMOTE_WORKSPACE_UNSUPPORTED: {method}"));
++    }
++    // Deletion is limited to the Worker's own persisted conversation history.
++    // Never accept a caller-supplied file path or execution-policy override.
++    if method == "thread/delete"
++        && !request
++            .get("params")
++            .and_then(Value::as_object)
++            .is_some_and(|params| {
++                params.len() == 1
++                    && params
++                        .get("threadId")
++                        .and_then(Value::as_str)
++                        .is_some_and(|id| !id.is_empty())
++            })
++    {
++        return Err("REMOTE_THREAD_DELETE_INVALID: expected threadId only".into());
++    }
++    let Some(params) = request.get("params").and_then(Value::as_object) else {
++        return Ok(());
++    };
++    if let Some(mode) = params.get("collaborationMode").filter(|v| !v.is_null()) {
++        if !matches!(mode.get("mode").and_then(Value::as_str), Some("default" | "plan"))
++            || mode.get("settings").and_then(|v| v.get("developer_instructions")).is_some_and(|v| !v.is_null())
++        {
++            return Err("REMOTE_COLLABORATION_INVALID: use built-in mode instructions".into());
++        }
++    }
++    if method == "skills/list" {
++        // Discovery never accepts client-controlled host roots or cwd values.
++        if params
++            .keys()
++            .any(|key| key != "forceReload" && key != "cwds")
++            || params
++                .get("cwds")
++                .is_some_and(|v| v.as_array().is_none_or(|a| !a.is_empty()))
++        {
++            return Err("REMOTE_SKILL_SCOPE_DENIED".into());
++        }
++    }
++    for key in [
++        "config",
++        "permissions",
++        "sandboxPolicy",
++        "sandbox",
++        "approvalPolicy",
++        "approvalsReviewer",
++        "environment",
++        "environments",
++        "path",
++        "forkFrom",
++    ] {
++        if params.get(key).is_some_and(|v| !v.is_null()) {
++            return Err(format!("REMOTE_WORKSPACE_OVERRIDE_DENIED: {key}"));
++        }
++    }
++    if let Some(cwd) = params.get("cwd").filter(|v| !v.is_null()) {
++        let worker = std::env::current_dir().map_err(|e| e.to_string())?;
++        if cwd.as_str() != worker.to_str() {
++            return Err("REMOTE_WORKSPACE_OVERRIDE_DENIED: cwd".into());
++        }
++    }
++    if let Some(input) = params.get("input").and_then(Value::as_array) {
++        for item in input {
++            if !matches!(
++                item.get("type").and_then(Value::as_str),
++                Some("text" | "image" | "skill")
++            ) {
++                return Err("REMOTE_WORKSPACE_UNSUPPORTED: local input or skill".into());
++            }
++            if item.get("type").and_then(Value::as_str) == Some("skill") {
++                let raw = item
++                    .get("path")
++                    .and_then(Value::as_str)
++                    .ok_or("REMOTE_SKILL_PATH_DENIED")?;
++                let root = std::env::current_dir()
++                    .map_err(|e| e.to_string())?
++                    .join("managed-skills");
++                let canonical_cwd =
++                    std::fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
++                        .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                let canonical_root =
++                    std::fs::canonicalize(&root).map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                if canonical_root != canonical_cwd.join("managed-skills")
++                    || std::fs::canonicalize(root.join("catalog.json")).ok()
++                        != Some(canonical_root.join("catalog.json"))
++                {
++                    return Err("REMOTE_SKILL_PATH_DENIED".into());
++                }
++                let path = std::path::Path::new(raw);
++                let canonical =
++                    std::fs::canonicalize(path).map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                let relative = path
++                    .strip_prefix(&root)
++                    .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                if relative.components().count() != 3
++                    || relative
++                        .components()
++                        .any(|c| !matches!(c, std::path::Component::Normal(_)))
++                    || path.file_name().and_then(|v| v.to_str()) != Some("SKILL.md")
++                    || canonical
++                        != std::fs::canonicalize(&root)
++                            .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?
++                            .join(relative)
++                {
++                    return Err("REMOTE_SKILL_PATH_DENIED".into());
++                }
++                let catalog: Value = serde_json::from_slice(
++                    &std::fs::read(root.join("catalog.json"))
++                        .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?,
++                )
++                .map_err(|_| "REMOTE_SKILL_PATH_DENIED")?;
++                let key = relative
++                    .parent()
++                    .ok_or("REMOTE_SKILL_PATH_DENIED")?
++                    .to_string_lossy()
++                    .replace('\\', "/");
++                if !catalog
++                    .as_array()
++                    .is_some_and(|rows| rows.iter().any(|v| v.as_str() == Some(&key)))
++                {
++                    return Err("REMOTE_SKILL_PATH_DENIED".into());
++                }
++            }
++            if item.get("type").and_then(Value::as_str) == Some("image")
++                && !item
++                    .get("url")
++                    .and_then(Value::as_str)
++                    .is_some_and(|url| url.starts_with("data:image/"))
++            {
++                return Err("REMOTE_WORKSPACE_UNSUPPORTED: only inline images".into());
++            }
++        }
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use serde_json::json;
++
++    #[test]
++    fn thread_delete_accepts_only_a_thread_id() {
++        assert!(validate_request(&json!({"method":"thread/delete","params":{"threadId":"019b0000-0000-7000-8000-000000000001"}})).is_ok());
++        for params in [
++            json!(null),
++            json!({}),
++            json!({"threadId":""}),
++            json!({"threadId":123}),
++            json!({"threadIds":["thread"]}),
++        ] {
++            assert!(validate_request(&json!({"method":"thread/delete","params":params})).is_err());
++        }
++        for key in ["path", "cwd", "config", "sandbox", "force"] {
++            assert!(
++                validate_request(
++                    &json!({"method":"thread/delete","params":{"threadId":"thread",key:"/private"}})
++                )
++                .is_err()
++            );
++        }
++        for method in [
++            "thread/deleteAll",
++            "thread/delete/extra",
++            "fs/delete",
++            "command/exec",
++        ] {
++            assert!(
++                validate_request(&json!({"method":method,"params":{"threadId":"thread"}})).is_err()
++            );
++        }
++    }
++
++    #[test]
++    fn rejects_workspace_rpc_and_overrides() {
++        for method in [
++            "command/exec",
++            "fs/readFile",
++            "fuzzyFileSearch",
++            "review/start",
++            "thread/fork",
++            "mcpServer/reload",
++        ] {
++            assert!(validate_request(&json!({"method": method})).is_err());
++        }
++        for key in [
++            "cwd",
++            "config",
++            "sandbox",
++            "approvalPolicy",
++            "path",
++            "environments",
++        ] {
++            assert!(
++                validate_request(&json!({"method":"thread/start", "params":{key:"/private"}}))
++                    .is_err()
++            );
++        }
++        assert!(validate_request(&json!({"method":"turn/start","params":{"input":[{"type":"localImage","path":"/private/image.png"}]}})).is_err());
++        assert!(
++            validate_request(
++                &json!({"method":"turn/start","params":{"input":[{"type":"text","text":"test"}]}})
++            )
++            .is_ok()
++        );
++    }
++
++    #[test]
++    fn allowlist_is_exact() {
++        assert!(device_tool("device_exec"));
++        assert!(device_tool("device_skill_draft"));
++        assert!(device_tool("conversation_read"));
++        for name in [
++            "exec_command",
++            "apply_patch",
++            "device_mcp_exec",
++            "device_exec_extra",
++            "spawn_agent",
++        ] {
++            assert!(!device_tool(name));
++        }
++    }
++
++    #[test]
++    fn managed_skill_discovery_rejects_host_overrides() {
++        assert!(
++            validate_request(
++                &json!({"method":"skills/list","params":{"forceReload":true,"cwds":[]}})
++            )
++            .is_ok()
++        );
++        assert!(
++            validate_request(&json!({"method":"skills/list","params":{"cwds":["/private"]}}))
++                .is_err()
++        );
++        assert!(
++            validate_request(&json!({"method":"skills/list","params":{"perCwdExtraUserRoots":[]}}))
++                .is_err()
++        );
++        assert!(validate_request(&json!({"method":"turn/start","params":{"input":[{"type":"skill","name":"forged","path":"/private/SKILL.md"}]}})).is_err());
++    }
++}

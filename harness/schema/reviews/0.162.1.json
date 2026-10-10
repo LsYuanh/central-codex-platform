@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "version": "0.162.1",
+  "commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+  "schema": {
+    "stable": {
+      "baseSha256": "dfd6f7197d4caa6a240c49984d6d2441ba768ca38a657dc92e2d48f726548476",
+      "sha256": "ed720775cdc264c7c5a930d582c56a27f5f8b18408187f783f93b9713ed40d48"
+    },
+    "experimental": {
+      "baseSha256": "d12fa7acdd7a0067879e7ae2b228cd19a4256b9a18dc6a6557676fcfa500a6ce",
+      "sha256": "41d34da4227eadccf971272b9a02dfc6679e23a9992cce1d265ac01a20ab38e3"
+    }
+  },
+  "review": [
+    "The existing remote request allowlist is unchanged. New attachmentOwner/list, prediction/request, gateway OAuth and experimental Bedrock routes remain denied. Prediction and OAuth events do not enable capabilities.",
+    "Goal set/clear add optional origin. The authenticated gateway stamps user actions as user and lifecycle pauses as automatic; callers cannot inject origin. Explicit Stop records user provenance. Legacy optional-field parsing remains compatible.",
+    "MessagePhase adds partial_answer. Existing clients retain its text as ordinary answer content without marking it final; turn/completed remains the completion signal. No UI or history payload migration is required.",
+    "Turn adds optional rootTurnId; turn/start adds optional parentTurnId and rootTurnId. The gateway does not request delegated work or enable internal subagents. Existing required fields are unchanged.",
+    "ResponseItem adds additional_tools. This does not grant tool execution permission: runtime dispatch still requires the audited remote-safe registry and unsupported tool calls remain denied.",
+    "Model provider capabilities remove namespaceTools on an unsupported route. ModelList field descriptions clarify future reasoning-effort values; existing model and effort wire fields are unchanged.",
+    "Skill paths retain string wire values via LegacyAppPathString. The managed catalog, exact projected directories and source validation remain enforced.",
+    "Thread item cursors accept item anchors and entries add optional timestamps. Item paging is outside the remote allowlist; history uses thread/read. Subagent activity adds optional model/effort metadata while internal subagents remain disabled.",
+    "CodexErrorInfo changes oneOf to anyOf and adds flexUnavailable/tooManyDenials, retaining existing variants. Misalignment reviewTarget and PlanType promax are metadata only; no continuation or approval permission is granted.",
+    "MCP discovery/resource/OAuth metadata, browser extension requirements, independent speed-mode support, environment skills/authBearerToken and realtime backendReasoningStatus are additive on unsupported routes. Existing gateway and remote policy do not expose them.",
+    "Approval binds only these exact source and schema hashes. Compilation, native probes, OS isolation, real model/device acceptance and publication are separate gates."
+  ]
+}

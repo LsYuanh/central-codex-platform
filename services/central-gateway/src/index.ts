@@ -552,14 +552,14 @@ const conversationReadUsers = new Set<string>();
 const taskControlUsers = new Set<string>();
 const taskControlBusy = new Set<string>();
 
-async function pauseThreadGoal(userId: string, threadId: string): Promise<void> {
+async function pauseThreadGoal(userId: string, threadId: string, origin: "user" | "automatic" = "automatic"): Promise<void> {
   if (!taskControlUsers.has(userId)) return;
   const bridge = workers.forUser(userId);
   let result:unknown;
   try { result = await bridge.request("thread/goal/get", {threadId}); }
   catch (error) { if(isMissingRolloutError(error)||/thread not found:/i.test(String(error)))return; throw error; }
   if (isRecord(result) && isRecord(result.goal) && result.goal.status === "active") {
-    await bridge.request("thread/goal/set", {threadId, status:"paused"});
+    await bridge.request("thread/goal/set", {threadId, status:"paused", origin});
   }
 }
 
@@ -1393,7 +1393,7 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
     if (message.operation === "conversation.turn.cancel" && typeof message.payload?.threadId === "string") {
       turnCancelVersions.set(message.payload.threadId, (turnCancelVersions.get(message.payload.threadId) ?? 0) + 1);
       cancelDeviceTools(message.payload.threadId, typeof message.payload.turnId === "string" ? message.payload.turnId : undefined);
-      await pauseThreadGoal(client.userId, message.payload.threadId);
+      await pauseThreadGoal(client.userId, message.payload.threadId, "user");
       if(typeof message.payload.turnId!=="string"){
         await interruptThread(client.userId,message.payload.threadId);
         send(client.socket,{type:"response",requestId:message.requestId,ok:true,data:{}});return;

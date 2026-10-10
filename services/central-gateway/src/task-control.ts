@@ -18,7 +18,7 @@ export function collaborationMode(value: unknown): CollaborationMode | undefined
   return value.mode as CollaborationMode;
 }
 
-export function goalParams(payload: Record<string, unknown>, operation: "get" | "set" | "clear") {
+export function goalParams(payload: Record<string, unknown>, operation: "get" | "set" | "clear"): Record<string, unknown> {
   const allowed = operation === "set" ? ["threadId", "objective", "status", "tokenBudget"] : ["threadId"];
   if (Object.keys(payload).some(k => !allowed.includes(k)) || typeof payload.threadId !== "string" || !payload.threadId) throw Error("GOAL_INPUT_INVALID");
   if (operation === "set") {
@@ -28,7 +28,9 @@ export function goalParams(payload: Record<string, unknown>, operation: "get" | 
     if (payload.tokenBudget !== undefined && payload.tokenBudget !== null && (!Number.isSafeInteger(payload.tokenBudget) || Number(payload.tokenBudget) <= 0)) throw Error("GOAL_BUDGET_INVALID");
     if (!["objective", "status", "tokenBudget"].some(k => k in payload)) throw Error("GOAL_INPUT_INVALID");
   }
-  return payload;
+  // This entry point handles authenticated UI actions only. Do not let callers
+  // supply provenance; automatic lifecycle pauses use a separate internal path.
+  return operation === "get" ? payload : {...payload, origin: "user"};
 }
 
 export function planToolAllowed(tool: string): boolean {

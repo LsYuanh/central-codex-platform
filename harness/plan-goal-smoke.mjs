@@ -13,6 +13,8 @@ let child,nextId=0,scenario='plan',step=0,stderr='',failure;
 const pending=new Map(),events=[],requests=[],deviceCalls=[],questions=[];
 const send=m=>child.stdin.write(JSON.stringify(m)+'\n');
 const rpc=(method,params={})=>new Promise((resolve,reject)=>{
+  // These goal RPCs simulate explicit UI actions, including pause and resume.
+  if(method==='thread/goal/set'||method==='thread/goal/clear')params={...params,origin:'user'};
   const id=++nextId,timer=setTimeout(()=>{pending.delete(id);reject(Error(`timeout ${method}: ${stderr.slice(-1500)}`));},30000);
   pending.set(id,{resolve:r=>{clearTimeout(timer);r.error?reject(Error(JSON.stringify(r.error))):resolve(r.result);}});send({id,method,params});
 });

@@ -17,6 +17,26 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+### 0.162.1 candidate adaptation (2026-10-10, local validation only)
+
+`candidatePatches["0.162.1"].basePatch` selects an exact-commit, byte-pinned
+replacement base patch. It differs from the fixed base only in three file sections:
+dynamic tools retain upstream third-party metadata alongside remote-safe dispatch;
+session warmup retains the Guardian source check and skips host discovery in remote
+mode; the broker catalog exception now covers the shared refresh/cache gate while
+preserving provider identity checks. The existing 0.159.2 overlay is reused for the
+cloud skill rename and isolated Mac policy inputs. Other versions use their original
+base patch. A regression verifies all other patch sections remain identical.
+
+Both exact schema snapshots were reviewed. Gateway UI goal mutations and Stop carry
+user provenance; automatic lifecycle pauses carry automatic provenance. New upstream
+routes remain denied. Mac ARM64 Rust 1.95.0 compilation and 13 native/gateway probes
+passed; the goal probe also passed against the older embedded 0.156.1 binary.
+See `verification/runtime-adaptation-01621-20261010.json` for evidence and the initial
+test-fixture correction. Windows model transport/SSE overlay conflicts remain blocked.
+This adaptation has not been pushed, signed, published, installed or tested with a real
+model/device. The live central remains 0.159.2; the embedded fixed baseline is 0.156.1.
+
 ### Native image generation (2026-10-10, central deployed)
 
 The pinned 0.156.1 extension is installed with no filesystem executor in remote

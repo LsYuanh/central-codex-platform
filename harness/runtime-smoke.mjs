@@ -70,6 +70,17 @@ try {
   for(const [method,params] of [['command/exec',{command:['/bin/sh','-c',`touch ${sideEffect}`]}],['fs/readFile',{path:sentinel}]]) {
     const result=await rpc(method,params);assert.match(result.error?.message??'',/REMOTE_WORKSPACE_UNSUPPORTED/,method);
   }
+  // New upstream routes must stay closed until the remote architecture supports them.
+  for(const [method,params] of [
+    ['thread/attachmentOwner/list',{attachmentType:'fixture',identityKey:'fixture'}],
+    ['thread/prediction/request',{threadId:'fixture',sourceTurnId:'fixture'}],
+    ['account/gatewayOAuth/read',null],['account/gatewayOAuth/login',null],['account/gatewayOAuth/cancel',null],
+    ['account/bedrock/checkGovCloudRequirements',{}],
+  ]) {
+    // Older pinned runtimes can reject unknown methods during deserialization;
+    // known routes must reach our denylist with valid required parameters.
+    const result=await rpc(method,params);assert.match(result.error?.message??'',/REMOTE_WORKSPACE_UNSUPPORTED|unknown variant/,method);
+  }
   const skillDir=join(worker,'managed-skills','native-probe','1');mkdirSync(skillDir,{recursive:true});
   writeFileSync(join(skillDir,'SKILL.md'),'---\nname: native-probe\ndescription: Native managed skill verification\n---\nMANAGED_SKILL_BODY_NATIVE_LOADED\n');
   writeFileSync(join(worker,'managed-skills','catalog.json'),JSON.stringify(['native-probe/1']));

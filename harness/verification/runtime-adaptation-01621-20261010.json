@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-10",
+  "status": "mac-adaptation-validated-locally",
+  "version": "0.162.1",
+  "commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+  "archiveSha256": "79c8ea8547e1dd9969f63ef6b76a4fb0d1a024ef36c0c627fbcd2ffb658d9312",
+  "basePatch": {
+    "path": "adaptations/0.162.1-base.patch",
+    "sha256": "157a806f3e9302b72c3fbe8d5807d26340b7e403be5c20baa90664fbe71919b4"
+  },
+  "overlay": {
+    "path": "adaptations/0.159.2.patch",
+    "sha256": "3c58220a3654691ea028cdf7a22d1917be10c57b06253b09c801a89e629c2e89"
+  },
+  "combinedPatchSha256": "3ac7c2a934b53b165ed285eec0a929659581ccfa0c6a786a49760f57be6014f9",
+  "schemaReview": "harness/schema/reviews/0.162.1.json",
+  "discovery": {
+    "status": "ready-for-validation",
+    "platform": "darwin-arm64",
+    "officialTagAndCommitCheckedOnline": true,
+    "archiveSource": "previously SHA-256-verified official archive; fresh codeload request timed out",
+    "sourceFilesCompared": 32,
+    "builtSourceMatchesDiscovery": true
+  },
+  "build": {
+    "status": "compiled",
+    "seconds": 458.467,
+    "platform": "darwin-arm64",
+    "rust": "1.95.0",
+    "profile": "dev; debug=0; incremental=0; jobs=2",
+    "binarySha256": "14f51a34c23f84d747200fbe8c3a52b9df39f12231d9f7704db1688c04f600c4"
+  },
+  "probes": [
+    {
+      "script": "harness/runtime-smoke.mjs",
+      "exitCode": 0,
+      "initialExitCode": 1,
+      "retry": "passed after supplying required parameters; unknown methods on old versions may fail deserialization, known routes must fail remote policy"
+    },
+    {
+      "script": "harness/plan-goal-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/image-generation-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/model-catalog-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/thread-delete-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/worker-isolation-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/model-credential-broker-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/image-generation-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/worker-routing-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/task-control-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/task-control-gateway-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/runtime-updates-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/native-account-update-smoke.mjs",
+      "exitCode": 0
+    }
+  ],
+  "localChecks": [
+    "gateway TypeScript build",
+    "10 runtime trial/release tests",
+    "task-control validation and accounting",
+    "authenticated TLS task-control gateway regression, including user Stop and automatic disconnect provenance",
+    "exact protocol hash gate"
+  ],
+  "backwardCompatibility": {
+    "version": "0.156.1",
+    "probe": "harness/plan-goal-smoke.mjs",
+    "passed": true
+  },
+  "limitations": {
+    "windowsCentral": "windows-model.patch still conflicts in http-client transport.rs and codex-api sse/responses.rs; fail closed",
+    "realModel": false,
+    "realDevice": false,
+    "hostedCI": false,
+    "packaged": false,
+    "signed": false,
+    "published": false,
+    "deployed": false
+  },
+  "unchanged": {
+    "embeddedBaseline": "0.156.1",
+    "existingAdaptation": "0.159.2",
+    "liveCentral": "0.159.2",
+    "centralApp": "0.1.6",
+    "client": "0.2.9"
+  },
+  "notes": [
+    "Original native probe failure was a new test missing required fields, not a runtime boundary failure. Corrected test passed against the same compiled binary.",
+    "Mac source-discovery retry used explicit installed Command Line Tools after the default Xcode selection failed; no global toolchain setting was changed.",
+    "Local validation does not replace the complete hosted release gate or live model/device acceptance."
+  ]
+}

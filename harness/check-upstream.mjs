@@ -73,7 +73,10 @@ export async function checkUpstream(destination,requestedVersion) {
     const extraction=spawnSync('tar',['-xzf',archivePath,'-C',destination,...exclude],{encoding:'utf8',timeout:60000});
     if(extraction.status!==0)throw Error('UPSTREAM_EXTRACT_FAILED');
     const adaptation=candidatePatch(pin,version,report.commit);
-    const patches=[pin.patch,...(adaptation?[adaptation]:[]),...(process.platform==='win32'?[pin.windowsPatch,pin.windowsModelPatch]:[])];
+    // A source refactor can require a reviewed replacement of the base patch.
+    // It is bound to the exact candidate commit and hash, never used by other releases.
+    const basePatch=adaptation?.basePatch??pin.patch;
+    const patches=[basePatch,...(adaptation?[adaptation]:[]),...(process.platform==='win32'?[pin.windowsPatch,pin.windowsModelPatch]:[])];
     const appliedBytes=[];
     report.patches=[];
     for(const spec of patches){
@@ -82,7 +85,7 @@ export async function checkUpstream(destination,requestedVersion) {
       if(createHash('sha256').update(bytes).digest('hex')!==spec.sha256)throw Error('UPSTREAM_PATCH_HASH_MISMATCH');
       // Upstream source-less workspace package versions follow the candidate version.
       // Never carry the old release's Cargo.lock hunk or touch third-party pins.
-      const exclusions=spec===pin.patch?['--exclude=codex-rs/Cargo.lock']:[];
+      const exclusions=spec===basePatch?['--exclude=codex-rs/Cargo.lock']:[];
       const result=spawnSync('git',['-c','core.autocrlf=input','apply','--check',...exclusions,patch],{cwd:source,env:isolatedGitEnvironment(source),encoding:'utf8',timeout:60000});
       if(result.status!==0){report.status='needs-adaptation';report.code='UPSTREAM_PATCH_CONFLICT';await writeFile(join(destination,'patch-conflicts.txt'),result.stderr);await save();return report;}
       const applied=spawnSync('git',['-c','core.autocrlf=input','apply',...exclusions,patch],{cwd:source,env:isolatedGitEnvironment(source),encoding:'utf8',timeout:60000});

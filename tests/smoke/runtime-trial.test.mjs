@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {zstdDecompressSync,zstdCompressSync} from 'node:zlib';
 import {schemaReviewMatches,checkRuntimeSchema} from '../../harness/check-runtime-schema.mjs';
+import {createHash} from 'node:crypto';
 
 test('trial selects an exact stable release while scheduled discovery stays on latest',()=>{
   assert.equal(releasePath(),'latest');
@@ -39,6 +40,28 @@ test('discovery token is limited to the official upstream API',()=>{
     assert.equal(upstreamHeaders(url,true,token).authorization,undefined);
   }
   assert.equal(upstreamHeaders('https://api.github.com/repos/openai/codex/releases/latest',true).authorization,undefined);
+});
+
+test('0.162.1 replaces only the three conflicting base sections and keeps older pins intact',()=>{
+  const pin=JSON.parse(readFileSync(new URL('../../harness/upstream.json',import.meta.url)));
+  const candidate=pin.candidatePatches['0.162.1'];
+  assert.equal(candidatePatch(pin,'0.162.1',candidate.commit),candidate);
+  assert.throws(()=>candidatePatch(pin,'0.162.1','0'.repeat(40)),/UPSTREAM_ADAPTATION_COMMIT_MISMATCH/);
+  assert.equal(pin.candidatePatches['0.159.2'].basePatch,undefined);
+  const read=spec=>{
+    const bytes=readFileSync(new URL('../../harness/'+spec.path,import.meta.url));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'),spec.sha256);
+    return bytes.toString().replaceAll('\r\n','\n');
+  };
+  const sections=patch=>new Map(patch.split(/(?=^diff --git )/m).filter(Boolean).map(s=>[s.split('\n')[0],s]));
+  const base=sections(read(pin.patch)),next=sections(read(candidate.basePatch));
+  read(candidate);
+  assert.deepEqual([...next.keys()],[...base.keys()]);
+  assert.deepEqual([...base].filter(([key,value])=>next.get(key)!==value).map(([key])=>key.split(' ')[2]),[
+    'a/codex-rs/core/src/tools/handlers/dynamic.rs',
+    'a/codex-rs/core/src/session/session.rs',
+    'a/codex-rs/models-manager/src/manager.rs',
+  ]);
 });
 test('reviewed schema requires exact release, commit, baseline and candidate bytes',()=>{
   const review=JSON.parse(readFileSync(new URL('../../harness/schema/reviews/0.159.2.json',import.meta.url)));

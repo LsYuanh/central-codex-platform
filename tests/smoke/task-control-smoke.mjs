@@ -13,6 +13,10 @@ for(const tool of ['device_exec','device_write_file','device_copy_file','device_
 assert(planToolAllowed('device_workspace_read_text'));assert(planToolAllowed('conversation_read'));
 for(const payload of [{threadId:'a',status:'complete'},{threadId:'a',objective:''},{threadId:'a',status:'active',tokenBudget:-1},{threadId:'a',status:'active',tokenBudget:1.1},{threadId:'a',objective:'ok',config:{}}])assert.throws(()=>goalParams(payload,'set'));
 assert.equal(goalParams({threadId:'a',objective:'done',tokenBudget:null},'set').objective,'done');
+assert.equal(goalParams({threadId:'a',status:'paused'},'set').origin,'user');
+assert.equal(goalParams({threadId:'a'},'clear').origin,'user');
+assert.equal(goalParams({threadId:'a'},'get').origin,undefined);
+assert.throws(()=>goalParams({threadId:'a',status:'paused',origin:'automatic'},'set'),/GOAL_INPUT_INVALID/);
 let manager,bridge,modeFailure=false,delayed;
 class Bridge {
   alive=true;enforcedRuntimeReady=true;pid=100;
