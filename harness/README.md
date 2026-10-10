@@ -17,7 +17,7 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
-### 0.162.1 candidate adaptation (2026-10-10, local validation only)
+### 0.162.1 candidate adaptation (2026-10-10, published and deployed on Mac)
 
 `candidatePatches["0.162.1"].basePatch` selects an exact-commit, byte-pinned
 replacement base patch. It differs from the fixed base only in three file sections:
@@ -34,8 +34,11 @@ routes remain denied. Mac ARM64 Rust 1.95.0 compilation and 13 native/gateway pr
 passed; the goal probe also passed against the older embedded 0.156.1 binary.
 See `verification/runtime-adaptation-01621-20261010.json` for evidence and the initial
 test-fixture correction. Windows model transport/SSE overlay conflicts remain blocked.
-This adaptation has not been pushed, signed, published, installed or tested with a real
-model/device. The live central remains 0.159.2; the embedded fixed baseline is 0.156.1.
+Commit `7785ab3` subsequently passed all 16 hosted builder steps and signing publication
+in run `38031874184`. The existing central App 0.1.6 automatically installed 0.162.1;
+real GPT-6.1 Sol and Windows Local Agent file/command, reconnect and history acceptance
+passed. See `verification/runtime-published-01621-20261010.json`. The embedded fixed
+baseline remains 0.156.1; Windows central overlay conflicts are still blocked.
 
 ### Native image generation (2026-10-10, central deployed)
 

@@ -2,7 +2,7 @@
 
 # Local AgentRPC
 
-## App Server 0.162.1 adaptation (2026-10-10, source only)
+## App Server 0.162.1 adaptation (2026-10-10, central deployed)
 
 No Local Agent wire methods change. The gateway stamps authenticated UI goal
 set/clear requests with upstream `origin: "user"`; explicit Stop also records a user
@@ -10,8 +10,9 @@ pause. Disconnect, cold-resume preparation and other lifecycle guards use
 `origin: "automatic"`. Clients cannot supply this field. Existing Thread ownership,
 device checks, plan restrictions and continuation quotas remain in force. The new
 field is optional upstream and the goal probe also passes against embedded 0.156.1.
-Mac candidate compilation/probes pass; publication and real model/device acceptance
-remain separate. See the [release manual](docs/发布与回退手册.md).
+Mac hosted compilation/probes and signing publication passed. The central native
+updater installed 0.162.1; real GPT-6.1 Sol and Windows Local Agent file/command,
+reconnect and history acceptance passed. See the [release manual](docs/发布与回退手册.md).
 
 ## Native image generation (central deployed 2026-10-10; new desktop states unreleased)
 
