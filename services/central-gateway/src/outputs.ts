@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import { createHash } from "node:crypto";
+import { imageFailureMessage } from './image-generation.js';
 import type { AgentRpcMethod, AgentRpcResponsePayload, OutputArtifact } from "@central-codex-spike/agentrpc-types";
 type Json = Record<string, unknown>;
 const LIMIT = 20 * 1024 * 1024;
@@ -30,8 +31,16 @@ export class OutputBroker {
   finishGeneration(threadId:string,turnId?:string){
     // A completed turn may finish saving after the next turn has already started.
     for(const output of this.list(threadId))if(output.status==='generating'&&(!turnId||output.turnId===turnId)){
-      output.status='generationFailed';output.error='图片生成已结束或中断，未收到完整图片；请查看对话错误后重试生成';this.changed(output);
+      output.status='generationFailed';output.error??='图片生成已结束或中断，未收到完整图片；请查看对话错误后重试生成';this.changed(output);
     }
+  }
+  noteGenerationFailure(threadId:string,turnId:string,code:string){
+    const message=imageFailureMessage(code);if(!message)return;
+    const candidates=this.list(threadId).filter(o=>o.source==='generatedImage'&&o.turnId===turnId&&['generating','generationFailed'].includes(o.status));
+    // The upstream header identifies a turn, not an individual call. Never guess
+    // which output failed when multiple image calls share that turn.
+    if(candidates.length!==1)return;
+    const output=candidates[0]!;output.error=message;this.changed(output);
   }
   private changed(output: OutputArtifact) { this.options.changed(output.threadId, output); }
   private async request(output: OutputArtifact, method: AgentRpcMethod, params: Json): Promise<Json> {
@@ -109,7 +118,7 @@ export class OutputBroker {
       output.status='generating';this.changed(output);return Promise.resolve();
     }
     if(item.failure||item.status!=='completed'){
-      output.status='generationFailed';output.error='图片生成失败，未收到可保存的完整图片；请查看对话错误后重试生成';this.changed(output);return Promise.resolve();
+      output.status='generationFailed';output.error??='图片生成失败，未收到可保存的完整图片；请查看对话错误后重试生成';this.changed(output);return Promise.resolve();
     }
     output.status="saving";delete output.error;this.changed(output);
     const target=output;

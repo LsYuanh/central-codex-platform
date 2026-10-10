@@ -12,6 +12,28 @@ export function legacyImageOutput(value:unknown):unknown {
 }
 type Json = Record<string, unknown>;
 const record = (v:unknown):v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
+/** Closed categories only: never return provider messages, prompts or request IDs. */
+export function imageProviderError(value:unknown):string|undefined {
+  if(!record(value))return;
+  const error=record(value.error)?value.error:value;
+  const code=typeof error.code==='string'?error.code.toLowerCase():'';
+  if(['moderation_blocked','content_policy_violation','safety_violation'].includes(code))return 'IMAGE_CONTENT_REJECTED';
+  if(['invalid_image','invalid_image_format','image_parse_error','invalid_base64_image','invalid_image_url'].includes(code))return 'IMAGE_REFERENCE_INVALID';
+  if(['image_too_large','image_size_exceeded'].includes(code))return 'IMAGE_REFERENCE_TOO_LARGE';
+  if(['unsupported_image_format','unsupported_image_media_type'].includes(code))return 'IMAGE_REFERENCE_UNSUPPORTED';
+}
+export function imageFailureMessage(code:string):string|undefined {
+  const messages:Record<string,string>={
+    IMAGE_CONTENT_REJECTED:'图片请求被上游内容审核拒绝，未生成图片。请核对图片与编辑要求；如认为是误判，请联系服务提供方。',
+    IMAGE_REFERENCE_INVALID:'上游无法解析参考图片。请重新选择有效图片后再试。',
+    IMAGE_REFERENCE_TOO_LARGE:'参考图片超过上游大小限制。请缩小图片后重新添加。',
+    IMAGE_REFERENCE_UNSUPPORTED:'上游不支持该参考图片格式。请改用 PNG、JPEG 或 WebP。',
+    MODEL_PROVIDER_RATE_LIMITED:'图片服务额度或请求频率受限，请稍后再试。',
+    MODEL_CREDENTIAL_REJECTED:'图片服务登录凭据被拒绝，请联系中央管理员检查模型登录。',
+    MODEL_PROVIDER_HTTP_400:'图片服务拒绝了请求，原因尚未识别（HTTP 400）。请联系管理员核对，勿反复重试。',
+  };
+  return Object.hasOwn(messages,code)?messages[code]:undefined;
+}
 export function imageRoute(method:string|undefined,url:string|undefined):'generations'|'edits'|undefined {
   if(method!=='POST')return;
   return /^\/(?:v1\/)?images\/(generations|edits)$/.exec(url??'')?.[1] as 'generations'|'edits'|undefined;

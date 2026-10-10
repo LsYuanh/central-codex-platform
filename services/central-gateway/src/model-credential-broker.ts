@@ -8,7 +8,7 @@ import {Transform, type Duplex} from "node:stream";
 import {createModelPipeTls, MODEL_PIPE_SERVER_NAME} from "./model-pipe-tls.js";
 import {readWindowsPrivateJson, WindowsPrivateJsonError} from "./windows-private-json.js";
 import {catalogVersion, fetchModelCatalog} from "./model-catalog.js";
-import {imageRoute, validateImageRequest, sanitizeImageResponse} from './image-generation.js';
+import {imageRoute, validateImageRequest, sanitizeImageResponse, imageProviderError} from './image-generation.js';
 
 type Provider = {id:string;kind:"chatgpt"|"api-key";credentialFile:string;baseUrl?:string};
 type Binding = {providerId:string;enabled:boolean};
@@ -28,6 +28,8 @@ export type ModelCredentialBrokerOptions = {
   audit?:(event:{action:string;userId?:string;status:"succeeded"|"failed";errorCode?:string})=>void;
   /** Stop the user's Worker when an automatic binding reload invalidates its capability. */
   onRevoke?:(userId:string)=>void;
+  /** Scoped diagnostic only; the gateway correlates it with a unique image output. */
+  onImageFailure?:(userId:string,turnId:string,code:string)=>void;
 };
 class SafeError extends Error {constructor(readonly code:string,readonly status=503){super(code);}}
 const obj=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==="object"&&!Array.isArray(value);
@@ -36,7 +38,10 @@ const fail=(code:string,status=503):never=>{throw new SafeError(code,status);};
 const limit=(value:number|undefined,fallback:number,max:number)=>{const result=value??fallback;if(!Number.isSafeInteger(result)||result<1||result>max)throw Error("MODEL_BROKER_INVALID_LIMIT");return result;};
 const responseFailed=(value:unknown):boolean=>obj(value)&&(value.type==="error"||value.type==="response.failed"||value.error!==undefined&&value.error!==null||obj(value.response)&&(value.response.status==="failed"||value.response.error!==undefined&&value.response.error!==null));
 /** Only closed diagnostic categories leave the authority, never provider-supplied strings. */
-function providerHttpError(status:number,bytes?:Buffer):SafeError{
+function providerHttpError(status:number,bytes?:Buffer,image=false):SafeError{
+  if(image&&bytes){
+    try{const code=imageProviderError(JSON.parse(bytes.toString('utf8')));if(code)return new SafeError(code,422);}catch{/* Unknown or non-JSON diagnostics remain redacted. */}
+  }
   if(status===401||status===403)return new SafeError("MODEL_CREDENTIAL_REJECTED",401);
   if(status===429)return new SafeError("MODEL_PROVIDER_RATE_LIMITED",429);
   const code=`MODEL_PROVIDER_HTTP_${Number.isInteger(status)&&status>=100&&status<=599?status:502}`;
@@ -422,10 +427,10 @@ export class ModelCredentialBroker {
             incoming.destroy();reject(new SafeError(`MODEL_PROVIDER_ENCODING_${category}_UNSUPPORTED`,502));return;
           }
           if(status<200||status>=300){
-            if(status!==400){incoming.destroy();reject(providerHttpError(status));return;}
+            if(status!==400&&!(image&&[403,422].includes(status))){incoming.destroy();reject(providerHttpError(status));return;}
             const diagnostics:Buffer[]=[];let size=0;
             incoming.on("data",chunk=>{size+=chunk.length;if(size>32768){incoming.destroy();reject(providerHttpError(status));}else diagnostics.push(Buffer.from(chunk));});
-            incoming.once("end",()=>reject(providerHttpError(status,Buffer.concat(diagnostics))));
+            incoming.once("end",()=>reject(providerHttpError(status,Buffer.concat(diagnostics),Boolean(image))));
             incoming.once("error",()=>reject(providerHttpError(status)));incoming.once("aborted",()=>reject(providerHttpError(status)));return;
           }
           const rawType=String(incoming.headers["content-type"]??"");
@@ -467,6 +472,10 @@ export class ModelCredentialBroker {
     }catch(error){
       const safe=error instanceof SafeError?error:new SafeError("MODEL_PROVIDER_UNAVAILABLE");
       try{this.emit("model.request",lease?.userId,"failed",safe.code);}catch{}
+      const imageTurn=request.headers['x-codex-image-turn-id'];
+      if(lease&&admitted&&imageRoute(request.method,request.url)&&bounded(imageTurn,256)){
+        try{this.options.onImageFailure?.(lease.userId,imageTurn,safe.code);}catch{/* Diagnostics must not change request completion. */}
+      }
       this.error(response,safe);
     }finally{
       if(timer)clearTimeout(timer);

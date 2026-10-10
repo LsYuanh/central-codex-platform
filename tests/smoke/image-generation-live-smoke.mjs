@@ -29,12 +29,17 @@ try{
     }
   });
   const namespace='com.centralcodex.harnessqa.central-live';client.stdin.write(JSON.stringify({gateway,caPath,code,tokenRoot,namespace})+'\n');await until(()=>connected,'native pairing',20000);
-  const agent=start('target/debug/local-agent.exe',['--workspace-root',workspace,'--gateway-url',gateway.replace('/ws','/ws/agent')+'?deviceId='+deviceId],{YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_DATA_DIR:tokenRoot,YUAN_PLATFORM_CA:caPath});agent.stdout.resume();
+  const agent=start('target/debug/local-agent.exe',['--workspace-root',workspace,'--gateway-url',gateway.replace('/ws','/ws/agent')+'?deviceId='+deviceId],{YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_DATA_DIR:tokenRoot,YUAN_PLATFORM_CA:caPath});
+  const localPending=new Map();
+  createInterface({input:agent.stdout}).on('line',line=>{const reply=JSON.parse(line);localPending.get(reply.id)?.(reply);});
+  const local=(method,params)=>new Promise((resolve,reject)=>{const id=randomUUID(),timer=setTimeout(()=>{localPending.delete(id);reject(Error('LOCAL_RPC_TIMEOUT'));},20000);localPending.set(id,r=>{clearTimeout(timer);localPending.delete(id);r.ok?resolve(r.result):reject(Error(r.error));});agent.stdin.write(JSON.stringify({id,method,params})+'\n');});
   await until(async()=>{try{return (await request('device.workspace.context')).ok;}catch{return false;}},'Windows Agent',30000);
   const init=await request('session.initialize',{clientInfo:{name:'yuan-image-live-qa',version:'1'},imageOutputStates:1});assert.equal(init.platformCapabilities.imageGeneration,true,JSON.stringify(init.platformCapabilities));
   const catalog=await request('skill.list');const skill=catalog.skills.find(s=>s.id==='yuan-zhou-imagegen');assert(skill);
   threadId=(await request('conversation.create',{model:'gpt-6-sol'})).thread.id;
-  const turn=await request('conversation.turn.create',{threadId,clientMessageId:randomUUID(),skills:[{id:skill.id,revision:skill.revision}],input:[{type:'text',text:'Generate exactly one image using image_gen.imagegen: a simple small blue sailboat floating on calm pale water, minimalist flat illustration, no text. This is an authorized image integration test; generate directly, do not ask questions. Do not use shell or draw through code. After generation, use device_list_outputs to verify that Local Agent saved it to this client. If image generation fails, report the failure and stop; do not retry generation.'}]});
+  const attachments=process.env.QA_EDIT_IMAGE?[{...await local('file/stat',{path:resolve(process.env.QA_EDIT_IMAGE)}),id:randomUUID(),source:'localFile'}]:[];
+  const subject=attachments.length?'Edit the attached sailboat image using image_gen.imagegen with num_last_images_to_include=1: change the boat hull to red and preserve everything else.':'Generate exactly one image using image_gen.imagegen: a simple small blue sailboat floating on calm pale water, minimalist flat illustration, no text.';
+  const turn=await request('conversation.turn.create',{threadId,clientMessageId:randomUUID(),skills:[{id:skill.id,revision:skill.revision}],attachments,input:[{type:'text',text:subject+' This is an authorized image integration test; act directly, do not ask questions. Do not use shell or draw through code. After generation, use device_list_outputs to verify that Local Agent saved it to this client. If image generation fails, report the failure and stop; do not retry generation.'}]});
   await until(()=>events.some(e=>e.eventType==='turn.completed'&&e.data?.threadId===threadId&&e.data.turn.id===turn.turn.id),'real image generation');
   const history=await request('conversation.read',{threadId,includeTurns:true});
   const output=history.outputs.find(o=>o.source==='generatedImage');
@@ -48,7 +53,7 @@ try{
   assert(events.some(e=>e.name==='output/state'&&e.data?.output?.status==='generating'));
   assert(events.some(e=>e.name==='output/state'&&e.data?.output?.status==='saved'));
   const before=output.version;await request('conversation.resume',{threadId});const restored=await request('conversation.read',{threadId,includeTurns:true});assert.equal(restored.outputs.find(o=>o.id===output.id)?.version,before);
-  const result={ok:true,root,threadId,output,checks:['authenticated-WSS','native-device-token','real-central-image-generation','builtin-skill','Windows-Local-Agent-save','client-SHA256','live-generation-and-save-states','history-resume']};
+  const result={ok:true,root,threadId,output,checks:['authenticated-WSS','native-device-token',attachments.length?'real-central-image-edit-with-client-attachment':'real-central-image-generation','builtin-skill','Windows-Local-Agent-save','client-SHA256','live-generation-and-save-states','history-resume']};
   await writeFile(join(root,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }catch(error){console.error(JSON.stringify({root,error:String(error),diagnostics}));throw error;}
 finally{

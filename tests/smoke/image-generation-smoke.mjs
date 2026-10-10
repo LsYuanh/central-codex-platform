@@ -10,10 +10,10 @@ import {ModelCredentialBroker} from '../../services/central-gateway/dist/model-c
 import {OutputBroker} from '../../services/central-gateway/dist/outputs.js';
 import {SkillStore} from '../../services/central-gateway/dist/skills.js';
 import {IMAGEGEN_ID} from '../../services/central-gateway/dist/builtin-imagegen.js';
-import {legacyImageOutput} from '../../services/central-gateway/dist/image-generation.js';
+import {legacyImageOutput,imageFailureMessage} from '../../services/central-gateway/dist/image-generation.js';
 const root=realpathSync(mkdtempSync(join(tmpdir(),'image-generation-')));
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAJ0lEQVR4nO3NMQ0AAAwDoPpXVllVsWMJGCA9FoFAIBAIBAKBQPAlGGDXYIj+Um+RAAAAAElFTkSuQmCC','base64');
-const received=[],errors=[],pending=new Set();let aborted=false;
+const received=[],errors=[],imageFailures=[],pending=new Set();let aborted=false;
 const upstream=http.createServer(async(req,res)=>{
   try{
     const parts=[];for await(const c of req)parts.push(c);const body=JSON.parse(Buffer.concat(parts));
@@ -21,6 +21,7 @@ const upstream=http.createServer(async(req,res)=>{
     assert.match(req.url,/^\/backend-api\/codex\/images\/(generations|edits)$/);
     if(body.prompt==='hold'){pending.add(res);res.on('close',()=>{pending.delete(res);aborted=true;});return;}
     if(body.prompt==='error'){res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({secret:'DO_NOT_LEAK'}));return;}
+    if(body.prompt.startsWith('diagnostic:')){const [,code,status]=body.prompt.split(':');res.writeHead(Number(status),{'content-type':'application/json'});res.end(JSON.stringify({error:{code,message:'DO_NOT_LEAK prompt credentials and request id'}}));return;}
     res.writeHead(200,{'content-type':'application/json'});
     res.end(JSON.stringify({created:1,data:[{b64_json:body.prompt==='invalid'?'not an image':png.toString('base64'),generation_id:'provider-state'}],background:'opaque',secret:'DO_NOT_LEAK'}));
   }catch(e){errors.push(e);res.writeHead(500);res.end();}
@@ -29,7 +30,7 @@ await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${upstream.address().port}`;
 const config={version:1,users:{alice:{providerId:'chat',enabled:true},bob:{providerId:'chat',enabled:true},api:{providerId:'api',enabled:true}},providers:{chat:{id:'chat',kind:'chatgpt',credentialFile:join(root,'chat.json'),baseUrl:base+'/backend-api/codex'},api:{id:'api',kind:'api-key',credentialFile:join(root,'api.json'),baseUrl:base+'/v1'}}};
 const token='e30.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')+'.fixture';
-const broker=await ModelCredentialBroker.start({configFile:join(root,'config.json'),allowLoopbackTestProviders:true,memorySource:{readConfig:()=>config,readCredential:ref=>ref.endsWith('api.json')?{apiKey:'SYNTHETIC_ONLY'}:{tokens:{access_token:token,account_id:'fixture'}}}});
+const broker=await ModelCredentialBroker.start({configFile:join(root,'config.json'),allowLoopbackTestProviders:true,onImageFailure:(userId,turnId,code)=>imageFailures.push({userId,turnId,code}),memorySource:{readConfig:()=>config,readCredential:ref=>ref.endsWith('api.json')?{apiKey:'SYNTHETIC_ONLY'}:{tokens:{access_token:token,account_id:'fixture'}}}});
 const alice=broker.createLease('alice'),bob=broker.createLease('bob'),api=broker.createLease('api');
 const request=async(lease,body,path='/v1/images/generations')=>{
   const res=await fetch(broker.url+path,{method:'POST',headers:{authorization:'Bearer '+lease.token,'content-type':'application/json','x-codex-image-turn-id':'same-turn','chatgpt-account-id':'forged'},body:JSON.stringify(body)});
@@ -49,6 +50,11 @@ try{
   assert.equal((await request(alice,body,'/images/generations?redirect=x')).status,404);
   assert.equal(received.length,count,'invalid requests reached provider');
   const denied=await request(alice,{...body,prompt:'error'});assert.equal(denied.status,401);assert(!denied.text.includes('DO_NOT_LEAK'));
+  for(const [code,expected,status]of [['moderation_blocked','IMAGE_CONTENT_REJECTED',400],['content_policy_violation','IMAGE_CONTENT_REJECTED',403],['invalid_image','IMAGE_REFERENCE_INVALID',422],['image_too_large','IMAGE_REFERENCE_TOO_LARGE',400],['unsupported_image_format','IMAGE_REFERENCE_UNSUPPORTED',400],['DO_NOT_LEAK','MODEL_PROVIDER_HTTP_400',400]]){
+    const rejected=await request(alice,{...body,prompt:`diagnostic:${code}:${status}`});
+    assert.equal(JSON.parse(rejected.text).error.code,expected);assert(!rejected.text.includes('DO_NOT_LEAK'));
+    assert.deepEqual(imageFailures.at(-1),{userId:'alice',turnId:'same-turn',code:expected});
+  }
   assert.equal((await request(alice,{...body,prompt:'invalid'})).status,502);
   const held=request(alice,{...body,prompt:'hold'}).catch(()=>({status:0}));
   const deadline=Date.now()+3000;while(!pending.size&&Date.now()<deadline)await new Promise(r=>setTimeout(r,10));assert(pending.size);alice.release();await held;
@@ -79,5 +85,13 @@ try{
   await outputs.image('thread','next-turn',{...item,id:'next-image'});
   outputs.finishGeneration('thread','turn');assert.equal(outputs.list('thread')[3].status,'generating','previous turn cleanup must not interrupt next turn');
   outputs.finishGeneration('thread');assert.equal(outputs.list('thread')[3].status,'generationFailed');
+  await outputs.image('thread','diagnostic-turn',{...item,id:'blocked'});
+  outputs.noteGenerationFailure('thread','foreign-turn','IMAGE_CONTENT_REJECTED');assert.equal(outputs.list('thread')[4].error,undefined);
+  outputs.noteGenerationFailure('thread','diagnostic-turn','IMAGE_CONTENT_REJECTED');
+  await outputs.image('thread','diagnostic-turn',{...item,id:'blocked',status:'failed'});
+  assert.equal(outputs.list('thread')[4].error,imageFailureMessage('IMAGE_CONTENT_REJECTED'));
+  await outputs.image('thread','parallel',{...item,id:'parallel-a'});await outputs.image('thread','parallel',{...item,id:'parallel-b'});
+  outputs.noteGenerationFailure('thread','parallel','IMAGE_CONTENT_REJECTED');assert.equal(outputs.list('thread')[5].error,undefined,'ambiguous parallel calls must not be misattributed');
+  assert.equal(imageFailureMessage('__proto__'),undefined);
   assert.deepEqual(errors,[]);console.log(JSON.stringify({ok:true,checks:['chatgpt-only','exact-routes','inline-references','user-scoped-headers','redacted-errors','revocation-cancels-image','skill-gate-preferences','generation-vs-save','offline-save-retry','idempotent-save','interrupted-terminal-state']}));
 }finally{await broker.close();upstream.closeAllConnections();await new Promise(r=>upstream.close(r));}
