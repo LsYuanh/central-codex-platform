@@ -209,7 +209,10 @@ for (const [path, item] of edits) {
   }
   // Keep the startup guard anchored to runtime options, not the unrelated auth type
   // renamed in 0.159. Full-file hashes still protect pinned source preparation.
-  const context = path === 'codex-rs/app-server/src/lib.rs' ? ['--unified=2'] : [];
+  // Image code gained adjacent provider/transparent-background fields in 0.159.2;
+  // anchor the same boundary changes without coupling to those unrelated lines.
+  const context = path.startsWith('codex-rs/ext/image-generation/') ? ['--unified=1']
+    : path === 'codex-rs/app-server/src/lib.rs' ? ['--unified=2'] : [];
   const diff = spawnSync('git', ['diff', '--no-index', '--no-prefix', ...context, '--', originalPath, join(root, path)], { encoding: 'utf8' });
   if (![0, 1].includes(diff.status)) throw new Error(diff.stderr);
   const lines = diff.stdout.split('\n');

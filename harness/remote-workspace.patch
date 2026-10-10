@@ -2121,40 +2121,28 @@ diff --git a/codex-rs/ext/image-generation/src/extension.rs b/codex-rs/ext/image
 index 551e14f..ecc32b1 100644
 --- a/codex-rs/ext/image-generation/src/extension.rs
 +++ b/codex-rs/ext/image-generation/src/extension.rs
-@@ -39,6 +39,8 @@ impl ImageGenerationExtensionConfig {
-     fn from_config(config: &Config, resolve_save_root: &SaveRootResolver) -> Self {
-         Self {
+@@ -41,2 +41,4 @@ impl ImageGenerationExtensionConfig {
              available: config.model_provider.is_openai()
 +                || (codex_core::remote_workspace::image_generation_enabled()
 +                    && config.model_provider_id == "yuan_broker")
                  || config.model_provider.requires_openai_auth
-                 || config.model_provider.uses_openai_actor_authorization(),
-             provider: config.model_provider.clone(),
 diff --git a/codex-rs/ext/image-generation/src/tool.rs b/codex-rs/ext/image-generation/src/tool.rs
 index 66864fe..acfbd6a 100644
 --- a/codex-rs/ext/image-generation/src/tool.rs
 +++ b/codex-rs/ext/image-generation/src/tool.rs
-@@ -285,6 +285,10 @@ async fn save_image_generation_result(
-     call_id: &str,
-     result: &str,
+@@ -287,2 +287,6 @@ async fn save_image_generation_result(
  ) -> Option<AbsolutePathBuf> {
 +    // Both LOCAL_FS and executor fallback are forbidden for remote image output.
 +    if codex_core::remote_workspace::enabled() {
 +        return None;
 +    }
      let (output_dir, save_result) = match save_root {
-         Some(save_root) => {
-             let path = image_generation_artifact_path(save_root, session_id, call_id);
-@@ -423,6 +427,9 @@ async fn request_for_call_args(
-     environments: &[ToolEnvironment<'_>],
- ) -> Result<ImageRequest, FunctionCallError> {
+@@ -425,2 +429,5 @@ async fn request_for_call_args(
      let paths = args.referenced_image_paths.as_deref().unwrap_or_default();
 +    if codex_core::remote_workspace::enabled() && !paths.is_empty() {
 +        return Err(FunctionCallError::RespondToModel("REMOTE_IMAGE_PATH_DENIED: attach client images through Local Agent and use num_last_images_to_include".into()));
 +    }
      if paths.len() > MAX_EDIT_IMAGES {
-         return Err(FunctionCallError::RespondToModel(format!(
-             "`referenced_image_paths` must contain at most {MAX_EDIT_IMAGES} paths"
 diff --git a/codex-rs/models-manager/src/manager.rs b/codex-rs/models-manager/src/manager.rs
 index 7b4d613..2b309a4 100644
 --- a/codex-rs/models-manager/src/manager.rs

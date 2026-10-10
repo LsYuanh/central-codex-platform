@@ -11,12 +11,15 @@ import {stageGateway,verifyCandidate,digestFile} from '../build/stage-central-ga
 const [outputArg,licenseArg,requestedVersion]=process.argv.slice(2);
 if(!outputArg||!licenseArg||process.platform!=='darwin'||process.arch!=='arm64')throw Error('Usage on isolated Mac arm64: node scripts/release/build-runtime-update.mjs NEW_OUTPUT NODE_LICENSE [STABLE_VERSION]');
 const root=resolve('.'),output=resolve(outputArg);
+const sourceRevision=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'});
+const sourceCommit=sourceRevision.stdout?.trim();
+if(sourceRevision.status!==0||! /^[a-f0-9]{40}$/.test(sourceCommit))throw Error('RUNTIME_SOURCE_COMMIT_REQUIRED');
 await mkdir(output,{recursive:false});
 const started=Date.now();
 function resources(){const disk=statfsSync(output);return {elapsedSeconds:Math.round((Date.now()-started)/1000),totalMemoryBytes:totalmem(),freeMemoryBytes:freemem(),availableDiskBytes:disk.bavail*disk.bsize};}
 const initialResources=resources();
 const report=await checkUpstream(join(output,'upstream'),requestedVersion);
-Object.assign(report,{requestedVersion,resources:{start:initialResources,afterDiscovery:resources()},steps:[]});
+Object.assign(report,{sourceCommit,requestedVersion,resources:{start:initialResources,afterDiscovery:resources()},steps:[]});
 await writeFile(join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
 if(report.status!=='ready-for-validation'){console.log(JSON.stringify(report));process.exit(report.status==='up-to-date'?0:1);}
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/(TOKEN|SECRET|PASSWORD|SIGNING|API_KEY|CODEX_HOME)/i.test(key)));
@@ -51,6 +54,7 @@ try{
   probe(process.execPath,['harness/thread-delete-smoke.mjs',binary]);
   probe(process.execPath,['harness/worker-isolation-smoke.mjs']);
   probe(process.execPath,['tests/smoke/model-credential-broker-smoke.mjs']);
+  probe(process.execPath,['tests/smoke/image-generation-smoke.mjs']);
   probe(process.execPath,['tests/smoke/worker-routing-smoke.mjs']);
   probe(process.execPath,['tests/smoke/task-control-smoke.mjs']);
   probe(process.execPath,['tests/smoke/task-control-gateway-smoke.mjs']);

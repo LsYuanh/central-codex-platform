@@ -1,12 +1,16 @@
 name: Runtime Mac trial
 
 on:
-  # Bootstrap the trial without merging unpublished product work into main.
+  # Bootstrap privately without enabling default-branch releases.
   push:
     branches: [codex/runtime-hosted-mac-trial]
     paths:
       - .github/workflows/runtime-trial.yml
+      - .github/workflows/runtime-update.yml
+      - .github/workflows/runtime-validate.yml
       - scripts/release/build-runtime-update.mjs
+      - scripts/release/runtime-release-artifact.mjs
+      - tests/smoke/runtime-release.test.mjs
       - harness/check-upstream.mjs
       - harness/check-runtime-schema.mjs
       - harness/remote-workspace.patch
@@ -21,7 +25,6 @@ on:
         required: true
         default: '0.159.2'
 
-# This workflow has no signing environment, secrets, release job or write permission.
 permissions:
   contents: read
 concurrency:
@@ -29,55 +32,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Exercise the release pipeline without inherited secrets or publication.
   trial:
-    runs-on: macos-15
-    timeout-minutes: 180
-    env:
-      CARGO_BUILD_JOBS: '2'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
-      CARGO_INCREMENTAL: '0'
-      RUNTIME_TRIAL_VERSION: ${{ inputs.upstream_version || '0.159.2' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: Verify host and record initial resources
-        run: |
-          echo "RUNTIME_TRIAL_OUTPUT=$RUNNER_TEMP/runtime-trial-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
-          test "$(uname -m)" = arm64
-          node --version
-          sysctl -n hw.memsize hw.logicalcpu
-          df -h "$RUNNER_TEMP"
-          rustup --version
-          xcode-select -p
-      - name: Build gateway and run trial regression
-        run: |
-          npm ci
-          npm run build --workspace @central-codex-spike/agentrpc-types
-          npm run build --workspace @central-codex-spike/central-gateway
-          node --test tests/smoke/runtime-trial.test.mjs
-      - name: Validate the selected App Server without signing or publishing
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          NODE_LICENSE="$(node -p 'require("node:path").resolve(process.execPath,"../../LICENSE")')"
-          node scripts/release/build-runtime-update.mjs "$RUNTIME_TRIAL_OUTPUT" "$NODE_LICENSE" "$RUNTIME_TRIAL_VERSION"
-      - name: Record final disk usage
-        if: always()
-        run: df -h "$RUNNER_TEMP"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: runtime-trial-report
-          # Only diagnostics leave the builder; no unsigned installation package.
-          path: |
-            ${{ env.RUNTIME_TRIAL_OUTPUT }}/report.json
-            ${{ env.RUNTIME_TRIAL_OUTPUT }}/schema-changes.json
-            ${{ env.RUNTIME_TRIAL_OUTPUT }}/upstream/upstream-report.json
-            ${{ env.RUNTIME_TRIAL_OUTPUT }}/upstream/patch-conflicts.txt
-          retention-days: 3
-          if-no-files-found: warn
+    uses: ./.github/workflows/runtime-validate.yml
+    with:
+      upstream_version: ${{ inputs.upstream_version || '0.159.2' }}
+      retain_candidate: false

@@ -1,0 +1,80 @@
+name: Build and validate runtime candidate
+on:
+  workflow_call:
+    inputs:
+      upstream_version:
+        type: string
+        default: '0.159.2'
+      retain_candidate:
+        type: boolean
+        default: false
+    outputs:
+      status:
+        value: ${{ jobs.validate.outputs.status }}
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 180
+    outputs:
+      status: ${{ steps.candidate.outputs.status }}
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+      RUNTIME_REQUESTED_VERSION: ${{ inputs.upstream_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare isolated ARM64 builder
+        run: |
+          echo "RUNTIME_OUTPUT=$RUNNER_TEMP/runtime-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          test "$(uname -m)" = arm64
+          node --version
+          sysctl -n hw.memsize hw.logicalcpu
+          df -h "$RUNNER_TEMP"
+      - name: Build gateway and verify release gates
+        run: |
+          npm ci
+          npm run build --workspace @central-codex-spike/agentrpc-types
+          npm run build --workspace @central-codex-spike/central-gateway
+          node --test tests/smoke/runtime-trial.test.mjs tests/smoke/runtime-release.test.mjs
+      - name: Check, build and validate
+        run: |
+          NODE_LICENSE="$(node -p 'require("node:path").resolve(process.execPath,"../../LICENSE")')"
+          args=("$RUNTIME_OUTPUT" "$NODE_LICENSE")
+          if [[ -n "$RUNTIME_REQUESTED_VERSION" ]]; then args+=("$RUNTIME_REQUESTED_VERSION"); fi
+          node scripts/release/build-runtime-update.mjs "${args[@]}"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Record candidate status
+        id: candidate
+        run: node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync(process.env.RUNTIME_OUTPUT+"/report.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,"status="+(r.status==="validated"?"validated":"skipped")+"\n");'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-diagnostics
+          path: |
+            ${{ env.RUNTIME_OUTPUT }}/report.json
+            ${{ env.RUNTIME_OUTPUT }}/schema-changes.json
+            ${{ env.RUNTIME_OUTPUT }}/upstream/upstream-report.json
+            ${{ env.RUNTIME_OUTPUT }}/upstream/patch-conflicts.txt
+          retention-days: 3
+      # Validation-only runs retain reports, not large unsigned installation packages.
+      - uses: actions/upload-artifact@v4
+        if: steps.candidate.outputs.status == 'validated' && inputs.retain_candidate
+        with:
+          name: runtime-candidate
+          path: |
+            ${{ env.RUNTIME_OUTPUT }}/report.json
+            ${{ env.RUNTIME_OUTPUT }}/latest.json
+            ${{ env.RUNTIME_OUTPUT }}/runtime.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1

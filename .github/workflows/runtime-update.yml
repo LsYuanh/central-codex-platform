@@ -3,6 +3,15 @@ on:
   schedule:
     - cron: '25 3 * * *'
   workflow_dispatch:
+    inputs:
+      upstream_version:
+        description: Stable App Server version (empty discovers latest)
+        type: string
+        default: '0.159.2'
+      publish:
+        description: Publish after validation (requires configured signing environment)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -10,31 +19,27 @@ concurrency:
   cancel-in-progress: false
 jobs:
   validate:
-    # A dedicated disposable builder; never attach this label to the live central host.
-    runs-on: [self-hosted, macOS, ARM64, runtime-build]
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - run: npm ci && npm run build --workspace @central-codex-spike/agentrpc-types && npm run build --workspace @central-codex-spike/central-gateway
-      - name: Check, build and validate
-        run: node scripts/release/build-runtime-update.mjs "$RUNNER_TEMP/runtime-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$RUNTIME_NODE_LICENSE"
-        env:
-          RUNTIME_NODE_LICENSE: ${{ vars.RUNTIME_NODE_LICENSE }}
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: runtime-candidate
-          path: |
-            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/report.json
-            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/latest.json
-            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/runtime.tar.gz
-            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/schema-changes.json
-            ${{ runner.temp }}/runtime-${{ github.run_id }}-${{ github.run_attempt }}/upstream/patch-conflicts.txt
-          retention-days: 7
+    if: github.event_name == 'workflow_dispatch' || vars.RUNTIME_AUTO_UPDATE_ENABLED == 'true'
+    uses: ./.github/workflows/runtime-validate.yml
+    with:
+      upstream_version: ${{ inputs.upstream_version || '' }}
+      retain_candidate: >-
+        ${{ github.repository == 'LsYuanh/central-codex-platform' &&
+          github.event.repository.private == false &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+          vars.RUNTIME_PUBLISH_ENABLED == 'true' &&
+          (inputs.publish == true || github.event_name == 'schedule') }}
   publish:
     needs: validate
+    # Public downloads and a reviewed default-branch workflow are required before
+    # the protected environment can release its key. No PR or trial branch signs.
+    if: >-
+      needs.validate.outputs.status == 'validated' &&
+      github.repository == 'LsYuanh/central-codex-platform' &&
+      github.event.repository.private == false &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      vars.RUNTIME_PUBLISH_ENABLED == 'true' &&
+      (inputs.publish == true || github.event_name == 'schedule')
     runs-on: ubuntu-latest
     environment: runtime-signing
     permissions:
@@ -50,7 +55,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Sign and publish only a validated candidate
         run: node scripts/release/publish-runtime-update.mjs candidate
         env:
