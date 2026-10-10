@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import http from 'node:http';
 import https from 'node:https';
+import {ModelTransportError} from './model-transport-error.js';
 
 /** The version is the actual requesting runtime, never a fabricated latest version. */
 export function catalogVersion(method: string | undefined, path: string | undefined): string | undefined {
@@ -11,6 +12,7 @@ export function catalogVersion(method: string | undefined, path: string | undefi
 export async function fetchModelCatalog(url: URL, headers: Record<string, string>, signal: AbortSignal): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const fail = () => reject(Error('MODEL_CATALOG_UNAVAILABLE'));
+    const transportFail = (error:unknown) => reject(new ModelTransportError('CATALOG',signal.aborted?signal.reason:error));
     const request = (url.protocol === 'https:' ? https : http).get(url, {
       headers: {...headers, accept: 'application/json', 'accept-encoding': 'identity'}, signal, agent: false,
     }, response => {
@@ -18,15 +20,16 @@ export async function fetchModelCatalog(url: URL, headers: Record<string, string
       if (response.statusCode !== 200 ||
           String(response.headers['content-type'] ?? '').split(';')[0] !== 'application/json' ||
           !['', 'identity'].includes(String(response.headers['content-encoding'] ?? ''))) {
-        response.destroy(); fail(); return;
+        fail(); response.destroy(); return;
       }
       const chunks: Buffer[] = []; let size = 0;
       response.on('data', chunk => {
         size += chunk.length;
-        if (size > 8 * 1024 * 1024) { response.destroy(); fail(); }
+        if (size > 8 * 1024 * 1024) { fail(); response.destroy(); }
         else chunks.push(Buffer.from(chunk));
       });
-      response.once('error', fail); response.once('aborted', fail);
+      response.once('error', transportFail);
+      response.once('aborted', () => transportFail({code:'ECONNRESET'}));
       response.once('end', () => {
         try {
           const value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(Buffer.concat(chunks)));
@@ -44,6 +47,6 @@ export async function fetchModelCatalog(url: URL, headers: Record<string, string
         } catch { fail(); }
       });
     });
-    request.once('error', fail);
+    request.once('error', transportFail);
   });
 }

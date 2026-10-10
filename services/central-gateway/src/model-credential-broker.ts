@@ -8,6 +8,7 @@ import {Transform, type Duplex} from "node:stream";
 import {createModelPipeTls, MODEL_PIPE_SERVER_NAME} from "./model-pipe-tls.js";
 import {readWindowsPrivateJson, WindowsPrivateJsonError} from "./windows-private-json.js";
 import {catalogVersion, fetchModelCatalog} from "./model-catalog.js";
+import {ModelTransportError} from './model-transport-error.js';
 import {imageRoute, validateImageRequest, sanitizeImageResponse, imageProviderError} from './image-generation.js';
 
 type Provider = {id:string;kind:"chatgpt"|"api-key";credentialFile:string;baseUrl?:string};
@@ -351,12 +352,12 @@ export class ModelCredentialBroker {
         if(request.headers['transfer-encoding']||Number(request.headers['content-length']??0)!==0)return fail("MODEL_REQUEST_INVALID",400);
         if(this.requests>=this.concurrent||(this.perUser.get(lease.userId)??0)>=this.userConcurrent)return fail("MODEL_BROKER_BUSY",429);
         controller=new AbortController();lease.controllers.add(controller);this.requests++;this.perUser.set(lease.userId,(this.perUser.get(lease.userId)??0)+1);admitted=true;
-        timer=setTimeout(()=>controller?.abort(),Math.min(this.timeout,4500));timer.unref();
+        timer=setTimeout(()=>controller?.abort(new DOMException('Model deadline','TimeoutError')),Math.min(this.timeout,4500));timer.unref();
         response.once('close',()=>controller?.abort());
         url.pathname=url.pathname.replace(/\/responses$/,'/models');url.searchParams.set('client_version',version);
         let body:Buffer;
         try{body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},controller.signal);}
-        catch{return fail('MODEL_CATALOG_UNAVAILABLE');}
+        catch(error){return fail(error instanceof ModelTransportError?error.code:'MODEL_CATALOG_UNAVAILABLE');}
         this.emit('model.catalog',lease.userId,'succeeded');
         response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});response.end(body);return;
       }
@@ -364,7 +365,7 @@ export class ModelCredentialBroker {
       if(this.requests>=this.concurrent||(this.perUser.get(lease.userId)??0)>=this.userConcurrent)return fail("MODEL_BROKER_BUSY",429);
       const length=request.headers["content-length"];if(length!==undefined&&(!/^\d+$/.test(length)||Number(length)>this.bodyLimit))return fail("MODEL_REQUEST_TOO_LARGE",413);
       controller=new AbortController();lease.controllers.add(controller);this.requests++;this.perUser.set(lease.userId,(this.perUser.get(lease.userId)??0)+1);admitted=true;
-      timer=setTimeout(()=>controller?.abort(),this.timeout);timer.unref();
+      timer=setTimeout(()=>controller?.abort(new DOMException('Model deadline','TimeoutError')),this.timeout);timer.unref();
       const abort=()=>controller?.abort();request.once("aborted",abort);response.once("close",abort);
       const chunks:Buffer[]=[];let size=0;
       // The abort listener also terminates a stalled upload, not just an upstream request.
@@ -414,7 +415,7 @@ export class ModelCredentialBroker {
           // its SSE socket open. Only acknowledge a terminal frame after its
           // downstream write callback; queued/partial frames are not success.
           if(response.destroyed&&terminalDelivered){finish();sseFilter?.destroy();incomingResponse?.destroy();upstream?.destroy();}
-          else reject(new SafeError("MODEL_REQUEST_CANCELLED",503));
+          else reject(new SafeError(signal.aborted&&signal.reason?.name==='TimeoutError'?"MODEL_REQUEST_TIMEOUT":"MODEL_REQUEST_CANCELLED",503));
         };
         signal.addEventListener("abort",cancel,{once:true});response.once("close",cancel);
         if(signal.aborted||response.destroyed){cancel();return;}
@@ -443,7 +444,7 @@ export class ModelCredentialBroker {
             const category=rawType.includes(",")?"DUPLICATE":!contentType?"MISSING":contentType==="text/plain"?"PLAIN":contentType==="text/html"?"HTML":contentType==="application/octet-stream"?"OCTET_STREAM":contentType==="application/x-ndjson"?"NDJSON":contentType==="application/jsonl"?"JSONL":contentType==="application/x-event-stream"?"X_EVENT_STREAM":contentType.startsWith("multipart/")?"MULTIPART":"UNKNOWN";
             incoming.destroy();reject(new SafeError(`MODEL_PROVIDER_CONTENT_TYPE_INVALID_${category}`,502));return;
           }
-          incoming.once("error",()=>reject(new SafeError("MODEL_PROVIDER_STREAM_TRANSPORT_FAILED",502)));
+          incoming.once("error",error=>reject(new SafeError(new ModelTransportError('STREAM',error).code,502)));
           incoming.once("aborted",()=>reject(new SafeError("MODEL_PROVIDER_STREAM_ABORTED",502)));
           if(contentType==="text/event-stream"){
             response.statusCode=status;response.setHeader("content-type",contentType);response.setHeader("cache-control","no-store");response.setHeader("x-accel-buffering","no");
@@ -467,7 +468,7 @@ export class ModelCredentialBroker {
             incoming.once("end",()=>{try{const body=Buffer.concat(result);const value=JSON.parse(body.toString("utf8"));if(responseFailed(value))throw new SafeError("MODEL_PROVIDER_UNAVAILABLE",502);const output=image?Buffer.from(JSON.stringify(sanitizeImageResponse(value))):body;response.writeHead(status,{"content-type":contentType,"cache-control":"no-store"});response.end(output);done();}catch(error){reject(error instanceof SafeError?error:new SafeError("MODEL_PROVIDER_JSON_INVALID",502));}});
           }
         });
-        upstream.once("error",()=>reject(new SafeError("MODEL_PROVIDER_REQUEST_TRANSPORT_FAILED",502)));upstream.end(body);
+        upstream.once("error",error=>reject(new SafeError(new ModelTransportError('REQUEST',error).code,502)));upstream.end(body);
       });
     }catch(error){
       const safe=error instanceof SafeError?error:new SafeError("MODEL_PROVIDER_UNAVAILABLE");

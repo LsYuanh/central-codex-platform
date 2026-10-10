@@ -21,6 +21,7 @@ const pending=new Set();let redirected=0;
 const upstream=http.createServer(async(request,response)=>{
   let raw='';for await(const chunk of request)raw+=chunk;
   const body=JSON.parse(raw);received.push({headers:request.headers,path:request.url,body});
+  if(body.mode==='connection-reset'){request.socket.destroy();return;}
   if(request.url!=='/v1/responses'&&request.url!=='/backend-api/codex/responses'){redirected++;response.end('unexpected');return;}
   if(body.mode==='error'){response.writeHead(401,{'content-type':'application/json'});response.end(JSON.stringify({leak:secretA,refresh_token:'FAKE_ONLY_NEVER_SEND_REFRESH'}));return;}
   if(body.mode==='redirect'){response.writeHead(302,{location:`http://127.0.0.1:${upstream.address().port}/leak`});response.end(secretA);return;}
@@ -107,6 +108,12 @@ try{
   assert.equal((await request('A'.repeat(43))).status,401);assert.equal(received.length,before);
   pass('Unknown leases, query overrides, alternate paths, and non-POST methods never reach a provider');
   const error=await request(alice.token,{mode:'error'});assert.equal(error.status,401);assert(error.text.includes('MODEL_CREDENTIAL_REJECTED'));assert(!error.text.includes(secretA));
+  const beforeReset=received.length;
+  const reset=await request(alice.token,{mode:'connection-reset'});
+  assert.equal(reset.status,502);assert.equal(JSON.parse(reset.text).error.code,'MODEL_PROVIDER_REQUEST_TRANSPORT_FAILED_CONNECTION_RESET');
+  assert.equal(received.length,beforeReset+1);assert(!reset.text.includes(secretA));assert(!reset.text.includes(base));
+  assert(audit.some(event=>event.errorCode==='MODEL_PROVIDER_REQUEST_TRANSPORT_FAILED_CONNECTION_RESET'));
+  pass('Upstream reset is classified in response and audit without leaking details or replaying a task');
   const redirect=await request(alice.token,{mode:'redirect'});assert.equal(redirect.status,502);assert(!redirect.text.includes(secretA));assert.equal(redirected,0);
   const bad=await request(alice.token,{mode:'bad-type'});assert.equal(bad.status,502);assert(!bad.text.includes(secretA));
   assert.equal(JSON.parse(bad.text).error.code,'MODEL_PROVIDER_CONTENT_TYPE_INVALID_HTML');
@@ -175,6 +182,7 @@ try{
   const held=broker.createLease('alice');
   const timeoutResponse=await fetch(broker.url+'/v1/responses',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+held.token},body:JSON.stringify({mode:'hold'})});
   await assert.rejects(()=>timeoutResponse.text());await until(()=>pending.size===0);assert.equal((await request(bob.token)).status,200);
+  assert(audit.some(event=>event.errorCode==='MODEL_REQUEST_TIMEOUT'));
   pass('Overall request deadline aborts a stalled SSE stream and releases concurrency slots');
   const disableLease=broker.createLease('alice');const disabledStream=await fetch(broker.url+'/responses',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+disableLease.token},body:JSON.stringify({mode:'hold'})});
   const disabledOutcome=disabledStream.text().then(()=>false,()=>true);config.users.alice.enabled=false;save(configFile,config);
