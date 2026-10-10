@@ -1,0 +1,28 @@
+[
+  {
+    "path": "codex-rs/http-client/src/lib.rs",
+    "upstreamSha256": "7f4187bf5774ecc4dbe96c43b4a71730aa696ca2d0912789ffc16e180741294f",
+    "patchedSha256": "5458c1d4b42bb7a0d2acf2f964eddcef0defb9a51919d400aa402f9b4f31b929"
+  },
+  {
+    "path": "codex-rs/http-client/src/transport.rs",
+    "upstreamSha256": "88aa391e6893205336b3412b065600bd717da8d80d59c1c7dd094d19bee666b6",
+    "patchedSha256": "9becea3a9c11e4d5416e55123a421502dbfa63d08befc2d5cc877489591429bb"
+  },
+  {
+    "path": "codex-rs/core/src/client.rs",
+    "upstreamSha256": "6ca16eb5fb185192738d321c22eacf74664e0ae2c107176c1c8a7f23fde33089",
+    "patchedSha256": "171ee4fae753795931dbbd028da68c7f05e144633f8dabf9bd9592804936632c"
+  },
+  {
+    "path": "codex-rs/codex-api/src/sse/responses.rs",
+    "upstreamSha256": "0abdd44445f1424ea8419885ca0c42b10be5a782462fcb5f55dd89e01bd6bb01",
+    "patchedSha256": "a6017ac3643b90c3adef1f0384823d4955a1dbbf0a92c770026f37ea634acd45"
+  },
+  {
+    "path": "codex-rs/http-client/src/windows_model_transport.rs",
+    "upstreamSha256": null,
+    "patchedSha256": "07b5d3b58263c62bc6fb16d14a176d65929ab6ca7847dbe2d0d533ae8b98e846",
+    "template": "windows_model_transport.rs"
+  }
+]

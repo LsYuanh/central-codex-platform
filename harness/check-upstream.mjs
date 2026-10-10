@@ -26,6 +26,11 @@ export function candidatePatch(pin,version,commit) {
   if(patch&&patch.commit!==commit)throw Error('UPSTREAM_ADAPTATION_COMMIT_MISMATCH');
   return patch;
 }
+export function upstreamPatches(pin,version,commit,platform=process.platform) {
+  const adaptation=candidatePatch(pin,version,commit);
+  return [adaptation?.basePatch??pin.patch,...(adaptation?[adaptation]:[]),
+    ...(platform==='win32'?[pin.windowsPatch,adaptation?.windowsModelPatch??pin.windowsModelPatch]:[])];
+}
 export function upstreamHeaders(url,json,token) {
   const headers={'User-Agent':'Yuan-Zhou-runtime-updates',accept:json?'application/vnd.github+json':'application/octet-stream'};
   const target=new URL(url);
@@ -60,8 +65,10 @@ export async function checkUpstream(destination,requestedVersion) {
     if(object?.type==='tag')object=(await download(`https://api.github.com/repos/openai/codex/git/tags/${object.sha}`,1024*1024,true)).object;
     if(object?.type!=='commit'||! /^[a-f0-9]{40}$/.test(object.sha))throw Error('UPSTREAM_COMMIT_INVALID');
     report.commit=object.sha;
+    const adaptation=candidatePatch(pin,version,report.commit);
     const archive=await download(`https://codeload.github.com/openai/codex/tar.gz/${object.sha}`,128*1024*1024);
     report.archiveSha256=createHash('sha256').update(archive).digest('hex');
+    if(adaptation?.archiveSha256&&adaptation.archiveSha256!==report.archiveSha256)throw Error('UPSTREAM_ARCHIVE_HASH_MISMATCH');
     const archivePath=join(destination,'upstream.tar.gz');await writeFile(archivePath,archive,{flag:'wx'});
     const source=join(destination,`codex-${object.sha}`);
     // The known redundant LICENSE symlink is excluded; new links require review.
@@ -72,11 +79,10 @@ export async function checkUpstream(destination,requestedVersion) {
     if(listing.status!==0||types.status!==0||names.length>100000||names.some(name=>!name.startsWith(`codex-${object.sha}/`)||name.includes('\\')||name.includes(':')||name.split('/').includes('..'))||types.stdout.trim().split(/\r?\n/).some(line=>!/^[-d]/.test(line)))throw Error('UPSTREAM_ARCHIVE_UNSAFE');
     const extraction=spawnSync('tar',['-xzf',archivePath,'-C',destination,...exclude],{encoding:'utf8',timeout:60000});
     if(extraction.status!==0)throw Error('UPSTREAM_EXTRACT_FAILED');
-    const adaptation=candidatePatch(pin,version,report.commit);
     // A source refactor can require a reviewed replacement of the base patch.
     // It is bound to the exact candidate commit and hash, never used by other releases.
     const basePatch=adaptation?.basePatch??pin.patch;
-    const patches=[basePatch,...(adaptation?[adaptation]:[]),...(process.platform==='win32'?[pin.windowsPatch,pin.windowsModelPatch]:[])];
+    const patches=upstreamPatches(pin,version,report.commit);
     const appliedBytes=[];
     report.patches=[];
     for(const spec of patches){
@@ -103,6 +109,6 @@ export async function checkUpstream(destination,requestedVersion) {
   }catch(error){report.status='failed';report.code=/^[A-Z_0-9]+$/.test(error.message)?error.message:'UPSTREAM_CHECK_FAILED';await save();return report;}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
-  if(!process.argv[2])throw Error('Usage: node harness/check-upstream.mjs NEW_OUTPUT_DIRECTORY');
-  console.log(JSON.stringify(await checkUpstream(resolve(process.argv[2])),null,2));
+  if(!process.argv[2]||process.argv.length>4)throw Error('Usage: node harness/check-upstream.mjs NEW_OUTPUT_DIRECTORY [STABLE_VERSION]');
+  console.log(JSON.stringify(await checkUpstream(resolve(process.argv[2]),process.argv[3]),null,2));
 }

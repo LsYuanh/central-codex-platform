@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-10T07:56:06.319Z",
+  "status": "local-windows-candidate-validated-not-released",
+  "version": "0.162.1",
+  "upstreamCommit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+  "archiveSha256": "79c8ea8547e1dd9969f63ef6b76a4fb0d1a024ef36c0c627fbcd2ffb658d9312",
+  "discovery": "Previously verified official archive; exact release/ref API fixtures, not a fresh online discovery",
+  "patches": [
+    {
+      "path": "adaptations/0.162.1-base.patch",
+      "sha256": "157a806f3e9302b72c3fbe8d5807d26340b7e403be5c20baa90664fbe71919b4"
+    },
+    {
+      "path": "adaptations/0.159.2.patch",
+      "sha256": "3c58220a3654691ea028cdf7a22d1917be10c57b06253b09c801a89e629c2e89"
+    },
+    {
+      "path": "windows-home.patch",
+      "sha256": "104ad03dc5db0678b2ceb1250f22079e51d5c3f767e18814e30fab50a47d7981"
+    },
+    {
+      "path": "adaptations/0.162.1-windows-model.patch",
+      "sha256": "a0693a075f889411c7366e5dcd7f653a77226fe7e58e7a97532f7906dbf75ff9"
+    }
+  ],
+  "patchSha256": "0db2ea04e025cdaf55948cd383b668b69cfde2b3b6ff4d31844349d2b7b795ef",
+  "build": {
+    "target": "x86_64-pc-windows-msvc",
+    "profile": "dev",
+    "compiler": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "command": "cargo +stable build --locked -p codex-app-server --bin codex-app-server -j 2",
+    "runtimeSha256": "c34a6c70cab8f319bb7cb4666ec563c34f8353eeed982c61db7af33865fdc5bf",
+    "startedAt": "2026-10-10T07:47:40.9271564Z",
+    "finishedAt": "2026-10-10T07:55:04.8819756Z",
+    "compilerNote": "Windows QA uses installed Rust 1.98.0; does not claim Rust 1.95.0 Windows qualification"
+  },
+  "checks": {
+    "nodeTrialAndReleaseTests": 11,
+    "sourceIntegrityFaultChecks": 13,
+    "freshPreparationEquivalentFiles": 39,
+    "rustTests": {
+      "pipeHelper": 7,
+      "transportReuse": 1,
+      "silentSseCancellation": 1
+    },
+    "gatewayTypeScriptBuild": true,
+    "changedRustFilesFormatCheck": true,
+    "nativePipeChecks": [
+      "Real patched App Server initializes inside the native AppContainer launcher",
+      "Host command/filesystem RPCs and workspace override remain denied; unprojected skills stay empty",
+      "Native pipe/TLS model requests reject builtin escape, round-trip the synthetic dynamic tool, and complete",
+      "Turn interruption closes a silent SSE through Rust, native pipe, TLS broker and upstream without replay",
+      "A new Turn succeeds after interruption with the broker concurrency slot restored",
+      "Positive Worker Job, AppContainer profile and scoped TLS lease close cleanly",
+      "Wrong per-lease CA fails the model Turn before provider dispatch and its Worker cleans up"
+    ]
+  },
+  "native": {
+    "launcherSha256": "5ec1aded3ff87ae3bbf030390f4a83b303eccdae5bc9927f731642c75faa5819",
+    "requests": {
+      "positive": 5,
+      "wrongCa": 0
+    },
+    "dynamicCalls": 1,
+    "responseEvidence": {
+      "utf8Bytes": 131123,
+      "sha256": "3e157658f075779322b7a9602415650f29d59bb50f945d1eae8401e27f20c14b"
+    },
+    "positiveTransport": {
+      "tlsSucceeded": 5,
+      "tlsFailed": 0,
+      "httpRequests": 5,
+      "tlsErrorCategories": {}
+    },
+    "wrongCaTransport": {
+      "tlsSucceeded": 0,
+      "tlsFailed": 1,
+      "httpRequests": 0,
+      "tlsErrorCategories": {
+        "MODEL_PIPE_TLS_HANDSHAKE_FAILED": 1
+      }
+    },
+    "wrongCaEvidence": [
+      "TLS_CERTIFICATE_REJECTED"
+    ],
+    "positiveCleanup": {
+      "expectedScope": true,
+      "profileCleaned": true,
+      "jobCloseVerified": true,
+      "modelPipeConnections": 5,
+      "modelPipeTailDrains": 3,
+      "modelPipeTailDrainCancels": 0
+    },
+    "wrongCaCleanup": {
+      "expectedScope": true,
+      "profileCleaned": true,
+      "jobCloseVerified": true,
+      "modelPipeConnections": 1,
+      "modelPipeTailDrains": 0,
+      "modelPipeTailDrainCancels": 0
+    }
+  },
+  "corrections": [
+    "Initial public dependency fetch stalled; bounded HTTP/1.1 retry with TLS verification retained succeeded.",
+    "Old synthetic JSON credential fixture rejected by native file protection; uses existing memory bootstrap without changing the product ACL gate.",
+    "Old skills/list denial expectation corrected to empty managed projection; central file and command denial retained.",
+    "Old tool fixture allowlist updated to include the already-reviewed planning/goal tools; unknown extensions and host executors still rejected.",
+    "Initial helper unit fixture missed the new Request field; candidate-only constructor update, with production helper and older overlay bytes unchanged."
+  ],
+  "boundaries": {
+    "syntheticModel": true,
+    "syntheticLocalAgent": true,
+    "realModelVerified": false,
+    "realDeviceVerified": false,
+    "credentialFileAclOrDpapiVerified": false,
+    "fullWindowsNetworkIsolationQualified": false,
+    "packaged": false,
+    "signed": false,
+    "pushed": false,
+    "published": false,
+    "deployed": false,
+    "macPatchBytesUnchanged": true,
+    "olderWindowsPatchBytesUnchanged": true
+  },
+  "localEvidenceDirectory": "artifacts/windows-01621-20261010",
+  "nativeEvidenceDirectory": "target/w162/model-qa-final",
+  "priorFailuresPreservedIn": [
+    "target/w162/model-qa",
+    "target/w162/model-qa-memory",
+    "target/w162/model-qa-current",
+    "artifacts/windows-01621-20261010/pipe-helper-initial.log",
+    "artifacts/windows-01621-20261010/build-initial-fetch.log"
+  ]
+}

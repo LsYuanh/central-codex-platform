@@ -92,7 +92,12 @@ const upstream = http.createServer(async (request, response) => {
     if (scenario === 'tool-boundary') {
       sequence++;
       if (sequence === 1) {
-        assert.deepEqual(body.tools.map(tool => tool.name), ['device_workspace_context']); toolsVerified = true;
+        const names = body.tools.map(tool => tool.name);
+        // Planning/goal tools are already part of the reviewed remote registry.
+        // Keep an explicit allowlist so host executors or new extensions still fail.
+        const allowed = ['device_workspace_context', 'update_plan', 'request_user_input', 'get_goal', 'create_goal', 'update_goal'];
+        for (const name of ['device_workspace_context', 'update_plan', 'request_user_input']) assert(names.includes(name));
+        assert(names.every(name => allowed.includes(name))); toolsVerified = true;
         respondSse(response, {type: 'function_call', call_id: 'builtin-escape', name: 'exec_command',
           arguments: JSON.stringify({cmd: 'cmd.exe /d /c echo forbidden>FORBIDDEN-EXECUTED'})}); return;
       }
@@ -195,7 +200,7 @@ function session(root, lease, certificatePem) {
         modelPipeTailDrainCancels: Number.isSafeInteger(summary.modelPipeTailDrainCancels) ? summary.modelPipeTailDrainCancels : null};
       assert.equal(summary.scope, 'model-runtime-transport-verify-separately');
       assert.equal(summary.profileCleaned, true); assert.equal(summary.jobCloseVerified, true);
-      assert(Number.isSafeInteger(summary.modelPipeConnections) && summary.modelPipeConnections > 0, 'No native pipe connection evidence');
+      assert(Number.isSafeInteger(summary.modelPipeConnections) && summary.modelPipeConnections >= 0, 'Invalid native pipe connection count');
       return {scope: summary.scope, profileCleaned: true, jobCloseVerified: true,
         modelPipeConnections: summary.modelPipeConnections,
         modelPipeTailDrains: cleanupEvidence.modelPipeTailDrains,
@@ -223,10 +228,15 @@ async function startTurn(context, threadId) {
 try {
   safeResult.launcherSha256 = await sha256(launcher); safeResult.runtimeSha256 = await sha256(runtime);
   await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
-  save('synthetic-credential.json', {apiKey: syntheticKey});
-  save('synthetic-bindings.json', {version: 1, users: {fixture: {providerId: 'fixture', enabled: true}}, providers: {
-    fixture: {id: 'fixture', kind: 'api-key', credentialFile: join(output, 'synthetic-credential.json'), baseUrl: `http://127.0.0.1:${upstream.address().port}/v1`}}});
+  // Match the existing native-parent memory bootstrap. This fixture tests pipe/TLS
+  // isolation, not private credential-file provisioning; never weaken its ACL gate.
+  const credentialReference = join(output, 'synthetic-credential.memory');
+  const bindings = {version: 1, users: {fixture: {providerId: 'fixture', enabled: true}}, providers: {
+    fixture: {id: 'fixture', kind: 'api-key', credentialFile: credentialReference, baseUrl: `http://127.0.0.1:${upstream.address().port}/v1`}}};
   broker = await ModelCredentialBroker.start({configFile: join(output, 'synthetic-bindings.json'), allowLoopbackTestProviders: true,
+    memorySource: {readConfig: () => bindings, readCredential: reference => {
+      assert.equal(reference, credentialReference); return {apiKey: syntheticKey};
+    }},
     maxConcurrent: 1, maxConcurrentPerUser: 1, timeoutMs: 60000,
     audit: event => {
       if (['model.pipe_tls_handshake', 'model.pipe_http_request'].includes(event.action)
@@ -249,13 +259,18 @@ try {
   writeFileSync(join(output, 'positive', 'central-canary'), syntheticCanary);
   phase = 'host-rpc-boundary';
   for (const [method, params] of [['command/exec', {command: ['cmd.exe', '/d', '/c', 'echo forbidden>FORBIDDEN-EXECUTED']}],
-    ['fs/readFile', {path: join(output, 'positive', 'central-canary')}], ['skills/list', {}]]) {
+    ['fs/readFile', {path: join(output, 'positive', 'central-canary')}]]) {
     const reply = await positive.rpc(method, params); assert.equal(reply.result, undefined);
     assert.equal(reply.error?.code, -32602); assert.equal(reply.error?.message, `REMOTE_WORKSPACE_UNSUPPORTED: ${method}`);
   }
+  // Current remote skills/list reads only the managed projection, never host skills.
+  // This isolated Worker has no projected catalog, so discovery must be empty.
+  const skills = await positive.rpc('skills/list', {cwds: [], forceReload: true});
+  assert.equal(skills.error, undefined); assert(Array.isArray(skills.result?.data));
+  assert.equal(skills.result.data.flatMap(entry => entry.skills).length, 0);
   const override = await positive.rpc('thread/start', {cwd: output});
   assert.match(override.error?.message ?? '', /REMOTE_WORKSPACE_OVERRIDE_DENIED/);
-  pass('Host command/filesystem/skills RPCs and workspace override remain denied');
+  pass('Host command/filesystem RPCs and workspace override remain denied; unprojected skills stay empty');
   phase = 'tool-model-turn';
   const threadId = await startThread(positive), first = await startTurn(positive, threadId);
   assert.equal((await positive.completed(first)).status, 'completed');
@@ -279,6 +294,7 @@ try {
   assert.equal(requestCount, beforeHold + 2); assert.equal(fixtureError, false);
   pass('A new Turn succeeds after interruption with the broker concurrency slot restored');
   phase = 'positive-cleanup'; safeResult.positiveCleanup = await positive.stop();
+  assert(safeResult.positiveCleanup.modelPipeConnections > 0, 'No native pipe connection evidence');
   assert(safeResult.positiveCleanup.modelPipeTailDrains > 0, 'Positive responses must exercise native EOF tail drain');
   assert(Number.isSafeInteger(safeResult.positiveCleanup.modelPipeTailDrainCancels)
     && safeResult.positiveCleanup.modelPipeTailDrainCancels >= 0, 'Tail drain cancellation evidence missing');
@@ -296,6 +312,7 @@ try {
   assert.equal((await negative.completed(failedTurn)).status, 'failed');
   await delay(500); assert.equal(wrongCaRequests, 0, 'Wrong CA reached the synthetic provider');
   safeResult.wrongCaCleanup = await negative.stop();
+  assert(safeResult.wrongCaCleanup.modelPipeConnections > 0, 'Wrong CA did not exercise the native pipe');
   safeResult.wrongCaTransportCounts = transportCounts(brokerTransportEvents.slice(transportEventBaseline));
   safeResult.wrongCaTlsEvidence = [...new Set([...safeResult.wrongCaCleanup.diagnosticCategories, ...brokerTlsFailures.slice(tlsFailureBaseline)])]
     .filter(value => ['TLS_CERTIFICATE_REJECTED', 'TLS_UNTRUSTED_ISSUER'].includes(value));

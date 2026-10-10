@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {releasePath,releaseVersion,upstreamHeaders,candidatePatch} from '../../harness/check-upstream.mjs';
+import {releasePath,releaseVersion,upstreamHeaders,candidatePatch,upstreamPatches} from '../../harness/check-upstream.mjs';
+import {prepareWindowsModel,windowsModelTemplate} from '../../harness/prepare-windows-model.mjs';
 import {readFileSync,writeFileSync,mkdtempSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -75,6 +76,29 @@ test('reviewed schema requires exact release, commit, baseline and candidate byt
     assert.equal(schemaReviewMatches(review,candidate,mode,baseSha256,'0'.repeat(64)),false);
     assert.equal(schemaReviewMatches(undefined,candidate,mode,baseSha256,sha256),false);
   }
+});
+
+test('Windows 0.162.1 selects only its reviewed model overlay; Mac and older releases retain their patches',()=>{
+  const pin=JSON.parse(readFileSync(new URL('../../harness/upstream.json',import.meta.url)));
+  const next=pin.candidatePatches['0.162.1'];
+  const mac=upstreamPatches(pin,'0.162.1',next.commit,'darwin');
+  assert.deepEqual(mac,[next.basePatch,next]);
+  assert.equal(createHash('sha256').update(Buffer.concat(mac.map(p=>readFileSync(new URL('../../harness/'+p.path,import.meta.url))))).digest('hex'),
+    '3ac7c2a934b53b165ed285eec0a929659581ccfa0c6a786a49760f57be6014f9');
+  assert.deepEqual(upstreamPatches(pin,'0.162.1',next.commit,'win32'),[next.basePatch,next,pin.windowsPatch,next.windowsModelPatch]);
+  const old=pin.candidatePatches['0.159.2'];
+  assert.deepEqual(upstreamPatches(pin,'0.159.2',old.commit,'win32'),[pin.patch,old,pin.windowsPatch,pin.windowsModelPatch]);
+  assert.deepEqual(upstreamPatches(pin,pin.version,pin.commit,'win32'),[pin.patch,pin.windowsPatch,pin.windowsModelPatch]);
+  assert.throws(()=>upstreamPatches(pin,'0.162.1','0'.repeat(40),'win32'),/COMMIT_MISMATCH/);
+  assert.throws(()=>prepareWindowsModel('unused',true,{version:'0.162.2',commit:next.commit}),/CANDIDATE_UNREVIEWED/);
+  assert.throws(()=>prepareWindowsModel('unused',true,{version:'0.162.1',commit:'0'.repeat(40)}),/COMMIT_MISMATCH/);
+  for(const spec of [pin.windowsModelPatch,next.windowsModelPatch]){
+    assert.equal(createHash('sha256').update(readFileSync(new URL('../../harness/'+spec.path,import.meta.url))).digest('hex'),spec.sha256);
+  }
+  const files=JSON.parse(readFileSync(new URL('../../harness/'+next.windowsModelPatch.files,import.meta.url)));
+  const helper=files.find(f=>f.template==='windows_model_transport.rs');
+  assert.equal(helper.patchedSha256,createHash('sha256').update(windowsModelTemplate('0.162.1')).digest('hex'));
+  assert.equal(windowsModelTemplate('0.162.1').split('#[cfg(test)]')[0],windowsModelTemplate().split('#[cfg(test)]')[0]);
 });
 
 test('schema gate rejects an unreviewed contract even with a reviewed version identity',()=>{

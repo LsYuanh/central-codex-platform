@@ -33,12 +33,47 @@ user provenance; automatic lifecycle pauses carry automatic provenance. New upst
 routes remain denied. Mac ARM64 Rust 1.95.0 compilation and 13 native/gateway probes
 passed; the goal probe also passed against the older embedded 0.156.1 binary.
 See `verification/runtime-adaptation-01621-20261010.json` for evidence and the initial
-test-fixture correction. Windows model transport/SSE overlay conflicts remain blocked.
+test-fixture correction. The separate Windows adaptation is described below.
 Commit `7785ab3` subsequently passed all 16 hosted builder steps and signing publication
 in run `38031874184`. The existing central App 0.1.6 automatically installed 0.162.1;
 real GPT-6.1 Sol and Windows Local Agent file/command, reconnect and history acceptance
 passed. See `verification/runtime-published-01621-20261010.json`. The embedded fixed
-baseline remains 0.156.1; Windows central overlay conflicts are still blocked.
+baseline remains 0.156.1.
+
+### Windows 0.162.1 transport adaptation (local QA, not released)
+
+`candidatePatches["0.162.1"].windowsModelPatch` pins a separate overlay and five-file
+integrity manifest to the exact upstream commit and archive. The new upstream
+route-aware transport retains its normal behavior; Windows remote model requests
+use a dedicated `ModelPipe` branch. Every request is checked before body preparation,
+requires a direct named-pipe client, disables request logging and preserves typed
+TLS certificate rejection. The existing AppContainer, per-worker CA, fixed POST
+endpoint, no-proxy/no-redirect/no-retry and no-WebSocket requirements remain intact.
+The SSE cancellation regression is inserted against the new source context.
+Mac patch bytes and older Windows version selections are unchanged.
+
+Use `node harness/check-upstream.mjs NEW_OUTPUT_DIRECTORY 0.162.1` to prepare the
+candidate, then require `status: ready-for-validation` in its report. Verify the
+prepared source with `node harness/prepare-windows-model.mjs SOURCE --verify 0.162.1
+092d3acd6bec3e3a14bdc7e7a2810ab628ab759d`. To regenerate the reviewed overlay, use
+`node harness/generate-windows-model-patch.mjs PINNED_ARCHIVE 0.162.1`; this validates
+the archive hash and updates only the candidate patch and manifest.
+
+Compile from the prepared `codex-rs` directory with an isolated `CARGO_TARGET_DIR`
+and `cargo +stable build --locked -p codex-app-server --bin codex-app-server -j 2`.
+The existing `build-central-windows.ps1` still builds the embedded 0.156.1 baseline;
+it does not select this candidate. Local QA uses installed Rust 1.98.0 on MSVC,
+not the candidate's Mac-tested Rust 1.95.0. Test the `windows_model_transport` and
+`model_pipe_transport_tests` filters in `codex-http-client`, and
+`receiver_drop_releases_silent_sse_body_without_waiting_idle_timeout` in `codex-api`.
+Then run `windows-model-smoke.mjs` with the native isolation probe and candidate
+binary. Synthetic fixtures do not qualify a real Windows central deployment.
+Local compilation, nine Rust tests, seven native pipe/TLS checks, eleven selection/
+release tests and thirteen source integrity checks passed. The native fixture uses
+the existing memory credential bootstrap and checks the current managed-skill and
+planning/goal registry; it does not test credential-file ACL/DPAPI. See
+`verification/windows-runtime-01621-20261010.json` for final hashes and retained
+fixture failures. No Windows runtime package was signed, published or deployed.
 
 ### Native image generation (2026-10-10, central deployed)
 

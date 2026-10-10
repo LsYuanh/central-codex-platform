@@ -56,12 +56,19 @@
     },
     "0.162.1": {
       "commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+      "archiveSha256": "79c8ea8547e1dd9969f63ef6b76a4fb0d1a024ef36c0c627fbcd2ffb658d9312",
       "path": "adaptations/0.159.2.patch",
       "sha256": "3c58220a3654691ea028cdf7a22d1917be10c57b06253b09c801a89e629c2e89",
       "scope": "Preserve third-party dynamic tool metadata and Guardian initialization; move broker catalog exception to shared refresh/cache gate; retain cloud skills and isolated Mac managed-policy adaptation",
       "basePatch": {
         "path": "adaptations/0.162.1-base.patch",
         "sha256": "157a806f3e9302b72c3fbe8d5807d26340b7e403be5c20baa90664fbe71919b4"
+      },
+      "windowsModelPatch": {
+        "path": "adaptations/0.162.1-windows-model.patch",
+        "sha256": "a0693a075f889411c7366e5dcd7f653a77226fe7e58e7a97532f7906dbf75ff9",
+        "scope": "Windows remote AppContainer model-only authenticated TLS named pipe transport",
+        "files": "adaptations/0.162.1-windows-model-files.json"
       }
     }
   }
