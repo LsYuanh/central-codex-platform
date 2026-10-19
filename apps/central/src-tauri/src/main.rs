@@ -854,6 +854,7 @@ fn main() {
             let update_root = root.clone();
             std::thread::spawn(move || {
                 let mut next_check = std::time::Instant::now();
+                let mut last_update_state = None;
                 loop {
                     if APP_EXIT_STARTED.load(Ordering::SeqCst) {
                         break;
@@ -863,6 +864,7 @@ fn main() {
                     };
                     if std::time::Instant::now() >= next_check || controller.updates.take_request()
                     {
+                        eprintln!("central-runtime-update-check: started");
                         let result = controller.updates.check(&update_root);
                         next_check = std::time::Instant::now()
                             + std::time::Duration::from_secs(if result.is_ok() {
@@ -883,6 +885,16 @@ fn main() {
                             }
                             controller.updates.set("failed", Some(error.code));
                         }
+                    }
+                    // Only the public update DTO is logged: never paths, account
+                    // references, downloaded response bodies or credentials.
+                    let status = controller.updates.status();
+                    let state = (status.state, status.code);
+                    if last_update_state != Some(state) {
+                        if let Ok(summary) = serde_json::to_string(&status) {
+                            eprintln!("central-runtime-update: {summary}");
+                        }
+                        last_update_state = Some(state);
                     }
                     drop(controller);
                     std::thread::sleep(std::time::Duration::from_secs(30));
