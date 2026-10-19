@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-19",
+  "runtimePublication": {
+    "signatureVerified": true,
+    "publicAssetDigestMatched": true,
+    "sourceCommit": "d849404765675cc7bd59be405359754852f9f21a",
+    "downloadedArchiveVerified": true,
+    "version": "0.162.1",
+    "sequence": 1792400248189,
+    "packageId": "macos-arm64-node24-qa1-2565d95c1c0395cd",
+    "archiveBytes": 168055909,
+    "archiveSha256": "74fcb735e645451cf068f11898686e965ca28fb9415c69ce8e1ebda0ceafec87",
+    "allManifestFilesVerified": 873,
+    "upstream": {
+      "version": "0.162.1",
+      "commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+      "archiveSha256": "79c8ea8547e1dd9969f63ef6b76a4fb0d1a024ef36c0c627fbcd2ffb658d9312",
+      "patchSha256": "974a6e854a7e536b0df53b787d198bea6548700cb62ed186fb882f9f5bcea26c"
+    },
+    "runUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/39224202745",
+    "workflowConclusion": "success",
+    "validationStepsPassed": 16
+  },
+  "centralHost": {
+    "sourceCommit": "72f32a6d4dc039e8ca7815906d1a0cfdc84b72c4",
+    "updaterFixCommit": "c9bfb82af2a0e1626810d19fceafa91dce4ec593",
+    "version": "0.1.7",
+    "windowsUpdaterTests": 9,
+    "macUpdaterTests": 10,
+    "configurationUnchanged": true,
+    "installedAppMatchesBuild": true,
+    "previousAppPreserved": true,
+    "completeProfileBackupPreserved": true,
+    "deploymentArtifact": {
+      "version": "0.1.7",
+      "sourceCommit": "72f32a6d4dc039e8ca7815906d1a0cfdc84b72c4",
+      "bytes": 200897441,
+      "sha256": "e858314dd227e40e8fdfbe75c85a7f04e639720682cad2abb3c1d11f4a46ba47",
+      "adHoc": true,
+      "notarized": false,
+      "privateDeploymentArtifact": true
+    },
+    "nativeUpdateLog": {
+      "finalState": "updated",
+      "code": null,
+      "priorCheckNonActivationCause": "not determined"
+    }
+  },
+  "centralAcceptance": {
+    "previousPackageId": "macos-arm64-node24-qa1-1093a5822ec92188",
+    "nativeBackupExists": true,
+    "appVersion": "0.1.7",
+    "revision": 16,
+    "baselineId": "macos-arm64-node24-qa1-764c44015095c306",
+    "health": {
+      "ok": true,
+      "devices": 1,
+      "clients": 1
+    },
+    "selection": {
+      "version": "0.162.1",
+      "sequence": 1792400248189,
+      "packageId": "macos-arm64-node24-qa1-2565d95c1c0395cd",
+      "pending": false,
+      "backupId": "backup-1792401151320"
+    },
+    "failedSequence": 1791609213646,
+    "runtimeProcesses": [
+      "macos-arm64-node24-qa1-2565d95c1c0395cd",
+      "macos-arm64-node24-qa1-2565d95c1c0395cd"
+    ],
+    "cachePreloadedFromVerifiedSignedArchive": true,
+    "nativeChannelAuthenticationAndPackageValidation": true,
+    "nativeBackupAndActivation": true,
+    "configRevisionPreserved": 16
+  },
+  "realClientAcceptance": [
+    {
+      "platform": "win32",
+      "arch": "x64",
+      "model": "gpt-6.1-sol",
+      "passed": true,
+      "checks": [
+        "authenticated-WSS",
+        "native-device-token",
+        "real-central-App-Server",
+        "client-Office-extraction",
+        "legacy-multisection-continuation",
+        "PDF-scanned-page-native-tool-image",
+        "771x8660-image",
+        "history-resume"
+      ],
+      "answer": {
+        "docTableLastCell": "Cell 2,3",
+        "xlsFirstCell": "replaceMe",
+        "xlsLastSheet": "Sheet3",
+        "pptSecondTitle": "This is the title on page 2",
+        "docxMarker": "WORD CLIENT MARKER",
+        "xlsxMarker": "SHEET CLIENT MARKER",
+        "pptxMarker": "SLIDE CLIENT MARKER",
+        "pdfFirstText": "PDF FIRST PAGE",
+        "pdfSecondColor": "blue",
+        "tallImageBackground": "white"
+      },
+      "agentFromPublishedPackage": true,
+      "temporaryDeviceRevoked": true
+    },
+    {
+      "platform": "darwin",
+      "arch": "arm64",
+      "model": "gpt-6.1-sol",
+      "passed": true,
+      "checks": [
+        "authenticated-WSS",
+        "native-device-token",
+        "real-central-App-Server",
+        "client-Office-extraction",
+        "legacy-multisection-continuation",
+        "PDF-scanned-page-native-tool-image",
+        "771x8660-image",
+        "history-resume"
+      ],
+      "answer": {
+        "docTableLastCell": "Cell 2,3",
+        "xlsFirstCell": "replaceMe",
+        "xlsLastSheet": "Sheet3",
+        "pptSecondTitle": "This is the title on page 2",
+        "docxMarker": "WORD CLIENT MARKER",
+        "xlsxMarker": "SHEET CLIENT MARKER",
+        "pptxMarker": "SLIDE CLIENT MARKER",
+        "pdfFirstText": "PDF FIRST PAGE",
+        "pdfSecondColor": "blue",
+        "tallImageBackground": "white"
+      },
+      "agentFromPublishedPackage": true,
+      "temporaryDeviceRevoked": true
+    }
+  ],
+  "releaseIncidents": [
+    {
+      "run": 39214474975,
+      "result": "cancelled",
+      "reason": "stale TURN_LIMIT assertion after cancellable queue policy"
+    },
+    {
+      "run": 39218452363,
+      "sequence": 1792397289322,
+      "result": "published_then_rolled_back",
+      "reason": "builtin creator changed without content version bump; existing user projection rejected",
+      "rollbackVerifiedWithRealModel": true,
+      "publicReleaseMarkedDoNotDeploy": true
+    }
+  ],
+  "limits": [
+    "No full installed-client upgrade/chat/lifecycle UI acceptance",
+    "Mac Intel and complex Office visual layout are not verified",
+    "Central App remains ad-hoc without Developer ID notarization",
+    "No fresh real image generation/editing acceptance in this release"
+  ]
+}

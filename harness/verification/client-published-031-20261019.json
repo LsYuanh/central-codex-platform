@@ -1,0 +1,157 @@
+{
+  "date": "2026-10-19",
+  "version": "0.3.1",
+  "sourceCommit": "b244bf49b9feabaa147fea54e0f7ef3fed51a96c",
+  "tag": "v0.3.1",
+  "github": {
+    "version": "0.3.1",
+    "published": true,
+    "url": "https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.1",
+    "assets": [
+      {
+        "file": "yuanzhou-0.3.1-windows-x64-setup.exe",
+        "bytes": 11383693,
+        "sha256": "4efa9a3f7970f7659339b08b9724af9a875514289a9dded53cc6fc5e6f9e96b1",
+        "anonymousDownloadVerified": true
+      },
+      {
+        "file": "yuanzhou-0.3.1-windows-x64-setup.exe.sig",
+        "bytes": 416,
+        "sha256": "52caee067d8dc39dbbafc9b1bb995cdbd76cde6f1c5bfd095666ab5012adc1ec",
+        "anonymousDownloadVerified": true
+      },
+      {
+        "file": "yuanzhou-0.3.1-aarch64.app.tar.gz",
+        "bytes": 15000456,
+        "sha256": "2c6451ebf32470fbbef6368bcce326d639b7839aa4f3f33e5ea8c69e6b8712f0",
+        "anonymousDownloadVerified": true
+      },
+      {
+        "file": "yuanzhou-0.3.1-aarch64.app.tar.gz.sig",
+        "bytes": 424,
+        "sha256": "f74ff2f5d0f5f155c41e1880f31a37b2f448471af2a5f0300e96275bd0b27755",
+        "anonymousDownloadVerified": true
+      },
+      {
+        "file": "yuanzhou-0.3.1-macos-aarch64.dmg",
+        "bytes": 16197819,
+        "sha256": "cc23cec2ff1183e63b39948f643c0e2cc3c4f30d779bde0f1826511554c39e98",
+        "anonymousDownloadVerified": true
+      },
+      {
+        "file": "SHA256SUMS.txt",
+        "bytes": 513,
+        "sha256": "ccea869ea5e63e910b32e20482d43e5240c56697da54bb27eadea13196666dc9",
+        "anonymousDownloadVerified": true
+      }
+    ]
+  },
+  "packageAcceptance": {
+    "windowsNsisExtractedPayloadPassed": true,
+    "macDmgReadOnlyMountedPayloadPassed": true,
+    "fixedUpdaterPublicKeyVerified": true,
+    "macAdHocDeepStrictVerified": true,
+    "windowsStaticCrtAndGuiSubsystemVerified": true,
+    "pdfiumBundled": true,
+    "privateBuildPatternScanPassed": true,
+    "capacity": {
+      "tallImage": [
+        771,
+        8660
+      ],
+      "pdfPages": 2,
+      "office": [
+        "fixture.docx",
+        "fixture.xlsx",
+        "fixture.pptx"
+      ],
+      "largeTextBytes": 2097158,
+      "fullOutputBytes": 1100003,
+      "commandSession": true
+    },
+    "legacyOffice": {
+      "fixtureRevision": "bf7c9b6a1490046517cbd8e1504e702a89be4bc9",
+      "windowsMacResultsMatch": true,
+      "results": [
+        {
+          "name": "simple.doc",
+          "sections": 1,
+          "contentSha256": "a727b36ed55790b7e8a710b16156a1243159a8767e846f8c87b7e80f7b03f218"
+        },
+        {
+          "name": "simple-table.doc",
+          "sections": 1,
+          "contentSha256": "f1485f009f1c7f3bf1fa68394281c2ed599316743839ed69b80276bb0233d77c"
+        },
+        {
+          "name": "HeaderFooterUnicode.doc",
+          "sections": 1,
+          "contentSha256": "39ea732cf0e8084b754f1375106d282aba4adcc9b11222409b90fc0c5b329c3e"
+        },
+        {
+          "name": "Word6.doc",
+          "sections": 1,
+          "contentSha256": "092de3768d3e6ed860c305eca4eba98c52c702a7ac3c749149fc4693530d2b28"
+        },
+        {
+          "name": "Simple.xls",
+          "sections": 3,
+          "contentSha256": "114e0640f00857f4f07e06f00bf72bcf97501b4685a0ea0c47b817c31f8d866a"
+        },
+        {
+          "name": "SimpleWithFormula.xls",
+          "sections": 3,
+          "contentSha256": "85ff1b9a9e9a7786c2437eeb33e0dd860efc42655a6c55f3cb671b9fdd0c05cb"
+        },
+        {
+          "name": "basic_test_ppt_file.ppt",
+          "sections": 2,
+          "contentSha256": "2bff88525d5f0e4c569010f47afe7bea2d3fa0770fdd7c334ff9b8c3c767025b"
+        },
+        {
+          "name": "with_textbox.ppt",
+          "sections": 1,
+          "contentSha256": "b59cf7c162cee5607adbc4906d2d7baa5e60310deca5402f55a60563d7b06a08"
+        },
+        {
+          "name": "PasswordProtected.doc",
+          "error": "DOCUMENT_PASSWORD_REQUIRED"
+        },
+        {
+          "name": "password.xls",
+          "error": "DOCUMENT_PASSWORD_REQUIRED"
+        },
+        {
+          "name": "Password_Protected-hello.ppt",
+          "error": "DOCUMENT_PASSWORD_REQUIRED"
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Full installed-client upgrade/chat/lifecycle UI acceptance was not repeated",
+    "Mac Intel was not built or verified",
+    "Windows lacks OS publisher signing; Mac App is ad-hoc and not notarized",
+    "Office complex visual layout, embedded objects and formula recalculation are not claimed"
+  ],
+  "deployment": {
+    "clientUpdateChannelVersion": "0.3.1",
+    "centralAuthenticatedDownloads": true,
+    "lanCaAndAuthenticatedDownloads": true,
+    "authenticatedDownloads": [
+      {
+        "platform": "windows-x86_64",
+        "bytes": 11383693,
+        "sha256": "4efa9a3f7970f7659339b08b9724af9a875514289a9dded53cc6fc5e6f9e96b1"
+      },
+      {
+        "platform": "darwin-aarch64",
+        "bytes": 15000456,
+        "sha256": "2c6451ebf32470fbbef6368bcce326d639b7839aa4f3f33e5ea8c69e6b8712f0"
+      }
+    ],
+    "temporaryDevicesRevoked": true,
+    "previousVersionRetained": "0.3.0",
+    "installedClientsReplaced": false
+  }
+}

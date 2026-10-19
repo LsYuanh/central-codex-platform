@@ -6,7 +6,7 @@
 
 它适合在可信局域网内，由一台中央机为多名用户提供统一的 AI 工作环境。客户端无需安装或运行 Codex，文件和命令操作由目标电脑上的 Local Agent 执行。
 
-[下载客户端](https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.0) · [客户端使用说明](docs/客户端维护手册.md) · [中央部署与管理](docs/中央管理维护手册.md) · [开发指南](docs/开发指南.md)
+[下载客户端](https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.1) · [客户端使用说明](docs/客户端维护手册.md) · [中央部署与管理](docs/中央管理维护手册.md) · [开发指南](docs/开发指南.md)
 
 ## 主要功能
 
@@ -38,7 +38,7 @@
 使用前需要一台已配置好模型接入和 TLS 的中央机，以及能够连接它的工作电脑。客户端安装包不包含中央服务，也不会自动接入公共服务。
 
 1. **准备中央端。** 管理员按照[中央管理手册](docs/中央管理维护手册.md)配置运行环境、模型登录和服务，再创建用户并发放设备配对码。构建与部署步骤见[开发指南](docs/开发指南.md)和[发布手册](docs/发布与回退手册.md)。
-2. **安装客户端。** [客户端 0.3.0 发布页](https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.0)提供 Windows x64 安装包和 macOS Apple Silicon DMG。Windows 小包需要电脑已有可用的 WebView2 运行环境。
+2. **安装客户端。** [客户端 0.3.1 发布页](https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.1)提供 Windows x64 安装包和 macOS Apple Silicon DMG。Windows 小包需要电脑已有可用的 WebView2 运行环境。
 3. **配对并选择目录。** 打开客户端，填写管理员提供的配对码，选择默认输出目录并保存配置。连接和设备均在线后，即可新建项目或对话。
 4. **开始任务。** 输入需求，按需添加附件或选择技能；也可以通过输入框的「＋」选择计划模式或目标模式。
 
@@ -46,7 +46,7 @@
 
 ## 当前状态与限制
 
-项目已有可信局域网内的真实部署，客户端 0.3.0 已发布。当前仍在持续完善，尚未完成完整的生产级隔离和跨平台验收。
+项目已有可信局域网内的真实部署，客户端 0.3.1 已发布。当前仍在持续完善，尚未完成完整的生产级隔离和跨平台验收。
 
 - **部署范围：** 当前面向可信局域网，必须校验 TLS 证书；不要将中央网关的 4510 端口直接暴露到互联网。
 - **平台验证：** macOS 中央与 Windows Local Agent 的真实模型、文件、命令和历史恢复链路已有验证。macOS 客户端完整交互、部分安装升级场景和 Windows 中央的最新运行包仍有待验收项。
