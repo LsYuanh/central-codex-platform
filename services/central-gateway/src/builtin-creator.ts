@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Kept in the compiled gateway so runtime packaging cannot omit the skill asset.
 export const CREATOR_ID = 'yuan-zhou-skill-creator';
-export const CREATOR_VERSION = 2;
+// Content changes need a fresh immutable projection for existing users.
+export const CREATOR_VERSION = 3;
 export const CREATOR_DESCRIPTION = '创建或修改远舟个人技能，将用户明确要求复用的对话流程整理为技能包。仅在用户要求创建、修改技能或把流程保存为技能时使用，普通任务执行不触发。';
 export const CREATOR_MAIN = `---
 name: yuan-zhou-skill-creator

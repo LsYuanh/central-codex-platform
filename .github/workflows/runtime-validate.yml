@@ -44,7 +44,7 @@ jobs:
           npm ci
           npm run build --workspace @central-codex-spike/agentrpc-types
           npm run build --workspace @central-codex-spike/central-gateway
-          node --test tests/smoke/runtime-trial.test.mjs tests/smoke/runtime-release.test.mjs
+          node --test tests/smoke/runtime-trial.test.mjs tests/smoke/runtime-release.test.mjs tests/smoke/builtin-skill-upgrade.test.mjs
       - name: Check, build and validate
         run: |
           NODE_LICENSE="$(node -p 'require("node:path").resolve(process.execPath,"../../LICENSE")')"
