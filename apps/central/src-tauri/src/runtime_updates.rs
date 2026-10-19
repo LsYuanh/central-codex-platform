@@ -124,6 +124,12 @@ fn client() -> Result<reqwest::blocking::Client> {
 fn get(url: &str, max: u64) -> Result<Vec<u8>> {
     let response = client()?
         .get(url)
+        // Runtime archives can take several minutes on ordinary LAN uplinks.
+        .timeout(Duration::from_secs(if max > 2 * 1024 * 1024 {
+            600
+        } else {
+            60
+        }))
         .send()
         .map_err(|_| "UPDATE_NETWORK_UNAVAILABLE")?;
     if response.status().as_u16() == 404 {
@@ -532,6 +538,25 @@ pub(crate) fn prune(app_data: &Path, selected: &Selection) -> Result<()> {
     Ok(())
 }
 
+// A signed rebuild may keep the upstream version while changing gateway/Harness
+// behavior. Its monotonic sequence, rather than only SemVer, identifies it.
+fn newer_release(d: &Descriptor, current: &str, sequence: Option<u64>) -> Result<bool> {
+    let incoming = version(&d.version).ok_or("UPDATE_DESCRIPTOR_INVALID")?;
+    let installed = version(current).ok_or("UPDATE_DESCRIPTOR_INVALID")?;
+    if incoming < installed {
+        return Ok(false);
+    }
+    if let Some(previous) = sequence {
+        if incoming == installed && d.sequence == previous {
+            return Ok(false);
+        }
+        if d.sequence <= previous {
+            return Err("UPDATE_REPLAY_DENIED");
+        }
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -568,6 +593,24 @@ mod tests {
         let mut d = descriptor();
         d.host_protocol = "future/v2".into();
         assert!(validate_descriptor(&d).is_err());
+    }
+    #[test]
+    fn signed_rebuilds_update_without_allowing_replay_or_downgrade() {
+        let mut d = descriptor();
+        d.sequence = 20;
+        assert_eq!(newer_release(&d, "0.156.1", Some(19)), Ok(true));
+        assert_eq!(newer_release(&d, "0.156.1", Some(20)), Ok(false));
+        assert_eq!(
+            newer_release(&d, "0.156.1", Some(21)),
+            Err("UPDATE_REPLAY_DENIED")
+        );
+        assert_eq!(
+            newer_release(&d, "0.155.0", Some(21)),
+            Err("UPDATE_REPLAY_DENIED")
+        );
+        assert_eq!(newer_release(&d, "0.157.0", Some(19)), Ok(false));
+        assert_eq!(newer_release(&d, "0.155.0", Some(19)), Ok(true));
+        assert_eq!(newer_release(&d, "0.156.1", None), Ok(true));
     }
     #[test]
     fn unsigned_or_forged_channel_is_rejected() {
@@ -883,7 +926,11 @@ impl Updater {
             }
         }
         let current_version = self.status().current_version;
-        if version(&d.version) <= version(&current_version) {
+        let current_sequence = current
+            .as_ref()
+            .map(|s| authenticate(&s.active).map(|d| d.sequence))
+            .transpose()?;
+        if !newer_release(&d, &current_version, current_sequence)? {
             self.set(
                 if version(latest) > version(&current_version) {
                     "waiting-for-package"
@@ -893,11 +940,6 @@ impl Updater {
                 None,
             );
             return Ok(());
-        }
-        if let Some(s) = &current {
-            if d.sequence <= authenticate(&s.active)?.sequence {
-                return Err("UPDATE_REPLAY_DENIED");
-            }
         }
         let update_root = root(app_data)?;
         let id = d.package["id"]
