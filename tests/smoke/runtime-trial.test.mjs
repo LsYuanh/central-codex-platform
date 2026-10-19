@@ -84,7 +84,8 @@ test('Windows 0.162.1 selects only its reviewed model overlay; Mac and older rel
   const mac=upstreamPatches(pin,'0.162.1',next.commit,'darwin');
   assert.deepEqual(mac,[next.basePatch,next]);
   assert.equal(createHash('sha256').update(Buffer.concat(mac.map(p=>readFileSync(new URL('../../harness/'+p.path,import.meta.url))))).digest('hex'),
-    '3ac7c2a934b53b165ed285eec0a929659581ccfa0c6a786a49760f57be6014f9');
+    // Capacity gates were removed from the reviewed base patch on 2026-10-19.
+    '974a6e854a7e536b0df53b787d198bea6548700cb62ed186fb882f9f5bcea26c');
   assert.deepEqual(upstreamPatches(pin,'0.162.1',next.commit,'win32'),[next.basePatch,next,pin.windowsPatch,next.windowsModelPatch]);
   const old=pin.candidatePatches['0.159.2'];
   assert.deepEqual(upstreamPatches(pin,'0.159.2',old.commit,'win32'),[pin.patch,old,pin.windowsPatch,pin.windowsModelPatch]);
