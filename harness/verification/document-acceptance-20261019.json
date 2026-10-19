@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-19",
+  "status": "isolated-real-central-and-device-acceptance-passed-not-published",
+  "productSourceCommit": "4af09efa5f2474ae24b3b1fa28938155e581f87d",
+  "followupChanges": [
+    "Synchronize managed-skills-host.rs.inc with the capacity removal already in the reviewed patches",
+    "Replace the obsolete native catalog overflow rejection assertion with 205 entries and 41116 bytes",
+    "Add pinned legacy Office fixtures and repeatable authenticated live document acceptance"
+  ],
+  "central": {
+    "platform": "darwin-arm64",
+    "node": "24.20.0",
+    "appServer": "0.162.1",
+    "upstreamCommit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+    "rust": "1.95.0",
+    "binarySha256": "66cdc59352f78de8eab7c82d24906b7c486f4cf0461f2f6ec94f31d347faded0",
+    "modifiedHostServiceSha256": "9e670e51a0973558ca9d4058cc66090e780957bc691b8f57cdd1879defe80d3c",
+    "restoredCacheHostServiceSha256": "9c4a2c3c815bc018acbb099ce1db908d4833e5c409c8ea3c626c22909fa7038b",
+    "isolation": "Dedicated loopback WSS gateway, fresh QA account/device/CA/state, normal per-user sandboxed Worker and credential broker",
+    "productionProcessAndStartTimeUnchanged": true,
+    "qaGatewayWorkerAndDiagnosticTunnelStopped": true
+  },
+  "nativeHarness": {
+    "script": "harness/runtime-smoke.mjs",
+    "status": "HARNESS_RUNTIME_BOUNDARY_OK",
+    "managedSkills": 205,
+    "catalogBytes": 41116,
+    "unsafePathDenied": true,
+    "centralFileAndCommandBoundariesPreserved": true,
+    "modelFixtureRequests": 4,
+    "dynamicToolCalls": 2,
+    "realModel": false
+  },
+  "deviceBuild": {
+    "macArm64": {
+      "rust": "1.98.0",
+      "gatewayAndSharedTypesBuild": "passed",
+      "agentBuild": "passed",
+      "agentUnitTests": 21,
+      "documentCapacitySmoke": "passed",
+      "pdfiumLibraryBesideExecutable": "passed",
+      "pdfiumSiblingResourcesDirectory": "passed-without-building-an-app-bundle"
+    },
+    "windowsX64": {"documentCapacitySmoke": "passed"}
+  },
+  "legacyOffice": {
+    "script": "tests/smoke/legacy-office-smoke.mjs",
+    "fixtureManifest": "tests/smoke/legacy-office-fixtures.mjs",
+    "source": "https://github.com/apache/poi",
+    "sourceCommit": "bf7c9b6a1490046517cbd8e1504e702a89be4bc9",
+    "license": "Apache-2.0",
+    "sha256VerifiedBeforeParsing": true,
+    "platforms": ["win32-x64", "darwin-arm64"],
+    "fixturesPerPlatform": 11,
+    "successfulContentFixtures": 8,
+    "passwordRequiredFixtures": 3,
+    "crossPlatformContentHashesEqual": true,
+    "checks": ["Word 97 and Word 6", "DOC table cells", "Unicode headers and footers", "XLS worksheets including empty sheets", "cached formula result without recalculation", "PPT slides and notes", "PPT text boxes", "section continuation", "source version mismatch", "invalid section", "explicit encrypted-document error"]
+  },
+  "liveDocuments": {
+    "script": "tests/smoke/document-live-smoke.mjs",
+    "model": "gpt-6.1-sol",
+    "nativePairingAndCertificateVerification": true,
+    "platformsPassedOnRecompiledHarness": ["win32-x64", "darwin-arm64"],
+    "attachmentsPerTurn": 8,
+    "formats": ["doc", "xls", "ppt", "docx", "xlsx", "pptx", "pdf", "png"],
+    "exactAnswerFields": 10,
+    "tallImage": {"width": 771, "height": 8660, "fixture": "synthetic-white-background"},
+    "verifiedNativeDeviceReadCalls": ["PPT section 2", "XLS section 3", "PDF section 2"],
+    "pdfNativeInputImageReturned": true,
+    "pdfImageColorRecognized": "blue",
+    "shellFallbackUsed": false,
+    "attachmentOwnershipAndReadPartialStates": "passed",
+    "historyAndAttachmentStateResume": "passed"
+  },
+  "unchangedPolicies": ["plugins", "MCP", "subagents", "authentication", "approvals", "source version and path integrity"],
+  "notPerformed": ["installer packaging or publication", "production service deployment", "installed-client replacement", "git push", "Mac Intel acceptance", "Mac Tauri UI and complete installed-client lifecycle", "actual installer PDFium contents", "full Office visual layout, charts and embedded-object matrix", "original questionnaire OCR accuracy assessment"],
+  "privateEvidence": "Raw logs, local paths, task identities and ephemeral QA credentials remain outside version control. No model login credential was copied into QA artifacts."
+}

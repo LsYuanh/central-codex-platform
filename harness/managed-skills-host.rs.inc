@@ -10,9 +10,13 @@
         if canonical_root != canonical_cwd.join("managed-skills") { return empty(); }
         if std::fs::canonicalize(root.join("catalog.json")).ok() != Some(canonical_root.join("catalog.json")) { return empty(); }
         let Ok(bytes) = std::fs::read(root.join("catalog.json")) else { return empty(); };
-        if bytes.len() > 32768 { return empty(); }
+        // Managed catalog size follows the App Server/runtime capacity.
+        // Ownership and canonical path checks below still apply.
+        // Do not impose a separate platform product quota here.
         let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else { return empty(); };
-        if entries.len() > 102 { return empty(); }
+        // All managed skill entries remain available to the native catalog.
+        // Ownership and canonical path checks below still apply.
+        // Do not impose a separate platform product quota here.
         let mut roots = Vec::new();
         for entry in entries {
             let relative = std::path::Path::new(&entry);
