@@ -35,10 +35,15 @@ class Bridge {
 manager=new WorkerManager({root:mkdtempSync(join(tmpdir(),'goal-quota-')),perUser:true,maxWorkers:2,perUserTurns:1,totalTurns:1,maxRequests:4,idleMs:60000,cooldownMs:1,create:()=>bridge=new Bridge(),event:()=>{}});
 const request=(method,p)=>manager.forUser('alice').request(method,p);
 const notice=(method,params)=>manager.notification('alice',bridge,{method,params});
+const watchdog=setTimeout(()=>{throw Error('Task-control admission test timed out');},10000);watchdog.unref();
 try{
   await request('thread/goal/set',{threadId:'a',status:'active'});
   assert(manager.hasGoal('alice','a'));assert.equal(manager.snapshot()[0].activeTurns,1);
-  await assert.rejects(request('turn/start',{threadId:'b'}),/TURN_LIMIT/);
+  // Saturation queues the request; cancellation must reject without sending turn/start.
+  let cancelled=false,settled=false;
+  const queued=manager.forUser('alice').request('turn/start',{threadId:'b'},()=>{if(cancelled)throw Error('QUEUE_CANCELLED');}).then(value=>{settled=true;return value;});
+  await new Promise(r=>setTimeout(r,60));assert.equal(settled,false);assert.equal(delayed,undefined);
+  cancelled=true;await assert.rejects(queued,/QUEUE_CANCELLED/);
   notice('turn/started',{threadId:'a',turn:{id:'auto1'}});
   notice('turn/completed',{threadId:'a',turn:{id:'auto1',status:'completed'}});
   assert.equal(manager.snapshot()[0].activeTurns,1,'idle active goal keeps quota');
@@ -59,4 +64,4 @@ try{
   notice('thread/goal/updated',{threadId:'foreign',goal:{status:'active'}});
   assert.equal(manager.snapshot()[0].stopping,true,'unadmitted native goal fails closed');
   console.log(JSON.stringify({ok:true,checks:['mode-validation','plan-tool-boundary','goal-validation','active-goal-quota','continuation-accounting','pause-vs-running-turn','activation-failure','early-completion-race','unadmitted-goal']}));
-}finally{manager.close();}
+}finally{clearTimeout(watchdog);manager.close();}

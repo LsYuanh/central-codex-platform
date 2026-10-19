@@ -1402,7 +1402,8 @@ async function handleGatewayMessageInner(client: ConnectedClient, message: Gatew
           cancelDeviceTools(tid);
           await interruptThread(client.userId,tid);
         }
-        const result = await bridge.request(`thread/goal/${action}`, payload);
+        // Cancellation must also reach admission waits, before a queued goal is sent upstream.
+        const result = await bridge.request(`thread/goal/${action}`, payload, activating ? checkActivation : undefined);
         if (activating) {
           try { checkActivation(); }
           catch (error) {

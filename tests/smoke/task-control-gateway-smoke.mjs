@@ -107,12 +107,23 @@ try {
  await assert.rejects(b.request('conversation.goal.get',{threadId:tid}),/does not belong/);
  await assert.rejects(other.request('conversation.goal.set',{threadId:tid,status:'paused'}),/GOAL_DEVICE_MISMATCH/);
  const second=(await a.request('conversation.create')).thread.id;
- await assert.rejects(a.request('conversation.goal.set',{threadId:second,objective:'quota',status:'active'}),/TURN_LIMIT/);
+ let queueSettled=false;
+ const cancelledGoal=a.request('conversation.goal.set',{threadId:second,objective:'cancel queued goal',status:'active'}).then(v=>{queueSettled=true;return v;},e=>{queueSettled=true;return e;});
+ await sleep(60);assert.equal(queueSettled,false);
+ await a.request('conversation.turn.cancel',{threadId:second});
+ assert.match(String(await cancelledGoal),/GOAL_CANCELLED/);
+ assert.equal((await a.request('conversation.goal.get',{threadId:second})).goal,null,'cancelled admission never reaches App Server');
+ // A distinct queued activation must proceed once the first goal releases its slot.
+ queueSettled=false;
+ const admittedGoal=a.request('conversation.goal.set',{threadId:second,objective:'wait for capacity',status:'active'}).then(v=>{queueSettled=true;return v;});
+ await sleep(60);assert.equal(queueSettled,false);
  await a.request('conversation.turn.cancel',{threadId:tid});
+ assert.equal((await admittedGoal).goal.status,'active');
+ await a.request('conversation.turn.cancel',{threadId:second});
  assert.equal((await a.request('conversation.goal.get',{threadId:tid})).goal.status,'paused');
  assert.equal((await a.request('conversation.goal.get',{threadId:tid})).goal.origin,'user','Stop is an explicit user action');
  const nativeCalls=(await a.request('model.list')).calls;assert(nativeCalls.lastIndexOf('thread/goal/set')<nativeCalls.lastIndexOf('turn/interrupt'));
- pass('ownership, device binding, persistent quota, stop pauses before interrupt');
+ pass('ownership, device binding, queued goal cancellation and admission, stop pauses before interrupt');
  await a.request('conversation.goal.set',{threadId:tid,status:'active'});
  a.socket.close();await until(async()=> (await other.request('conversation.goal.get',{threadId:tid})).goal.status==='paused','disconnect pauses native goal');
  assert.equal((await other.request('conversation.goal.get',{threadId:tid})).goal.origin,'automatic','Disconnect is not a user pause instruction');
