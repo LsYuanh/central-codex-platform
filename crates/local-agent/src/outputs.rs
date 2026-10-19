@@ -7,17 +7,17 @@ use std::path::Component;
 use std::{
     collections::HashMap,
     fs,
-    io::{Read, Write},
+    io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use uuid::Uuid;
 
-pub const OUTPUT_LIMIT: usize = 20 * 1024 * 1024;
 struct PendingWrite {
     params: Value,
-    bytes: Vec<u8>,
-    total: usize,
+    file: tempfile::NamedTempFile,
+    received: u64,
+    total: u64,
     sha256: String,
     touched: Instant,
 }
@@ -56,35 +56,23 @@ impl Outputs {
             ),
             "file/write_text" => {
                 let content = p["content"].as_str().ok_or("content must be UTF-8 text")?;
-                if content.len() > 256 * 1024 {
-                    return Err("TEXT_TOO_LARGE: use chunked writes above 256 KiB".into());
-                }
                 self.save(p, content.as_bytes())
             }
             "file/write_begin" => {
-                let total = p["totalBytes"]
-                    .as_u64()
-                    .filter(|v| *v <= OUTPUT_LIMIT as u64)
-                    .ok_or("OUTPUT_TOO_LARGE: maximum 20 MiB")?
-                    as usize;
+                let total = p["totalBytes"].as_u64().ok_or("INVALID_TOTAL_BYTES")?;
                 let sha256 = p["sha256"]
                     .as_str()
                     .filter(|v| v.len() == 64 && v.bytes().all(|c| c.is_ascii_hexdigit()))
                     .ok_or("sha256 is required")?
                     .to_lowercase();
                 self.destination(p)?;
-                if self.writes.len() >= 4
-                    || self.writes.values().map(|w| w.total).sum::<usize>() + total
-                        > 80 * 1024 * 1024
-                {
-                    return Err("WRITE_BUSY".into());
-                }
                 let id = Uuid::new_v4().to_string();
                 self.writes.insert(
                     id.clone(),
                     PendingWrite {
                         params: p.clone(),
-                        bytes: Vec::new(),
+                        file: tempfile::NamedTempFile::new().map_err(|e| e.to_string())?,
+                        received: 0,
                         total,
                         sha256,
                         touched: Instant::now(),
@@ -102,33 +90,43 @@ impl Outputs {
                     .writes
                     .get_mut(super::required_string(p, "transferId")?)
                     .ok_or("WRITE_EXPIRED")?;
-                let offset = p["offset"].as_u64().ok_or("INVALID_OFFSET")? as usize;
-                if offset < w.bytes.len()
-                    && offset
-                        .checked_add(data.len())
-                        .is_some_and(|end| end <= w.bytes.len())
-                    && w.bytes[offset..offset + data.len()] == data
-                {
-                    w.touched = Instant::now();
-                    return Ok(json!({"nextOffset":w.bytes.len()}));
+                let offset = p["offset"].as_u64().ok_or("INVALID_OFFSET")?;
+                if data.len() > super::attachments::CHUNK {
+                    return Err("CHUNK_TOO_LARGE".into());
                 }
-                if offset != w.bytes.len()
-                    || data.len() > super::attachments::CHUNK
-                    || w.bytes.len() + data.len() > w.total
-                {
-                    return Err("INVALID_WRITE_CHUNK".into());
+                let end = offset
+                    .checked_add(data.len() as u64)
+                    .ok_or("INVALID_OFFSET")?;
+                // Idempotent chunk replay compares bytes on disk, without retaining the file in RAM.
+                if offset < w.received && end <= w.received {
+                    let mut previous = vec![0; data.len()];
+                    w.file
+                        .seek(SeekFrom::Start(offset))
+                        .and_then(|_| w.file.read_exact(&mut previous))
+                        .map_err(|e| e.to_string())?;
+                    if previous != data {
+                        return Err("INVALID_WRITE_CHUNK".into());
+                    }
+                } else {
+                    if offset != w.received || end > w.total {
+                        return Err("INVALID_WRITE_CHUNK".into());
+                    }
+                    w.file
+                        .seek(SeekFrom::Start(offset))
+                        .and_then(|_| w.file.write_all(&data))
+                        .map_err(|e| e.to_string())?;
+                    w.received = end;
                 }
-                w.bytes.extend(data);
                 w.touched = Instant::now();
-                Ok(json!({"nextOffset":w.bytes.len()}))
+                Ok(json!({"nextOffset":w.received}))
             }
             "file/write_commit" => {
                 let id = super::required_string(p, "transferId")?;
                 let w = self.writes.get(id).ok_or("WRITE_EXPIRED")?;
-                if w.bytes.len() != w.total || hash(&w.bytes) != w.sha256 {
+                if w.received != w.total || file_hash(w.file.path())? != w.sha256 {
                     return Err("WRITE_CHECKSUM_MISMATCH".into());
                 }
-                let result = self.save(&w.params, &w.bytes)?;
+                let result = self.save_file(&w.params, w.file.path())?;
                 self.writes.remove(id);
                 Ok(result)
             }
@@ -138,8 +136,7 @@ impl Outputs {
             }
             "file/copy" => {
                 let source = self.existing(super::required_string(p, "sourcePath")?)?;
-                let data = read_bounded(&source)?;
-                self.save(p, &data)
+                self.save_file(p, &source)
             }
             "file/publish" => {
                 let path = self.existing(super::required_string(p, "path")?)?;
@@ -206,18 +203,18 @@ impl Outputs {
         ))
     }
     fn save(&self, p: &Value, data: &[u8]) -> Result<Value, String> {
-        if data.len() > OUTPUT_LIMIT {
-            return Err("OUTPUT_TOO_LARGE".into());
-        }
-        if p["image"] == true {
-            super::attachments::decode(data)?;
-        }
+        let mut source = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+        source.write_all(data).map_err(|e| e.to_string())?;
+        self.save_file(p, source.path())
+    }
+    fn save_file(&self, p: &Value, source: &Path) -> Result<Value, String> {
         let target = self.destination(p)?;
-        let digest = hash(data);
+        let digest = file_hash(source)?;
+        let total = fs::metadata(source).map_err(|e| e.to_string())?.len();
         let exists = target.exists();
         if exists {
-            if fs::metadata(&target).map_err(|e| e.to_string())?.len() == data.len() as u64
-                && hash(&read_bounded(&target)?) == digest
+            if fs::metadata(&target).map_err(|e| e.to_string())?.len() == total
+                && file_hash(&target)? == digest
             {
                 return verified(&target);
             }
@@ -239,10 +236,24 @@ impl Outputs {
         self.destination(p)?;
         let mut temporary =
             tempfile::NamedTempFile::new_in(parent).map_err(|e| format!("WRITE_DENIED: {e}"))?;
-        temporary
-            .write_all(data)
-            .and_then(|_| temporary.as_file().sync_all())
-            .map_err(|e| format!("WRITE_FAILED: {e}"))?;
+        std::io::copy(
+            &mut fs::File::open(source).map_err(|e| e.to_string())?,
+            &mut temporary,
+        )
+        .and_then(|_| temporary.as_file().sync_all())
+        .map_err(|e| format!("WRITE_FAILED: {e}"))?;
+        // A user-owned copy source can change during streaming. Verify the
+        // complete staged snapshot before replacing an existing destination.
+        if temporary
+            .as_file()
+            .metadata()
+            .map_err(|e| e.to_string())?
+            .len()
+            != total
+            || file_hash(temporary.path())? != digest
+        {
+            return Err("SOURCE_CHANGED".into());
+        }
         if exists {
             if super::attachments::stat(&target)?["version"] != p["expectedVersion"] {
                 return Err("SOURCE_CHANGED".into());
@@ -301,31 +312,30 @@ pub fn display_path(path: &Path) -> String {
         value.trim_start_matches("\\\\?\\").to_string()
     }
 }
-fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
-    let mut bytes = Vec::new();
-    fs::File::open(path)
-        .map_err(|e| e.to_string())?
-        .take(OUTPUT_LIMIT as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() > OUTPUT_LIMIT {
-        return Err("OUTPUT_TOO_LARGE: maximum 20 MiB".into());
+pub(crate) fn file_hash(path: &Path) -> Result<String, String> {
+    let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
     }
-    Ok(bytes)
+    Ok(format!("{:x}", digest.finalize()))
 }
+#[cfg(test)]
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 fn verified(path: &Path) -> Result<Value, String> {
     let mut before = super::attachments::stat(path)?;
-    let bytes = read_bounded(path)?;
-    if before["kind"] == "image" {
-        super::attachments::decode(&bytes)?;
-    }
+    let digest = file_hash(path)?;
     if before["version"] != super::attachments::stat(path)?["version"] {
         return Err("SOURCE_CHANGED".into());
     }
-    before["sha256"] = json!(hash(&bytes));
+    before["sha256"] = json!(digest);
     before["verified"] = json!(true);
     Ok(before)
 }

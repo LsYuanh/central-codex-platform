@@ -8,9 +8,9 @@ use std::{
 
 use serde_json::{Value, json};
 use tokio::{
-    io::{AsyncRead, AsyncReadExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::{Child, Command},
-    sync::watch,
+    sync::{mpsc, watch},
     task::JoinHandle,
     time,
 };
@@ -18,7 +18,8 @@ use tokio::{
 use crate::command_output;
 
 const FINAL_OUTPUT_BYTES: usize = 64 * 1024;
-const STREAM_OUTPUT_BYTES: usize = 1024 * 1024;
+// Per-event chunking bounds frames; there is no total stream truncation.
+const STREAM_OUTPUT_BYTES: usize = usize::MAX;
 const EVENT_CHUNK_BYTES: usize = 16 * 1024;
 const PARTIAL_FLUSH_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -37,6 +38,8 @@ pub type EventSink = Arc<dyn Fn(StreamEvent) + Send + Sync>;
 struct Capture {
     bytes: Vec<u8>,
     source_truncated: bool,
+    path: Option<String>,
+    error: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -55,6 +58,8 @@ struct StreamEmitter {
     reported_truncation: bool,
     sequence: Arc<Mutex<u64>>,
     sink: EventSink,
+    log: Option<std::fs::File>,
+    log_error: Option<String>,
 }
 
 impl StreamEmitter {
@@ -67,6 +72,8 @@ impl StreamEmitter {
             reported_truncation: false,
             sequence,
             sink,
+            log: None,
+            log_error: None,
         }
     }
 
@@ -88,7 +95,7 @@ impl StreamEmitter {
         }
     }
 
-    fn finish(mut self) {
+    fn finish(&mut self) {
         self.detect_encoding(true);
         while !self.buffer.is_empty()
             && self.flush_prefix(self.buffer.len().min(EVENT_CHUNK_BYTES), true)
@@ -191,6 +198,14 @@ impl StreamEmitter {
         if text.is_empty() {
             return;
         }
+        // The event/response windows are previews. Preserve every decoded byte
+        // on the device so a model can continue reading beyond those windows.
+        if let Some(log) = &mut self.log {
+            use std::io::Write;
+            if let Err(error) = log.write_all(text.as_bytes()) {
+                self.log_error = Some(error.to_string());
+            }
+        }
         let remaining = STREAM_OUTPUT_BYTES.saturating_sub(self.emitted_bytes);
         if remaining == 0 {
             self.report_truncation();
@@ -252,6 +267,20 @@ async fn capture_stream<R: AsyncRead + Unpin>(
 ) -> Capture {
     let mut capture = Capture::default();
     let mut emitter = StreamEmitter::new(name, sequence, sink);
+    match tempfile::Builder::new()
+        .prefix("yuan-command-")
+        .suffix(".txt")
+        .tempfile()
+    {
+        Ok(file) => match file.keep() {
+            Ok((file, path)) => {
+                capture.path = Some(crate::outputs::display_path(&path));
+                emitter.log = Some(file);
+            }
+            Err(error) => capture.error = Some(error.to_string()),
+        },
+        Err(error) => capture.error = Some(error.to_string()),
+    }
     let mut input = [0u8; 8192];
     let mut flush = time::interval(PARTIAL_FLUSH_INTERVAL);
     flush.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -265,12 +294,15 @@ async fn capture_stream<R: AsyncRead + Unpin>(
                     if count > room { capture.source_truncated = true; }
                     emitter.push(&input[..count]);
                 }
-                Err(_) => break,
+                Err(error) => { capture.error = Some(error.to_string()); break; },
             },
             _ = flush.tick() => emitter.flush_partial(),
         }
     }
     emitter.finish();
+    if emitter.log_error.is_some() {
+        capture.error = emitter.log_error;
+    }
     capture
 }
 
@@ -311,12 +343,24 @@ pub async fn run_command(
 }
 
 pub async fn run_command_detailed(
-    mut command: Command,
+    command: Command,
     program: &str,
     args: &[String],
     timeout: Duration,
+    cancel: watch::Receiver<bool>,
+    sink: EventSink,
+) -> Result<Value, CommandFailure> {
+    run_command_session(command, program, args, Some(timeout), cancel, sink, None).await
+}
+
+pub async fn run_command_session(
+    mut command: Command,
+    program: &str,
+    args: &[String],
+    timeout: Option<Duration>,
     mut cancel: watch::Receiver<bool>,
     sink: EventSink,
+    input: Option<mpsc::Receiver<Option<String>>>,
 ) -> Result<Value, CommandFailure> {
     if *cancel.borrow() {
         return Err(CommandFailure {
@@ -326,9 +370,12 @@ pub async fn run_command_detailed(
         });
     }
     command
-        // Commands are noninteractive. In desktop mode stdin is the private
-        // attachment IPC pipe and must never be inherited by a spawned tool.
-        .stdin(Stdio::null())
+        // Dedicated pipe only: never inherit the desktop's private attachment IPC.
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -341,6 +388,17 @@ pub async fn run_command_detailed(
     }
     let mut child = command.spawn().map_err(|error| error.to_string())?;
     let pid = child.id();
+    let input_task = if let (Some(mut input), Some(mut stdin)) = (input, child.stdin.take()) {
+        Some(tokio::spawn(async move {
+            while let Some(Some(text)) = input.recv().await {
+                stdin.write_all(text.as_bytes()).await?;
+                stdin.flush().await?;
+            }
+            stdin.shutdown().await
+        }))
+    } else {
+        None
+    };
     let stdout = child
         .stdout
         .take()
@@ -367,8 +425,11 @@ pub async fn run_command_detailed(
     let end = tokio::select! {
         status = child.wait() => match status { Ok(status) => End::Exited(status), Err(error) => End::Failed(error.to_string()) },
         changed = cancel.changed() => if changed.is_ok() && *cancel.borrow() { End::Cancelled } else { End::Failed("command cancellation channel closed".into()) },
-        _ = time::sleep(timeout) => End::TimedOut,
+        _ = async { if let Some(duration)=timeout {time::sleep(duration).await} else {std::future::pending::<()>().await} } => End::TimedOut,
     };
+    if let Some(task) = input_task {
+        task.abort();
+    }
     let exit_status = if let End::Exited(status) = &end {
         Some(*status)
     } else {
@@ -391,7 +452,11 @@ pub async fn run_command_detailed(
         "exitCode": exit_status.and_then(|status| status.code()),
         "stdout": stdout_text.text,
         "stderr": stderr_text.text,
-        "truncated": truncated
+        "truncated": truncated,
+        "stdoutPath": stdout.path,
+        "stderrPath": stderr.path,
+        "outputRead": "Full UTF-8 logs are on the client; read them with device_workspace_read_text using nextOffset until truncated=false.",
+        "outputError": stdout.error.or(stderr.error)
     });
     let (message, code) = match end {
         End::Exited(status) if status.success() => return Ok(result),
@@ -409,7 +474,10 @@ pub async fn run_command_detailed(
             "COMMAND_CANCELLED",
         ),
         End::TimedOut => (
-            format!("COMMAND_TIMEOUT: 本机命令超过 {} 秒", timeout.as_secs()),
+            format!(
+                "COMMAND_TIMEOUT: 本机命令超过 {} 秒",
+                timeout.unwrap_or_default().as_secs()
+            ),
             "COMMAND_TIMEOUT",
         ),
         End::Failed(error) => (error, "WORKSPACE_RESULT_UNKNOWN"),

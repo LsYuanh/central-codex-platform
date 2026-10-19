@@ -22,11 +22,9 @@ export async function fetchModelCatalog(url: URL, headers: Record<string, string
           !['', 'identity'].includes(String(response.headers['content-encoding'] ?? ''))) {
         fail(); response.destroy(); return;
       }
-      const chunks: Buffer[] = []; let size = 0;
+      const chunks: Buffer[] = [];
       response.on('data', chunk => {
-        size += chunk.length;
-        if (size > 8 * 1024 * 1024) { fail(); response.destroy(); }
-        else chunks.push(Buffer.from(chunk));
+        chunks.push(Buffer.from(chunk));
       });
       response.once('error', transportFail);
       response.once('aborted', () => transportFail({code:'ECONNRESET'}));
@@ -34,7 +32,7 @@ export async function fetchModelCatalog(url: URL, headers: Record<string, string
         try {
           const value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(Buffer.concat(chunks)));
           const ids = new Set<string>();
-          if (!Array.isArray(value.models) || !value.models.length || value.models.length > 512) throw Error();
+          if (!Array.isArray(value.models) || !value.models.length) throw Error();
           for (const model of value.models) {
             if (!model || typeof model !== 'object' || typeof model.slug !== 'string' ||
                 !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(model.slug) || ids.has(model.slug) ||

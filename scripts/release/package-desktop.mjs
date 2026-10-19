@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPortableWindowsRuntime } from "../build/windows-runtime-check.mjs";
 import { prepareInstaller, runtimeSpec } from "../build/desktop-webview2.mjs";
+import { prepareDocumentRuntime } from "../build/document-runtime.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const desktop = join(root, "apps", "desktop");
@@ -98,6 +99,14 @@ if (flags.has("--plan")) {
   process.exit(0);
 }
 if (process.platform === "win32") await prepareInstaller(targetDir, { withWebView2 });
+const documentRuntime = await prepareDocumentRuntime(join(targetDir, "document-runtime"));
+const documentConfig = config.startsWith("{") ? JSON.parse(config) : JSON.parse(readFileSync(join(desktop, config), "utf8"));
+documentConfig.bundle.resources = {
+  ...(documentConfig.bundle.resources ?? {}),
+  [documentRuntime.library]: documentRuntime.name,
+  [documentRuntime.notices]: "PDFium-LICENSE",
+};
+config = JSON.stringify(documentConfig);
 // Tauri sets static CRT flags for its own build; our separate Cargo sidecar build
 // must do the same so fresh Windows machines do not need vc_redist installed.
 const agentEnv = { ...env };

@@ -327,7 +327,16 @@ async fn socket_identity(
     let connector = Connector::Rustls(std::sync::Arc::new(config));
     let (socket, _) = tokio::time::timeout(
         Duration::from_secs(15),
-        connect_async_tls_with_config(request, None, false, Some(connector)),
+        connect_async_tls_with_config(
+            request,
+            Some(
+                tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+                    .max_message_size(None)
+                    .max_frame_size(None),
+            ),
+            false,
+            Some(connector),
+        ),
     )
     .await
     .map_err(|_| "CENTRAL_CONNECTION_TIMEOUT")?

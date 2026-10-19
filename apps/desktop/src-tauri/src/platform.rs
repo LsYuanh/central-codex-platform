@@ -394,9 +394,6 @@ pub async fn platform_ws_send(
     data: Option<String>,
 ) -> Result<(), String> {
     updates.ensure_idle()?;
-    if data.as_ref().is_some_and(|s| s.len() > 1024 * 1024) {
-        return Err("中央请求过大".into());
-    }
     let tx = state
         .sockets
         .lock()
@@ -404,5 +401,5 @@ pub async fn platform_ws_send(
         .get(&connection_id)
         .map(|socket| socket.sender.clone())
         .ok_or("中央连接已关闭")?;
-    tx.try_send(data).map_err(|_| "中央连接拥塞或已关闭".into())
+    tx.send(data).await.map_err(|_| "中央连接已关闭".into())
 }

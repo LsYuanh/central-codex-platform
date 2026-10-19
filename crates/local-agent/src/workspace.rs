@@ -4,17 +4,14 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::{process::Command, sync::watch};
 
-const FILE_LIMIT: usize = 1024 * 1024;
 const PAGE_BYTES: usize = 64 * 1024;
-const SCAN_ENTRIES: usize = 10_000;
-const SCAN_BYTES: usize = 8 * 1024 * 1024;
 static PATCH_LOCK: Mutex<()> = Mutex::new(());
 
 fn io_error(error: std::io::Error) -> String {
@@ -49,26 +46,18 @@ fn relative(root: &Path, path: &Path) -> String {
     crate::outputs::display_path(path.strip_prefix(root).unwrap_or(path)).replace('\\', "/")
 }
 
-fn snapshot(root: &Path, raw: &str, limit: usize) -> Result<(Vec<u8>, String), String> {
+fn snapshot(root: &Path, raw: &str) -> Result<(Vec<u8>, String), String> {
     let path = resolve(root, raw)?;
-    let file = File::open(&path).map_err(io_error)?;
+    let mut file = File::open(&path).map_err(io_error)?;
     let before = file.metadata().map_err(io_error)?;
     if !before.is_file() {
         return Err("NOT_A_FILE".into());
     }
-    if before.len() > limit as u64 {
-        return Err("FILE_TOO_LARGE".into());
-    }
     let mut bytes = Vec::new();
-    file.take(limit as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(io_error)?;
+    file.read_to_end(&mut bytes).map_err(io_error)?;
     let after_path = resolve(root, raw)?;
     let after = fs::metadata(after_path).map_err(io_error)?;
-    if bytes.len() > limit
-        || before.len() != after.len()
-        || before.modified().ok() != after.modified().ok()
-    {
+    if before.len() != after.len() || before.modified().ok() != after.modified().ok() {
         return Err("VERSION_CONFLICT: file changed during read".into());
     }
     let version = format!("sha256:{:x}", Sha256::digest(&bytes));
@@ -82,12 +71,9 @@ fn text(bytes: Vec<u8>) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|_| "ENCODING_UNSUPPORTED: expected UTF-8 text".into())
 }
 
-fn checkpoint(cancel: &watch::Receiver<bool>, started: Instant) -> Result<(), String> {
+fn checkpoint(cancel: &watch::Receiver<bool>, _started: Instant) -> Result<(), String> {
     if *cancel.borrow() {
         return Err("WORKSPACE_CANCELLED".into());
-    }
-    if started.elapsed() > Duration::from_secs(5) {
-        return Err("WORKSPACE_TIMEOUT".into());
     }
     Ok(())
 }
@@ -153,7 +139,7 @@ fn version_at(root: &Path, raw: &str) -> Result<String, String> {
     if !path.exists() {
         return Ok("missing".into());
     }
-    snapshot(root, raw, FILE_LIMIT).map(|(_, version)| version)
+    super::outputs::file_hash(&path).map(|hash| format!("sha256:{hash}"))
 }
 
 struct Change {
@@ -172,9 +158,6 @@ fn apply_patch(
         .try_lock()
         .map_err(|_| "WORKSPACE_BUSY: another patch is active")?;
     let patch = crate::required_string(p, "patch")?;
-    if patch.len() > 256 * 1024 {
-        return Err("PATCH_TOO_LARGE".into());
-    }
     let patch_hash = format!("sha256:{:x}", Sha256::digest(patch.as_bytes()));
     if !p["dryRun"].as_bool().unwrap_or(false) {
         if p["patchHash"].as_str() != Some(patch_hash.as_str()) {
@@ -183,9 +166,6 @@ fn apply_patch(
         let expected = p["expectedVersions"]
             .as_object()
             .ok_or("VERSION_REQUIRED: preview expectedVersions is required")?;
-        if expected.len() > 200 {
-            return Err("PATCH_TOO_LARGE".into());
-        }
         for (path, version) in expected {
             if version.as_str() != Some(version_at(root, path)?.as_str()) {
                 return Err("VERSION_CONFLICT: files changed since preview/approval".into());
@@ -201,12 +181,11 @@ fn apply_patch(
     if parsed.workdir.is_some() || parsed.environment_id.is_some() {
         return Err("WORKSPACE_PATH_DENIED: patch cannot override task binding".into());
     }
-    if parsed.hunks.is_empty() || parsed.hunks.len() > 100 {
-        return Err("INVALID_PATCH: require 1 to 100 file hunks".into());
+    if parsed.hunks.is_empty() {
+        return Err("INVALID_PATCH: require at least one file hunk".into());
     }
     let mut changes = Vec::<Change>::new();
     let mut versions = serde_json::Map::new();
-    let mut total_bytes = 0;
     for hunk in parsed.hunks {
         checkpoint(cancel, started)?;
         let is_add = matches!(&hunk, Hunk::AddFile { .. });
@@ -220,7 +199,7 @@ fn apply_patch(
                 chunks,
             } => {
                 let raw = path.to_str().ok_or("INVALID_PATH")?;
-                let (bytes, version) = snapshot(root, raw, FILE_LIMIT)?;
+                let (bytes, version) = snapshot(root, raw)?;
                 observed_version = Some(version);
                 let original = text(bytes)?;
                 let content = derive_new_contents(
@@ -244,12 +223,6 @@ fn apply_patch(
         }
         if version == "missing" && content.is_none() {
             return Err("PATH_NOT_FOUND".into());
-        }
-        if let Some(ref content) = content {
-            total_bytes += content.len();
-            if content.len() > FILE_LIMIT || total_bytes > SCAN_BYTES {
-                return Err("PATCH_TOO_LARGE".into());
-            }
         }
         if versions.insert(raw.clone(), json!(version)).is_some() {
             return Err("INVALID_PATCH: duplicate source path".into());
@@ -408,7 +381,6 @@ fn context(
     let mut ancestors: Vec<_> = directory.ancestors().collect();
     ancestors.reverse();
     let mut rules = Vec::new();
-    let mut total = 0;
     for directory in ancestors {
         checkpoint(cancel, started)?;
         for name in ["AGENTS.override.md", "AGENTS.md"] {
@@ -419,11 +391,7 @@ fn context(
                 Ok(_) => {}
             }
             let raw = relative(root, &path);
-            let (bytes, version) = snapshot(root, &raw, PAGE_BYTES)?;
-            total += bytes.len();
-            if total > PAGE_BYTES {
-                return Err("RULES_TOO_LARGE: combined project rules exceed 64 KiB".into());
-            }
+            let (bytes, version) = snapshot(root, &raw)?;
             let content = text(bytes)?;
             if content.trim().is_empty() {
                 continue;
@@ -440,24 +408,40 @@ fn context(
     )
 }
 
-fn read_text(root: &Path, p: &Value) -> Result<Value, String> {
+pub(crate) fn read_text(root: &Path, p: &Value) -> Result<Value, String> {
     let raw = crate::required_string(p, "path")?;
-    let (bytes, version) = snapshot(root, raw, FILE_LIMIT)?;
+    let path = resolve(root, raw)?;
+    let before = super::attachments::stat(&path)?;
+    let version = format!("sha256:{}", super::outputs::file_hash(&path)?);
     if p["version"].as_str().is_some_and(|v| v != version) {
         return Err("VERSION_CONFLICT".into());
     }
-    let content = text(bytes)?;
-    let offset = p["offset"].as_u64().unwrap_or(0) as usize;
-    if offset > content.len() || !content.is_char_boundary(offset) {
+    let offset = p["offset"].as_u64().unwrap_or(0);
+    let total = before["bytes"].as_u64().ok_or("NOT_A_FILE")?;
+    if offset > total {
         return Err("INVALID_OFFSET".into());
     }
-    let mut end = content.len().min(offset.saturating_add(PAGE_BYTES));
-    while !content.is_char_boundary(end) {
-        end -= 1;
+    let mut file = File::open(&path).map_err(io_error)?;
+    file.seek(SeekFrom::Start(offset)).map_err(io_error)?;
+    let mut bytes = Vec::new();
+    file.take(PAGE_BYTES as u64)
+        .read_to_end(&mut bytes)
+        .map_err(io_error)?;
+    let end = match std::str::from_utf8(&bytes) {
+        Ok(_) => bytes.len(),
+        Err(e) if e.error_len().is_none() && offset + (bytes.len() as u64) < total => {
+            e.valid_up_to()
+        }
+        Err(_) => return Err("ENCODING_UNSUPPORTED: expected UTF-8 text".into()),
+    };
+    let content = text(bytes[..end].to_vec())?;
+    if super::attachments::stat(&path)?["version"] != before["version"] {
+        return Err("VERSION_CONFLICT".into());
     }
+    let next = offset + end as u64;
     Ok(
-        json!({"source":"client","path":raw,"version":version,"bytes":content.len(),
-        "content":&content[offset..end],"offset":offset,"nextOffset":end,"truncated":end<content.len()}),
+        json!({"source":"client","path":raw,"version":version,"bytes":total,
+        "content":content,"offset":offset,"nextOffset":next,"truncated":next<total}),
     )
 }
 
@@ -473,9 +457,6 @@ fn search(
         return Err("NOT_A_DIRECTORY".into());
     }
     let query = p["query"].as_str().unwrap_or("");
-    if query.len() > 4096 {
-        return Err("QUERY_TOO_LARGE".into());
-    }
     let mode = p["mode"].as_str().unwrap_or("files");
     if mode != "files" && mode != "text" {
         return Err("INVALID_SEARCH_MODE".into());
@@ -488,24 +469,17 @@ fn search(
         .unwrap_or("0")
         .parse::<usize>()
         .map_err(|_| "INVALID_CURSOR")?;
-    if offset > SCAN_ENTRIES {
-        return Err("INVALID_CURSOR".into());
-    }
     let limit = p["limit"].as_u64().unwrap_or(100).clamp(1, 200) as usize;
     let mut directories = vec![start];
     let mut paths = Vec::new();
     let mut skipped = 0;
     let mut scanned = 0;
-    let mut scan_truncated = false;
+    let scan_truncated = false;
     while let Some(directory) = directories.pop() {
         checkpoint(cancel, started)?;
         let mut children = Vec::new();
         for entry in fs::read_dir(directory).map_err(io_error)? {
             checkpoint(cancel, started)?;
-            if scanned == SCAN_ENTRIES {
-                scan_truncated = true;
-                break;
-            }
             scanned += 1;
             let entry = entry.map_err(io_error)?;
             let metadata = fs::symlink_metadata(entry.path()).map_err(io_error)?;
@@ -534,7 +508,6 @@ fn search(
     paths.sort_by(|a, b| a.0.cmp(&b.0));
     let mut matches = Vec::new();
     let mut total_matches = 0;
-    let mut read_bytes = 0;
     let mut response_bytes = 0;
     let mut more = false;
     'files: for (path, is_dir) in paths {
@@ -547,27 +520,16 @@ fn search(
                     .push(json!({"path":name,"kind":if is_dir { "directory" } else { "file" }}));
             }
         } else if !is_dir {
-            let (bytes, version) = match snapshot(root, &name, FILE_LIMIT) {
-                Ok(v) => v,
-                Err(e) if e == "FILE_TOO_LARGE" => {
-                    skipped += 1;
-                    continue;
-                }
-                Err(e) => return Err(e),
-            };
-            read_bytes += bytes.len();
-            if read_bytes > SCAN_BYTES {
-                scan_truncated = true;
-                break;
-            }
-            let content = match text(bytes) {
-                Ok(v) => v,
-                Err(_) => {
-                    skipped += 1;
-                    continue;
-                }
-            };
-            for (line, value) in content.lines().enumerate() {
+            let version = version_at(root, &name)?;
+            let reader = BufReader::new(File::open(&path).map_err(io_error)?);
+            for (line, value) in reader.lines().enumerate() {
+                let value = match value {
+                    Ok(value) if !value.contains('\0') => value,
+                    _ => {
+                        skipped += 1;
+                        break;
+                    }
+                };
                 if line % 100 == 0 {
                     checkpoint(cancel, started)?;
                 }
@@ -585,10 +547,6 @@ fn search(
             }
         }
         for candidate in candidates {
-            if total_matches == SCAN_ENTRIES {
-                scan_truncated = true;
-                break 'files;
-            }
             total_matches += 1;
             if total_matches <= offset {
                 continue;
@@ -606,7 +564,7 @@ fn search(
         json!({"source":"client","path":raw,"mode":mode,"matches":matches,
         "nextCursor":if more { Some((offset+matches.len()).to_string()) } else { None },
         "scanTruncated":scan_truncated,"scannedEntries":scanned,"skippedEntries":skipped,
-        "pagination":"live-rescan","limits":{"entries":SCAN_ENTRIES,"fileBytes":FILE_LIMIT,"scanBytes":SCAN_BYTES,"pageBytes":PAGE_BYTES}}),
+        "pagination":"live-rescan","limits":{"pageBytes":PAGE_BYTES}}),
     )
 }
 

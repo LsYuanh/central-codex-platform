@@ -12,11 +12,12 @@ use std::{
 use uuid::Uuid;
 
 pub const CHUNK: usize = 256 * 1024;
-const IMAGE_LIMIT: usize = 5 * 1024 * 1024;
-const MEMORY_LIMIT: usize = 20 * 1024 * 1024;
 const TTL: Duration = Duration::from_secs(60);
 struct Transfer {
-    bytes: Vec<u8>,
+    file: File,
+    total: u64,
+    // Own imported bytes on disk until commit/expiry, rather than retaining an image in RAM.
+    _temporary: Option<tempfile::NamedTempFile>,
     path: Option<PathBuf>,
     version: String,
     touched: Instant,
@@ -130,28 +131,12 @@ impl Attachments {
                 let path = self.resolve(p)?;
                 let info = stat(&path)?;
                 check_version(p, &info)?;
-                let image_limit = if local {
-                    super::outputs::OUTPUT_LIMIT
-                } else {
-                    IMAGE_LIMIT
-                };
-                if info["bytes"].as_u64().unwrap_or(u64::MAX) > image_limit as u64 {
-                    return Err("IMAGE_TOO_LARGE: maximum 5 MiB".into());
-                }
-                let mut bytes = Vec::new();
-                File::open(&path)
-                    .map_err(|e| e.to_string())?
-                    .take(image_limit as u64 + 1)
-                    .read_to_end(&mut bytes)
-                    .map_err(|e| e.to_string())?;
-                if bytes.len() > image_limit {
-                    return Err("IMAGE_TOO_LARGE".into());
-                }
-                let decoded = decode(&bytes)?;
-                if info["version"] != stat(&path)?["version"] {
-                    return Err("SOURCE_CHANGED".into());
-                }
                 if method.starts_with("attachment/") {
+                    let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+                    let decoded = decode(&bytes)?;
+                    if info["version"] != stat(&path)?["version"] {
+                        return Err("SOURCE_CHANGED".into());
+                    }
                     let (width, height) = if method == "attachment/output_preview" {
                         (960, 720)
                     } else {
@@ -166,40 +151,58 @@ impl Attachments {
                         json!({"url":format!("data:image/jpeg;base64,{}", STANDARD.encode(encoded.into_inner())), "version":info["version"]}),
                     );
                 }
-                let format = image::guess_format(&bytes).map_err(|e| e.to_string())?;
-                let mime = match format {
-                    ImageFormat::Png => "image/png",
-                    ImageFormat::Jpeg => "image/jpeg",
-                    ImageFormat::WebP => "image/webp",
-                    ImageFormat::Gif => "image/gif",
-                    _ => return Err("IMAGE_FORMAT_UNSUPPORTED".into()),
-                };
-                let total = bytes.len();
-                let id = self.insert(
-                    bytes,
-                    Some(path),
-                    info["version"].as_str().unwrap_or("").to_owned(),
-                )?;
+                // Upload does not depend on the thumbnail decoder. Upstream decides
+                // whether the original image is supported by the selected model.
+                let mime = info["mimeType"]
+                    .as_str()
+                    .unwrap_or("application/octet-stream");
+                if info["kind"] != "image" {
+                    return Err("NOT_AN_IMAGE".into());
+                }
+                let file = File::open(&path).map_err(|e| e.to_string())?;
+                let total = file.metadata().map_err(|e| e.to_string())?.len();
+                let id = Uuid::new_v4().to_string();
+                self.transfers.insert(
+                    id.clone(),
+                    Transfer {
+                        file,
+                        total,
+                        _temporary: None,
+                        path: Some(path),
+                        version: info["version"].as_str().unwrap_or("").to_owned(),
+                        touched: Instant::now(),
+                    },
+                );
                 Ok(
-                    json!({"transferId":id, "totalBytes":total, "chunkBytes":CHUNK, "mimeType":mime, "width":decoded.width(), "height":decoded.height(), "version":info["version"]}),
+                    json!({"transferId":id, "totalBytes":total, "chunkBytes":CHUNK, "mimeType":mime, "version":info["version"]}),
                 )
             }
             "file/read_chunk" => {
                 let id = super::required_string(p, "transferId")?;
-                let offset = p["offset"].as_u64().ok_or("INVALID_OFFSET")? as usize;
+                let offset = p["offset"].as_u64().ok_or("INVALID_OFFSET")?;
                 let t = self.transfers.get_mut(id).ok_or("TRANSFER_EXPIRED")?;
                 if let Some(path) = &t.path {
                     if stat(path)?["version"] != t.version {
                         return Err("SOURCE_CHANGED".into());
                     }
                 }
-                if offset > t.bytes.len() || offset % CHUNK != 0 {
+                if offset > t.total || offset % CHUNK as u64 != 0 {
                     return Err("INVALID_OFFSET".into());
                 }
-                let end = (offset + CHUNK).min(t.bytes.len());
+                let end = offset.saturating_add(CHUNK as u64).min(t.total);
+                let mut bytes = vec![0; (end - offset) as usize];
+                t.file
+                    .seek(SeekFrom::Start(offset))
+                    .and_then(|_| t.file.read_exact(&mut bytes))
+                    .map_err(|e| e.to_string())?;
+                if let Some(path) = &t.path {
+                    if stat(path)?["version"] != t.version {
+                        return Err("SOURCE_CHANGED".into());
+                    }
+                }
                 t.touched = Instant::now();
                 Ok(
-                    json!({"transferId":id, "offset":offset, "sequence":offset/CHUNK, "totalBytes":t.bytes.len(), "data": STANDARD.encode(&t.bytes[offset..end]), "done":end == t.bytes.len()}),
+                    json!({"transferId":id, "offset":offset, "sequence":offset/CHUNK as u64, "totalBytes":t.total, "data": STANDARD.encode(bytes), "done":end == t.total}),
                 )
             }
             "file/close_transfer" => {
@@ -208,7 +211,20 @@ impl Attachments {
                 Ok(json!({"closed":true}))
             }
             "attachment/import_begin" if local => {
-                let id = self.insert(Vec::new(), None, String::new())?;
+                let temporary = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+                let file = temporary.reopen().map_err(|e| e.to_string())?;
+                let id = Uuid::new_v4().to_string();
+                self.transfers.insert(
+                    id.clone(),
+                    Transfer {
+                        file,
+                        total: 0,
+                        _temporary: Some(temporary),
+                        path: None,
+                        version: String::new(),
+                        touched: Instant::now(),
+                    },
+                );
                 Ok(json!({"transferId":id}))
             }
             "attachment/import_chunk" if local => {
@@ -221,49 +237,42 @@ impl Attachments {
                     .transfers
                     .get_mut(super::required_string(p, "transferId")?)
                     .ok_or("TRANSFER_EXPIRED")?;
-                if t.path.is_some()
-                    || p["offset"].as_u64() != Some(t.bytes.len() as u64)
-                    || t.bytes.len() + bytes.len() > IMAGE_LIMIT
-                {
+                if t.path.is_some() || p["offset"].as_u64() != Some(t.total) {
                     return Err("INVALID_IMPORT_CHUNK".into());
                 }
-                t.bytes.extend(bytes);
+                t.file
+                    .seek(SeekFrom::Start(t.total))
+                    .and_then(|_| t.file.write_all(&bytes))
+                    .map_err(|e| e.to_string())?;
+                t.total += bytes.len() as u64;
                 t.touched = Instant::now();
-                Ok(json!({"nextOffset":t.bytes.len()}))
+                Ok(json!({"nextOffset":t.total}))
             }
             "attachment/import_commit" if local => {
                 let id = super::required_string(p, "transferId")?;
-                let t = self.transfers.remove(id).ok_or("TRANSFER_EXPIRED")?;
+                let mut t = self.transfers.remove(id).ok_or("TRANSFER_EXPIRED")?;
                 if t.path.is_some() {
                     return Err("INVALID_IMPORT".into());
                 }
-                decode(&t.bytes)?;
                 fs::create_dir_all(&self.temp_root).map_err(|e| e.to_string())?;
                 // Only UUID files registered by this Agent are eligible for expiry.
                 self.cleanup_temp()?;
-                let used: u64 = fs::read_dir(&self.temp_root)
-                    .map_err(|e| e.to_string())?
-                    .flatten()
-                    .filter_map(|e| e.metadata().ok())
-                    .map(|m| m.len())
-                    .sum();
-                if used + t.bytes.len() as u64 > 100 * 1024 * 1024 {
-                    return Err("TEMP_CAPACITY: retained attachments reached 100 MiB".into());
-                }
-                let extension = match image::guess_format(&t.bytes).map_err(|e| e.to_string())? {
-                    ImageFormat::Png => "png",
-                    ImageFormat::Jpeg => "jpg",
-                    ImageFormat::WebP => "webp",
-                    ImageFormat::Gif => "gif",
-                    _ => return Err("IMAGE_FORMAT_UNSUPPORTED".into()),
-                };
+                t.file.rewind().map_err(|e| e.to_string())?;
+                let mut header = [0; 32];
+                let n = t.file.read(&mut header).map_err(|e| e.to_string())?;
+                let format = image::guess_format(&header[..n]).map_err(|e| e.to_string())?;
+                let extension = format
+                    .extensions_str()
+                    .first()
+                    .ok_or("IMAGE_FORMAT_UNKNOWN")?;
                 let target = self.temp_root.join(format!("{id}.{extension}"));
                 let mut out = File::options()
                     .write(true)
                     .create_new(true)
                     .open(&target)
                     .map_err(|e| e.to_string())?;
-                out.write_all(&t.bytes).map_err(|e| e.to_string())?;
+                t.file.rewind().map_err(|e| e.to_string())?;
+                std::io::copy(&mut t.file, &mut out).map_err(|e| e.to_string())?;
                 fs::write(
                     self.temp_root.join(format!("{id}.registered")),
                     target.file_name().unwrap().to_string_lossy().as_bytes(),
@@ -274,35 +283,6 @@ impl Attachments {
             // Remove references never deletes original files. Clipboard files expire after 7 days.
             _ => Err(format!("UNSUPPORTED_ATTACHMENT_METHOD: {method}")),
         }
-    }
-    fn insert(
-        &mut self,
-        bytes: Vec<u8>,
-        path: Option<PathBuf>,
-        version: String,
-    ) -> Result<String, String> {
-        if self.transfers.len() >= 4
-            || self
-                .transfers
-                .values()
-                .map(|t| t.bytes.len())
-                .sum::<usize>()
-                + bytes.len()
-                > MEMORY_LIMIT
-        {
-            return Err("TRANSFER_BUSY".into());
-        }
-        let id = Uuid::new_v4().to_string();
-        self.transfers.insert(
-            id.clone(),
-            Transfer {
-                bytes,
-                path,
-                version,
-                touched: Instant::now(),
-            },
-        );
-        Ok(id)
     }
     fn cleanup_temp(&self) -> Result<(), String> {
         for entry in fs::read_dir(&self.temp_root)
@@ -329,9 +309,11 @@ impl Attachments {
                 continue;
             }
             let name = fs::read_to_string(&marker).map_err(|e| e.to_string())?;
-            if ["png", "jpg", "webp", "gif"]
-                .iter()
-                .any(|ext| name == format!("{id}.{ext}"))
+            if [
+                "png", "jpg", "webp", "gif", "bmp", "tiff", "avif", "heic", "heif", "svg",
+            ]
+            .iter()
+            .any(|ext| name == format!("{id}.{ext}"))
             {
                 let _ = fs::remove_file(self.temp_root.join(name));
                 let _ = fs::remove_file(marker);
@@ -349,28 +331,13 @@ fn check_version(p: &Value, stat: &Value) -> Result<(), String> {
     Ok(())
 }
 pub(crate) fn decode(bytes: &[u8]) -> Result<image::DynamicImage, String> {
-    let (width, height) = ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?
-        .into_dimensions()
-        .map_err(|e| format!("IMAGE_DECODE_FAILED: {e}"))?;
-    if u64::from(width) * u64::from(height) > 16_000_000 {
-        return Err("IMAGE_PIXEL_LIMIT: maximum 16 megapixels".into());
-    }
     let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|e| e.to_string())?;
-    let mut limits = Limits::default();
-    limits.max_image_width = Some(8192);
-    limits.max_image_height = Some(8192);
-    limits.max_alloc = Some(80 * 1024 * 1024);
-    reader.limits(limits);
+    reader.limits(Limits::no_limits());
     let image = reader
         .decode()
         .map_err(|e| format!("IMAGE_DECODE_FAILED: {e}"))?;
-    if u64::from(image.width()) * u64::from(image.height()) > 16_000_000 {
-        return Err("IMAGE_PIXEL_LIMIT: maximum 16 megapixels".into());
-    }
     Ok(image)
 }
 
@@ -556,6 +523,11 @@ pub(crate) fn stat(path: &Path) -> Result<Value, String> {
         "jpg" | "jpeg" => ("image", "image/jpeg"),
         "webp" => ("image", "image/webp"),
         "gif" => ("image", "image/gif"),
+        "bmp" => ("image", "image/bmp"),
+        "tif" | "tiff" => ("image", "image/tiff"),
+        "avif" => ("image", "image/avif"),
+        "heic" | "heif" => ("image", "image/heic"),
+        "svg" => ("image", "image/svg+xml"),
         "pdf" | "docx" | "xlsx" | "pptx" | "doc" | "xls" | "ppt" => {
             ("document", "application/octet-stream")
         }

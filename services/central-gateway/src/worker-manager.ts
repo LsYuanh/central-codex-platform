@@ -15,7 +15,7 @@ export interface WorkerBridge {
   readonly closed?:Promise<void>;
 }
 type ActiveTurn = {id?:string; pendingStart?:boolean; completedBeforeResponse:Set<string>};
-type Worker = {userId:string; bridge?:WorkerBridge; starting?:Promise<WorkerBridge>; cancelStart?:()=>void; startTimer?:NodeJS.Timeout; stopping:boolean; exitConfirmed?:boolean; calls:number; touched:number; turns:Map<string,ActiveTurn>; goals:Set<string>; pendingGoals:Set<string>};
+type Worker = {userId:string; bridge?:WorkerBridge; starting?:Promise<WorkerBridge>; cancelStart?:()=>void; startTimer?:NodeJS.Timeout; stopping:boolean; exitConfirmed?:boolean; calls:number; queued:number; touched:number; turns:Map<string,ActiveTurn>; goals:Set<string>; pendingGoals:Set<string>};
 type Options = {
   root:string; perUser:boolean; maxWorkers:number; perUserTurns:number; totalTurns:number; maxRequests:number; idleMs:number; cooldownMs:number;
   create:(userId:string|undefined, paths:{home:string; directory:string}|undefined)=>WorkerBridge|Promise<WorkerBridge>;
@@ -33,6 +33,7 @@ export class WorkerManager {
   private closed=false;
   private updateQuiesced=false;
   private readonly exitWaiters=new Set<()=>void>();
+  private readonly capacityWaiters=new Set<()=>void>();
   private readonly timer:NodeJS.Timeout;
   private readonly startTimeout:number;
   constructor(private options:Options){
@@ -64,7 +65,7 @@ export class WorkerManager {
     const starting=new Promise<WorkerBridge>((resolve,reject)=>{resolveStart=resolve;rejectStart=reject;});
     // Eager legacy construction or a cancelled startup may have no waiter yet.
     void starting.catch(()=>{});
-    const worker:Worker={userId:key,starting,stopping:false,calls:0,touched:Date.now(),turns:new Map(),goals:new Set(),pendingGoals:new Set(),
+    const worker:Worker={userId:key,starting,stopping:false,calls:0,queued:0,touched:Date.now(),turns:new Map(),goals:new Set(),pendingGoals:new Set(),
       cancelStart:()=>rejectStart(Error("WORKER_STOPPING: startup cancelled; operation was not sent"))};
     // Reserve before invoking an async factory: both capacity and same-user
     // single-flight admission include workers whose bridge does not exist yet.
@@ -118,26 +119,54 @@ export class WorkerManager {
     }
     return worker;
   }
-  forUser(userId:string){return {request:(method:string,params:unknown)=>this.request(userId,method,params)};}
-  private async request(userId:string,method:string,params:unknown):Promise<unknown>{
+  forUser(userId:string){return {request:(method:string,params:unknown,guard?:()=>void)=>this.request(userId,method,params,guard)};}
+  private async waitForCapacity(guard?:()=>void) {
+    guard?.();
+    if(this.closed||this.updateQuiesced)throw Error("WORKER_MANAGER_UNAVAILABLE: queued operation was not sent");
+    await new Promise<void>(resolve=>{
+      const finish=()=>{clearTimeout(timer);this.capacityWaiters.delete(finish);resolve();};
+      // Check caller cancellation while waiting, including when no worker emits events.
+      const timer=setTimeout(finish,250);
+      this.capacityWaiters.add(finish);
+    });
+  }
+  private async request(userId:string,method:string,params:unknown,guard?:()=>void):Promise<unknown>{
     if(this.updateQuiesced)throw Error('CENTRAL_UPDATING: reconnect after the central runtime update');
+    guard?.();
+    while(!this.workers.has(this.key(userId))&&this.workers.size>=this.options.maxWorkers){
+      const idle=[...this.workers.values()].filter(w=>!w.stopping&&!w.starting&&!w.calls&&!w.queued&&!w.turns.size).sort((a,b)=>a.touched-b.touched)[0];
+      if(idle)this.stop(idle,true);
+      await this.waitForCapacity(guard);
+    }
     const w=this.get(userId);
-    if(w.calls>=this.options.maxRequests)throw Error("WORKER_REQUEST_LIMIT: too many pending requests");
     const tid=record(params)&&typeof params.threadId==="string"?params.threadId:undefined;
     let reserved:ActiveTurn|undefined;
     const activatingGoal=method==="thread/goal/set"&&record(params)&&params.status==="active";
     const newGoalReservation=!!(activatingGoal&&tid&&!w.goals.has(tid));
+    // Queued requests keep their worker alive, but do not consume execution slots.
+    w.queued++;
+    const queuedGuard=()=>{guard?.();if(w.stopping||this.workers.get(this.key(userId))!==w)throw Error("WORKER_STOPPING: queued operation was not sent");};
+    try {
+    // Recheck both resources after every wait: another request may take a call
+    // slot while this request waits for a turn. Interrupts must bypass that queue.
+    while(true){
+      queuedGuard();
+      if(this.options.perUser&&method==="turn/start"&&tid&&w.turns.has(tid)&&(!w.goals.has(tid)||w.turns.get(tid)?.id||w.turns.get(tid)?.pendingStart))throw Error("THREAD_BUSY: an active or unknown turn must be reconciled before starting another");
+      const requestFull=w.calls>=this.options.maxRequests&&!["turn/interrupt","thread/goal/set","thread/goal/clear"].includes(method);
+      const turnFull=(method==="turn/start"||activatingGoal)&&tid&&this.options.perUser&&!w.turns.has(tid)&&(w.turns.size>=this.options.perUserTurns||[...this.workers.values()].reduce((n,item)=>n+item.turns.size,0)>=this.options.totalTurns);
+      if(!requestFull&&!turnFull)break;
+      await this.waitForCapacity(queuedGuard);
+    }
     if((method==="turn/start"||activatingGoal)&&tid){
-      if(this.options.perUser&&method==="turn/start"&&w.turns.has(tid)&&(!w.goals.has(tid)||w.turns.get(tid)?.id||w.turns.get(tid)?.pendingStart))throw Error("THREAD_BUSY: an active or unknown turn must be reconciled before starting another");
-      const total=[...this.workers.values()].reduce((n,w)=>n+w.turns.size,0);
-      if(this.options.perUser&&!w.turns.has(tid)&&(w.turns.size>=this.options.perUserTurns||total>=this.options.totalTurns)){this.options.event("worker.quota",w.userId,"failed","TURN_LIMIT");throw Error("TURN_LIMIT: active turn quota reached; stop or wait for an existing turn");}
       if(method==="turn/start"||!w.turns.has(tid)){reserved={pendingStart:method==="turn/start",completedBeforeResponse:new Set()};w.turns.set(tid,reserved);}
       if(activatingGoal){w.goals.add(tid);w.pendingGoals.add(tid);}
     }
+    queuedGuard();
     w.calls++;
+    } finally {w.queued--;this.changed();}
     try{
       const bridge=w.bridge??await w.starting!;
-      const assertCurrent=()=>{if(this.closed||w.stopping||this.workers.get(this.key(userId))!==w)throw Error("WORKER_STOPPING: operation was not sent");};
+      const assertCurrent=()=>{guard?.();if(this.closed||w.stopping||this.workers.get(this.key(userId))!==w)throw Error("WORKER_STOPPING: operation was not sent");};
       assertCurrent();
       // Fresh/restarted processes can initialize for read/recovery requests. Never replay the failed request.
       if(this.options.perUser&&method!=="initialize"&&!bridge.enforcedRuntimeReady)await bridge.request("initialize",{clientInfo:{name:"yuan-worker-manager",version:"1"},capabilities:{experimentalApi:true}});
@@ -167,7 +196,7 @@ export class WorkerManager {
         if(reserved&&w.turns.get(tid)===reserved){reserved.pendingStart=false;if(!w.goals.has(tid))w.turns.delete(tid);}
       }
       throw error;
-    }finally{w.calls--;w.touched=Date.now();}
+    }finally{w.calls--;w.touched=Date.now();this.changed();}
   }
   notification(userId:string|undefined,bridge:WorkerBridge,message:WorkerMessage){
     const key=this.key(userId??"legacy"),w=this.workers.get(key);
@@ -203,6 +232,7 @@ export class WorkerManager {
       w.turns.clear();w.goals.clear();w.pendingGoals.clear();this.options.event("worker.exit",key,"failed","RUNTIME_UNAVAILABLE");
     }
     w.touched=Date.now();
+    this.changed();
   }
   exited(userId:string|undefined,bridge:WorkerBridge){
     const key=this.key(userId??"legacy");
@@ -215,7 +245,7 @@ export class WorkerManager {
   private reap(){
     for(const [key,until] of this.retryAfter)if(until<=Date.now())this.retryAfter.delete(key);
     if(!this.options.perUser)return;
-    for(const w of this.workers.values())if(!w.stopping&&w.bridge?.alive&&!w.calls&&!w.turns.size&&Date.now()-w.touched>=this.options.idleMs){this.options.event("worker.idle_stop",w.userId,"succeeded");this.stop(w,true);}
+    for(const w of this.workers.values())if(!w.stopping&&w.bridge?.alive&&!w.calls&&!w.queued&&!w.turns.size&&Date.now()-w.touched>=this.options.idleMs){this.options.event("worker.idle_stop",w.userId,"succeeded");this.stop(w,true);}
   }
   hasActiveThreads(matches:(threadId:string)=>boolean){return [...this.workers.values()].some(w=>[...w.turns.keys()].some(matches));}
   hasGoal(userId:string,threadId:string){return this.workers.get(this.key(userId))?.goals.has(threadId)===true;}
@@ -223,7 +253,7 @@ export class WorkerManager {
   snapshot(){return [...this.workers.values()].map(w=>({userId:w.userId,pid:w.bridge?.pid,ready:!w.stopping&&(w.bridge?.enforcedRuntimeReady??false),alive:w.bridge?.alive??false,starting:!!w.starting,stopping:w.stopping,pendingRequests:w.calls,activeTurns:w.turns.size}));}
   /** Check and close admission in one event-loop turn; polling metrics is insufficient. */
   quiesceIfIdle(){
-    if(this.closed||[...this.workers.values()].some(w=>w.starting||w.stopping||w.calls||w.turns.size))return false;
+    if(this.closed||[...this.workers.values()].some(w=>w.starting||w.stopping||w.calls||w.queued||w.turns.size))return false;
     this.updateQuiesced=true;return true;
   }
   get enforcedRuntimeReady(){const entries=[...this.workers.values()];return entries.length>0&&entries.every(w=>!w.stopping&&w.bridge?.enforcedRuntimeReady);}
@@ -232,7 +262,7 @@ export class WorkerManager {
   close(){if(this.closed)return;this.closed=true;clearInterval(this.timer);for(const w of this.workers.values()){
     try{this.stop(w);}catch{/* Keep every failed stop reserved and continue stopping the others. */}
   }}
-  private changed(){for(const notify of this.exitWaiters)notify();}
+  private changed(){for(const notify of this.exitWaiters)notify();for(const notify of this.capacityWaiters)notify();}
   /** Closing a bridge is not exit evidence. A deadline never frees a stopping slot. */
   drain(timeoutMs=20_000):Promise<void>{
     if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300_000)return Promise.reject(Error("WORKER_SHUTDOWN_TIMEOUT_INVALID"));

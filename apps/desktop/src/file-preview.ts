@@ -29,10 +29,10 @@ export async function readFullImage(file: LocalFile, cancelled: () => boolean) {
     if (cancelled()) throw new UiError("图片读取已取消");
     const opened = await request<{transferId: string; totalBytes: number; chunkBytes: number; mimeType: string}>("file/read_image", {path: file.path, version: file.version});
     transferId = opened.transferId;
-    if (!Number.isSafeInteger(opened.totalBytes) || opened.totalBytes <= 0 || opened.totalBytes > 20 * 1024 * 1024 || opened.chunkBytes !== 256 * 1024 || !/^image\/(png|jpeg|webp|gif)$/.test(opened.mimeType)) throw new UiError("图片预览格式或大小不受支持");
-    const data = new Uint8Array(opened.totalBytes), deadline = Date.now() + 60_000;
+    if (!Number.isSafeInteger(opened.totalBytes) || opened.totalBytes <= 0 || opened.chunkBytes !== 256 * 1024 || !/^image\/[a-z0-9.+-]+$/i.test(opened.mimeType)) throw new UiError("图片预览格式或大小不受支持");
+    const data = new Uint8Array(opened.totalBytes);
     for (let offset = 0; offset < data.length; offset += opened.chunkBytes) {
-      if (cancelled() || Date.now() > deadline) throw new UiError("图片读取已取消或超时");
+      if (cancelled()) throw new UiError("图片读取已取消或超时");
       const chunk = await request<{data: string; offset: number; done: boolean}>("file/read_chunk", {transferId, offset});
       const raw = atob(chunk.data), expected = Math.min(opened.chunkBytes, data.length - offset);
       if (chunk.offset !== offset || raw.length !== expected || chunk.done !== (offset + expected === data.length)) throw new UiError("图片内容校验失败");

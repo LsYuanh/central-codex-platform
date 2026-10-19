@@ -2,6 +2,57 @@
 
 # Local AgentRPC
 
+## Device documents and capacity alignment (2026-10-19, source only)
+
+This section supersedes older platform quotas below. It is implemented and locally
+tested, not deployed. Authentication, user/device/Thread ownership, approvals,
+source-version checks, chunk integrity and upstream format constraints remain.
+Plugins, MCP and subagent policy are unchanged. Full requests still depend on
+available resources and upstream capability; removal of platform quotas is not
+a guarantee that the model accepts arbitrary formats or unlimited content.
+
+- `documents/v1` adds `file/read_document({path,version?,section?,offset?,render?,scale?})`.
+  `file/read_text` also routes supported document extensions here. Sections start
+  at 1: PDF page, Word section, Excel sheet or PowerPoint slide. Results include
+  `content`, byte `offset`/`nextOffset`, `truncated`, `section`, `sections`,
+  optional `nextSection`, source `version` and `untrusted:true`. Text pages are
+  64 KiB; this is a continuation boundary, not a total document limit. PDF pages
+  without text, or `render:true`, return an `image` reference readable through
+  existing image transfers. The device uses bundled PDFium and an Office parser;
+  it does not execute macros, external links or formula recalculation. Password,
+  malformed file and missing runtime failures are explicit. Native App Server
+  receives text/image inputs, never a fictitious PDF input type or central path.
+  Gateway `device_read_text` exposes these parameters; old Threads can use
+  `device_exec(program='codexia.files',args=['read_document',JSON parameters])`.
+  Attachment state `partial` means only a portion has been read.
+- `exec-sessions/v1` extends `exec` with `yieldMs`, `interactive`, `sessionId`,
+  `stdin`, `closeStdin`, `cancel` and byte `offset`. Polls use `program:''`,
+  `args:[]`; responses include `sessionId`, `running`, `content`, `nextOffset`
+  and `completion`. The gateway supplies reserved `__sessionOwner` from the
+  authenticated user and Thread; callers cannot forge it. Stdin is a dedicated
+  child pipe, never the Agent transport. Task/request cancellation includes
+  resumed sessions; device disconnect ends all sessions. Full stdout/stderr
+  logs remain on the device, with paths and paging instructions in completion.
+  An omitted `timeoutMs` imposes no execution deadline; explicit positive values
+  remain supported. Transport/idle/recovery timeouts are separate.
+- Image transfer sends original bytes without a local dimension/decoder gate.
+  Optional thumbnails cannot block sending. File transfers are backed by device
+  temporary files/streams; 256 KiB chunks remain, with no platform total-byte or
+  transfer-count quota. Gateway/native WebSockets no longer impose the former
+  aggregate 1 MiB limit. Private chunked attachment IPC retains its frame guard.
+- File text, directories and search are paginated instead of silently stopping
+  at a total file/entry budget. `read_file` accepts `offset`/`version`;
+  `workspace/list` accepts `cursor` and returns `nextCursor`/`totalEntries`.
+  Patch content/count quotas are removed; approval/version checks are retained.
+- Worker capacity thresholds schedule waiting requests instead of rejecting
+  them. Stop, disconnect and identity changes cancel queued turn submissions.
+  Requests are never replayed after an uncertain upstream result. Model Broker
+  default body/frame/catalog quotas are removed; explicit administrator settings
+  and credential/network security remain. Project/skill catalog quotas are
+  removed; native naming rules and portable safe paths remain enforced.
+- Running-turn steering accepts attachment/skill references with the same
+  preparation, membership, deduplication and device checks as a new turn.
+
 ## App Server 0.162.1 adaptation (2026-10-10, central deployed)
 
 No Local Agent wire methods change. The gateway stamps authenticated UI goal
@@ -42,7 +93,7 @@ Current maintenance baseline: 2026-09-20. WSS plus `device-token-v1` is the depl
 
 ## Client projects (2026-09-20, central deployed; desktop installer pending)
 
-The gateway advertises `platformCapabilities.projects`. Platform operations are `project.list`, `project.save` and `project.remove`; the desktop RPC adapter exposes `project/list`, `project/save` and `project/remove`. Catalog entries `{id,name,folders,revision}` are scoped to authenticated user/device and retained in the existing atomic gateway state file. `folders[0]` is primary. Save validates 1–8 existing directories through the target Agent's `workspace/list`, stores canonical client paths, checks device installation identity and revision, and rejects duplicate folders. Creation accepts a stable `creationKey` for idempotent retries. Remove requires `{id,revision}`; it changes grouping only. Successful mutations emit `project/changed` to that user's connected clients on the same device.
+The gateway advertises `platformCapabilities.projects`. Platform operations are `project.list`, `project.save` and `project.remove`; the desktop RPC adapter exposes `project/list`, `project/save` and `project/remove`. Catalog entries `{id,name,folders,revision}` are scoped to authenticated user/device and retained in the existing atomic gateway state file. `folders[0]` is primary. Save validates one or more existing directories through the target Agent's `workspace/list`, stores canonical client paths, checks device installation identity and revision, and rejects duplicate folders. Creation accepts a stable `creationKey` for idempotent retries. Remove requires `{id,revision}`; it changes grouping only. Successful mutations emit `project/changed` to that user's connected clients on the same device.
 
 `conversation.create` optionally accepts `projectId` and `projectRevision`. These gateway-only fields never reach the central App Server; the gateway captures a `clientProject` snapshot in Thread metadata and supplies primary-directory `workspace/context` from Local Agent as instructions. Existing-thread requests cannot override the snapshot. Read/resume/list return gateway-owned metadata. Editing or removing the catalog entry does not change existing Thread directories, rules or device binding.
 
@@ -224,12 +275,13 @@ flushed after 250 ms and large lines are divided into frames no larger than 16 K
 ```
 
 Streaming is observational: the App Server tool call remains pending until exactly one final
-`agent.response`. The Agent keeps at most 64 KiB per stream for that final response and forwards at
-most 1 MiB per stream to the UI. It drains excess process output to avoid deadlock, emits
-`truncated=true`, and does not persist raw command output in gateway audit records.
+`agent.response`. The Agent keeps at most 64 KiB per stream for that final response,
+streams without the former 1 MiB ceiling, and stores full UTF-8 output in device
+logs with returned paths. `truncated=true` marks an inline excerpt. Raw output is
+not persisted in gateway audit records.
 
-`timeoutMs` defaults to 30 minutes, is clamped to 1 second–2 hours by both gateway and Agent, and is
-not reset merely because output arrives. `job.cancel` identifies the active request by `requestId`.
+`timeoutMs` is optional and positive when supplied, with no platform default or two-hour clamp;
+it is not reset merely because output arrives. `job.cancel` identifies requests by `requestId`.
 The Agent continues reading WebSocket frames and sending heartbeats while commands run, acknowledges
 the cancellation, and terminates the process tree. Turn interruption cancels every matching active
 device command before forwarding `turn/interrupt` upstream. A disconnect also cancels in-flight
@@ -297,9 +349,9 @@ metadata. The V1 envelope and 1 MiB frame limit are unchanged.
 | `file/copy` | sourcePath, path or name, optional overwrite/version | Verified destination metadata |
 | `file/publish` | path | Metadata with verified=true and SHA-256 after actual client read |
 
-Output files are limited to 20 MiB, chunks to 256 KiB, and active writes to four with
-80 MiB reserved total. Idle transfers expire after 60 seconds. Image saves stop starting
-new requests after 45 seconds, with the current bounded RPC and cleanup allowed to finish.
+Output files have no platform total-byte or active-write quota; chunks remain 256 KiB.
+Idle transfers expire after 60 seconds. There is no cumulative 45-second save budget;
+each individual RPC and cleanup still has a terminal timeout/cancellation path.
 Conflicting existing destinations require overwrite=true and expectedVersion; matching
 content is idempotent even after a lost commit response. Version checks use the existing
 file size/mtime token; SHA-256 checks the transmitted and committed bytes.
@@ -310,8 +362,8 @@ targets are rejected. OS access failures are returned, never upgraded to success
 command nonzero exit codes return COMMAND_FAILED.
 
 Local pipe only: `attachment/output_preview` creates a 960×720 JPEG preview;
-`file/reveal` opens the containing folder. Local `file/read_image` permits output images
-up to 20 MiB for the large preview; remote attachment input retains its 5 MiB limit.
+`file/reveal` opens the containing folder. Local and remote `file/read_image` transfer
+original bytes without a platform image size or dimension quota.
 
 App Server imageGeneration.result is consumed as inline image bytes; savedPath is never
 read by this broker. `output/state` events and history `outputs` contain metadata only,
@@ -328,7 +380,7 @@ gateway, never spawned as an executable. Both interfaces share device identity c
 
 ## Attachment extension (`attachments/v1`, 2026-09-03)
 
-The wire envelope stays V1 and retains a **1 MiB** frame limit. New Agents advertise
+The wire envelope stays V1; the former aggregate **1 MiB** WebSocket limit is removed. Agents advertise
 `attachments/v1`, `file/stat`, `file/read_text`, `file/read_image`, `file/read_chunk`,
 and `file/close_transfer`; the broker reports `AGENT_UPGRADE_REQUIRED` for unsupported
 methods. `agent.deviceKey` identifies the client installation independently of the
@@ -339,24 +391,24 @@ inherited anonymous pipes. No client network listener is added.
 |---|---|---|
 | `file/stat` | `path` | Canonical client path, name, kind, MIME, bytes, version, mtime, symlink flag |
 | `file/read_text` | `path`, optional `offset`, `version` | UTF-8 `content`, byte `nextOffset`, `truncated`, `version` (64 KiB page) |
-| `file/read_image` | `path`, optional `version` | `transferId`, `totalBytes`, `chunkBytes`, MIME, width, height, version |
+| `file/read_image` | `path`, optional `version` | `transferId`, `totalBytes`, `chunkBytes`, MIME, version; no mandatory decode |
 | `file/read_chunk` | `transferId`, `offset` (256 KiB aligned) | Base64 `data`, offset, sequence, totalBytes, done |
 | `file/close_transfer` | `transferId` | Idempotent `{closed:true}` |
 
-Image streams are validated snapshots in bounded Agent memory; the file size/mtime
-version is rechecked before each chunk. The gateway validates ID, byte count, sequence,
-offset, canonical Base64 and final flag. It reserves at most four submissions until the
-upstream request settles; per-turn source bytes are capped at 10 MiB. Base64/JSON and
-runtime copies add overhead, so this is not a promise that RSS is only 40 MiB.
+Image transfers retain a file handle and recheck the file size/mtime version around
+each chunk. The gateway validates ID, byte count, sequence, offset, canonical Base64
+and final flag. There is no submission-count or per-turn source-byte quota.
+The native image input still requires Base64/JSON allocation in gateway memory.
 Transfers are closed in `finally`, explicitly canceled before `turn/start`, or expire
 after 60 seconds idle. Read-only chunks may be retried; turns and writes are never
 automatically retried on uncertain outcomes.
 
 Existing relative workspace calls keep their old boundary. With the explicit trusted
 LAN flag, attachment/output file methods and command cwd accept absolute local paths. Drive-relative
-Windows paths, UNC input, missing files, non-files, unsupported encodings, image decode
-errors, source changes and expired transfers return errors. Document parsing is not
-implemented; binary files are not forced through UTF-8.
+Windows paths, UNC input, missing files, non-files, unsupported text encodings,
+source changes and expired transfers return errors. Image preview decode errors do
+not gate original-byte input. Supported documents use `documents/v1`; arbitrary
+binary files are not forced through UTF-8. Current path access follows `client-paths/v1` above.
 
 Local-only pipe methods are `attachment/identity`, `attachment/preview`,
 `attachment/import_begin`, `attachment/import_chunk`, `attachment/import_commit`.
@@ -485,7 +537,7 @@ A Local Agent advertising `skills/v1` additionally accepts the following gateway
 | `skills/read` | relative file, SHA-256, offset | base64 chunk, nextOffset, done; rejects changed source |
 | `skills/check` | programs (at most 12 basenames) | missing client PATH commands; never executes them |
 
-Full package limit is 64 files/8 MiB, depth six; each transfer chunk is at most 256 KiB. The gateway validates portable paths, metadata and hashes, then uses existing `file/write_begin/chunk/commit/abort` for client preparation and re-inspects the final manifest. Transfers bind to the same live Agent session; disconnect, re-pair, cancellation and checksum failure are errors. Native RPC skill input uses only gateway-resolved managed paths. The new exact dynamic tool `device_skill_load({name})` resolves from the turn's user catalog snapshot, checks current enabled membership, single-flights the selected version, and returns instructions plus verified **client** directory/resources. It grants no new system permissions. Existing command approval/transport boundaries remain intact.
+There is no platform package count/size/depth quota; each transfer chunk is at most 256 KiB. The gateway validates portable paths, metadata and hashes, then uses existing `file/write_begin/chunk/commit/abort` for client preparation and re-inspects the final manifest. Transfers bind to the same live Agent session; disconnect, re-pair, cancellation and checksum failure are errors. Native RPC skill input uses only gateway-resolved managed paths. The new exact dynamic tool `device_skill_load({name})` resolves from the turn's user catalog snapshot, checks current enabled membership, single-flights the selected version, and returns instructions plus verified **client** directory/resources. It grants no new system permissions. Existing command approval/transport boundaries remain intact.
 
 ### Built-in Yuan Zhou skill creator (2026-09-22, source only)
 

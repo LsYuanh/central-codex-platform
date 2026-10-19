@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { imageFailureMessage } from './image-generation.js';
 import type { AgentRpcMethod, AgentRpcResponsePayload, OutputArtifact } from "@central-codex-spike/agentrpc-types";
 type Json = Record<string, unknown>;
-const LIMIT = 20 * 1024 * 1024;
 const CHUNK = 256 * 1024;
 export const isRecord = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -129,18 +128,17 @@ export class OutputBroker {
     if (item.failure || item.status!=="completed") throw new Error("中央图片生成失败，没有可保存的完整图片");
     if (typeof item.result!=="string" || !item.result) throw new Error("中央未返回图片数据；不会将中央文件路径当作本机路径");
     const encoded=item.result.replace(/^data:image\/(?:png|jpeg|webp|gif);base64,/,"");
-    if(encoded.length>Math.ceil(LIMIT/3)*4)throw new Error("生成图片超过 20 MiB 保存上限");
-    if(this.active>=4)throw new Error("客户端输出保存繁忙，请重试");
+
     this.active++;
     let transferId: string | undefined;
-    const deadline=Date.now()+45_000;
+
     const writeRequest=(method:AgentRpcMethod,params:Json)=>{
-      if(Date.now()>deadline)throw new Error("客户端图片保存超时，请重试并核对本机文件");
+
       return this.request(output,method,params);
     };
     try {
       const bytes=Buffer.from(encoded,"base64");
-      if(!bytes.length || bytes.length>LIMIT || bytes.toString("base64")!==encoded)throw new Error("中央图片 Base64 校验失败");
+      if(!bytes.length || bytes.toString("base64")!==encoded)throw new Error("中央图片 Base64 校验失败");
       const extension=bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?"png":bytes[0]===255&&bytes[1]===216?"jpg":bytes.toString("ascii",0,4)==="RIFF"&&bytes.toString("ascii",8,12)==="WEBP"?"webp":bytes.toString("ascii",0,3)==="GIF"?"gif":undefined;
       if(!extension)throw new Error("中央图片格式无法识别");
       output.name=output.name.replace(/\.[^.]+$/,`.${extension}`);

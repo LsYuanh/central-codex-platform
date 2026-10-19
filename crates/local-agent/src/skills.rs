@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::{
     fs,
+    io::{Read, Seek, SeekFrom},
     path::{Component, Path},
 };
 
-const LIMIT: usize = 8 * 1024 * 1024;
-fn hash(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
 fn component(p: &Value, key: &str) -> Result<String, String> {
     let s = p[key].as_str().ok_or("SKILL_ID_INVALID")?;
     if s.is_empty() || s.len() > 80 || !s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
@@ -43,16 +39,7 @@ fn safe_directory(root: &Path, path: &Path) -> Result<(), String> {
     }
     Ok(())
 }
-fn walk(
-    root: &Path,
-    dir: &Path,
-    rows: &mut Vec<Value>,
-    total: &mut usize,
-    depth: usize,
-) -> Result<(), String> {
-    if depth > 6 {
-        return Err("SKILL_PACKAGE_TOO_DEEP".into());
-    }
+fn walk(root: &Path, dir: &Path, rows: &mut Vec<Value>, total: &mut u64) -> Result<(), String> {
     safe_directory(root, dir)?;
     for item in fs::read_dir(dir).map_err(|e| e.to_string())? {
         let item = item.map_err(|e| e.to_string())?;
@@ -68,24 +55,17 @@ fn walk(
             }
         }
         if meta.is_dir() {
-            walk(root, &item.path(), rows, total, depth + 1)?;
+            walk(root, &item.path(), rows, total)?;
         } else if meta.is_file() {
-            if rows.len() >= 64 || meta.len() > LIMIT as u64 || *total + meta.len() as usize > LIMIT
-            {
-                return Err("SKILL_PACKAGE_TOO_LARGE: 最多 64 个文件、共 8 MiB".into());
-            }
-            let bytes = fs::read(item.path()).map_err(|e| e.to_string())?;
-            *total += bytes.len();
-            if *total > LIMIT {
-                return Err("SKILL_PACKAGE_TOO_LARGE".into());
-            }
+            let digest = super::outputs::file_hash(&item.path())?;
+            *total = total.checked_add(meta.len()).ok_or("SKILL_SIZE_INVALID")?;
             let path = item
                 .path()
                 .strip_prefix(root)
                 .map_err(|e| e.to_string())?
                 .to_string_lossy()
                 .replace('\\', "/");
-            rows.push(json!({"path":path,"bytes":bytes.len(),"sha256":hash(&bytes)}));
+            rows.push(json!({"path":path,"bytes":meta.len(),"sha256":digest}));
         } else {
             return Err("SKILL_FILE_INVALID".into());
         }
@@ -160,7 +140,7 @@ fn call_at(root: &Path, method: &str, p: &Value) -> Result<Value, String> {
     if method == "skills/inspect" {
         let mut rows = Vec::new();
         let mut total = 0;
-        walk(&path, &path, &mut rows, &mut total, 0)?;
+        walk(&path, &path, &mut rows, &mut total)?;
         rows.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
         return Ok(
             json!({"source":"client","path":super::outputs::display_path(&path),"files":rows,"bytes":total,"os":std::env::consts::OS}),
@@ -180,7 +160,7 @@ fn call_at(root: &Path, method: &str, p: &Value) -> Result<Value, String> {
         let file = path.join(relative);
         safe_directory(root, file.parent().ok_or("SKILL_PATH_INVALID")?)?;
         let meta = fs::symlink_metadata(&file).map_err(|e| e.to_string())?;
-        if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > LIMIT as u64 {
+        if !meta.is_file() || meta.file_type().is_symlink() {
             return Err("SKILL_FILE_INVALID".into());
         }
         #[cfg(windows)]
@@ -190,18 +170,28 @@ fn call_at(root: &Path, method: &str, p: &Value) -> Result<Value, String> {
                 return Err("SKILL_LINK_DENIED".into());
             }
         }
-        let bytes = fs::read(&file).map_err(|e| e.to_string())?;
-        if Some(hash(&bytes).as_str()) != p["sha256"].as_str() {
+        let before = super::attachments::stat(&file)?;
+        if Some(super::outputs::file_hash(&file)?.as_str()) != p["sha256"].as_str() {
             return Err("SKILL_SOURCE_CHANGED".into());
         }
-        let offset = p["offset"].as_u64().ok_or("SKILL_OFFSET_INVALID")? as usize;
-        if offset > bytes.len() {
+        let offset = p["offset"].as_u64().ok_or("SKILL_OFFSET_INVALID")?;
+        if offset > meta.len() {
             return Err("SKILL_OFFSET_INVALID".into());
         }
-        let end = (offset + 256 * 1024).min(bytes.len());
-        return Ok(
-            json!({"data":STANDARD.encode(&bytes[offset..end]),"nextOffset":end,"done":end==bytes.len()}),
-        );
+        let mut source = fs::File::open(&file).map_err(|e| e.to_string())?;
+        source
+            .seek(SeekFrom::Start(offset))
+            .map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        source
+            .take(256 * 1024)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        let end = offset + bytes.len() as u64;
+        if super::attachments::stat(&file)?["version"] != before["version"] {
+            return Err("SKILL_SOURCE_CHANGED".into());
+        }
+        return Ok(json!({"data":STANDARD.encode(&bytes),"nextOffset":end,"done":end==meta.len()}));
     }
     Err("SKILL_METHOD_UNSUPPORTED".into())
 }

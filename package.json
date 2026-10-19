@@ -21,7 +21,7 @@
     "dev:central-ui": "npm run web:dev --workspace @central-codex-spike/central",
     "dev": "npm run dev:desktop",
     "dev:gateway": "npm run dev --workspace @central-codex-spike/central-gateway",
-    "dev:desktop": "cargo build -p local-agent && npm run tauri:dev --workspace @central-codex-spike/desktop",
+    "dev:desktop": "node scripts/build/document-runtime.mjs target/debug && cargo build -p local-agent && npm run tauri:dev --workspace @central-codex-spike/desktop",
     "package:desktop": "node scripts/release/package-desktop.mjs",
     "package:webview2": "node scripts/release/package-webview2.mjs",
     "check": "npm run check --workspaces --if-present && cargo check --workspace",

@@ -10,7 +10,7 @@
   },
   "patch": {
     "path": "remote-workspace.patch",
-    "sha256": "14c2dbda7daf48ebb5b0ed24474e484de22f1b846eaff2daf11663879beea3ff"
+    "sha256": "702e03e7a84290f9f68080b4c9828e7514694f7a84208e2041122cef629f74ed"
   },
   "schema": {
     "stable": {
@@ -62,7 +62,7 @@
       "scope": "Preserve third-party dynamic tool metadata and Guardian initialization; move broker catalog exception to shared refresh/cache gate; retain cloud skills and isolated Mac managed-policy adaptation",
       "basePatch": {
         "path": "adaptations/0.162.1-base.patch",
-        "sha256": "157a806f3e9302b72c3fbe8d5807d26340b7e403be5c20baa90664fbe71919b4"
+        "sha256": "90e27eabe03ea0ac7d6a9d1f742ef00dd421ba2439bbe34d4c91fec1e25464e4"
       },
       "windowsModelPatch": {
         "path": "adaptations/0.162.1-windows-model.patch",

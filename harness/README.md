@@ -17,6 +17,15 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+### Platform capacity alignment (2026-10-19, source only)
+
+The fixed base and the 0.162.1 adaptation no longer impose the platform's
+32 KiB/102-entry managed skill catalog quotas. Catalog syntax, membership,
+hashes and device boundaries remain enforced. Patch SHA-256 pins and the fixed
+patched source inventory are updated together. Targeted patch application and
+gateway regressions are local source validation, not a new Harness binary or
+central deployment. Plugins, MCP and subagent policy are unchanged.
+
 ### 0.162.1 candidate adaptation (2026-10-10, published and deployed on Mac)
 
 `candidatePatches["0.162.1"].basePatch` selects an exact-commit, byte-pinned

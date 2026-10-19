@@ -22,20 +22,19 @@ use tokio::{
     task::JoinSet,
     time,
 };
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{connect_async_with_config, tungstenite::Message};
 mod attachments;
 mod command_output;
+mod documents;
 mod outputs;
 mod process;
+mod process_sessions;
 mod runtime;
 mod skills;
 #[cfg(windows)]
 mod windows_job;
 mod workspace;
 
-const MAX_FILE_BYTES: u64 = 1024 * 1024;
-const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 30 * 60 * 1000;
-const MAX_COMMAND_TIMEOUT_MS: u64 = 2 * 60 * 60 * 1000;
 static NONCE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 type AgentResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -247,7 +246,17 @@ async fn run_connection(
         )
         .await?
     } else {
-        connect_async(&config.gateway_url).await?.0
+        connect_async_with_config(
+            &config.gateway_url,
+            Some(
+                tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+                    .max_message_size(None)
+                    .max_frame_size(None),
+            ),
+            false,
+        )
+        .await?
+        .0
     };
     let (mut socket_writer, mut reader) = socket.split();
     let (outbound, mut outbound_rx) = mpsc::unbounded_channel::<Value>();
@@ -268,7 +277,7 @@ async fn run_connection(
                 "os": env::consts::OS,
                 "arch": env::consts::ARCH,
                 "workspaceRoot": outputs::display_path(&config.workspace_root),
-                "capabilities": ["skills/v1", "client-paths/v1", "remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "job.cancel", "attachments/v1", "outputs/v1", "file/stat", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
+                "capabilities": ["skills/v1", "client-paths/v1", "remote-workspace/v1", "workspace/context", "workspace/search", "workspace/read_text", "workspace/git_status", "workspace/git_diff", "workspace/apply_patch", "workspace/list", "read_file", "exec", "exec-stream/v1", "exec-sessions/v1", "job.cancel", "attachments/v1", "documents/v1", "outputs/v1", "file/stat", "file/read_document", "file/read_text", "file/read_image", "file/read_chunk", "file/close_transfer", "file/write_text", "file/write_begin", "file/write_chunk", "file/write_commit", "file/write_abort", "file/copy", "file/publish", "file/output_paths"],
                 "absolutePaths": config.allow_absolute
             }
         }),
@@ -281,6 +290,7 @@ async fn run_connection(
     let mut heartbeat = time::interval(Duration::from_secs(10));
     heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let cancellations = Arc::new(Mutex::new(HashMap::<String, watch::Sender<bool>>::new()));
+    let sessions = Arc::new(process_sessions::Sessions::default());
     let mut tasks = JoinSet::new();
     let connection_result: AgentResult<()> = loop {
         tokio::select! {
@@ -309,7 +319,6 @@ async fn run_connection(
                 }
 
                 let text = match incoming.into_text() { Ok(value) => value, Err(error) => break Err(error.into()) };
-                if text.len() > 1024 * 1024 { break Err("AgentRPC frame exceeds 1 MiB".into()); }
                 let envelope: RequestEnvelope = match serde_json::from_str(text.as_ref()) {
                     Ok(envelope) => envelope,
                     Err(error) => {
@@ -332,7 +341,8 @@ async fn run_connection(
                         continue;
                     }
                     let Some(request_id) = envelope.request_id else { continue };
-                    let accepted = cancellations.lock().unwrap().get(&request_id).is_some_and(|cancel| cancel.send(true).is_ok());
+                    let accepted = cancellations.lock().unwrap().get(&request_id).is_some_and(|cancel| cancel.send(true).is_ok())
+                        | sessions.cancel(&request_id,envelope.task_id.as_deref());
                     let ack = versioned_message("job.cancel_ack", json!({"accepted":accepted}), Some(&request_id), envelope.task_id.as_deref(), envelope.trace_id.as_deref());
                     let _ = outbound.send(ack);
                     continue;
@@ -372,8 +382,9 @@ async fn run_connection(
                 let activity = Arc::clone(activity);
                 let outbound_task = outbound.clone();
                 let cancellations_task = cancellations.clone();
+                let sessions = sessions.clone();
                 tasks.spawn(async move {
-                    let response = handle_request(&workspace_root, allow_absolute, &files, &activity, request, cancel_rx, outbound_task.clone()).await;
+                    let response = handle_request(&workspace_root, allow_absolute, &files, &activity, &sessions, request, cancel_rx, outbound_task.clone()).await;
                     cancellations_task.lock().unwrap().remove(&request_id);
                     let _ = outbound_task.send(response);
                 });
@@ -394,6 +405,7 @@ async fn run_connection(
     for cancel in cancellations.lock().unwrap().values() {
         let _ = cancel.send(true);
     }
+    sessions.close().await;
     if time::timeout(Duration::from_secs(5), async {
         while tasks.join_next().await.is_some() {}
     })
@@ -438,7 +450,8 @@ async fn handle_request(
     workspace_root: &Path,
     allow_absolute: bool,
     files: &Arc<Mutex<attachments::Attachments>>,
-    activity: &runtime::Activity,
+    activity: &Arc<runtime::Activity>,
+    sessions: &process_sessions::Sessions,
     request: AgentRequest,
     cancel: watch::Receiver<bool>,
     outbound: mpsc::UnboundedSender<Value>,
@@ -465,33 +478,83 @@ async fn handle_request(
                 .await
                 .unwrap_or_else(|error| Err(format!("WORKSPACE_RESULT_UNKNOWN: {error}")))
             }
-            "exec" => execute_command(workspace_root, allow_absolute, &request.params, cancel, {
-                let request_id = request.id.clone();
-                let task_id = request.task_id.clone();
-                let trace_id = request.trace_id.clone();
-                Arc::new(move |event: process::StreamEvent| {
-                    let message = versioned_message(
-                        "agent.event",
-                        json!({
-                            "stream":event.stream,
-                            "sequence":event.sequence,
-                            "chunk":event.chunk,
-                            "done":event.done,
-                            "truncated":event.truncated,
-                        }),
-                        Some(&request_id),
-                        task_id.as_deref(),
-                        trace_id.as_deref(),
-                    );
-                    let _ = outbound.send(message);
-                })
-            })
-            .await
+            "exec" => {
+                let sink: process::EventSink = {
+                    let request_id = request.id.clone();
+                    let task_id = request.task_id.clone();
+                    let trace_id = request.trace_id.clone();
+                    Arc::new(move |event: process::StreamEvent| {
+                        let message = versioned_message(
+                            "agent.event",
+                            json!({
+                                "stream":event.stream,
+                                "sequence":event.sequence,
+                                "chunk":event.chunk,
+                                "done":event.done,
+                                "truncated":event.truncated,
+                            }),
+                            Some(&request_id),
+                            task_id.as_deref(),
+                            trace_id.as_deref(),
+                        );
+                        let _ = outbound.send(message);
+                    })
+                };
+                if request.params.get("sessionId").is_some()
+                    || request.params.get("yieldMs").is_some()
+                    || request.params["interactive"] == true
+                {
+                    sessions
+                        .execute(
+                            workspace_root,
+                            &request.params,
+                            &request.id,
+                            request.task_id.as_deref(),
+                            activity.clone(),
+                            cancel,
+                            sink,
+                        )
+                        .await
+                } else {
+                    execute_command(
+                        workspace_root,
+                        allow_absolute,
+                        &request.params,
+                        cancel,
+                        sink,
+                    )
+                    .await
+                }
+            }
             .map_err(|failure| {
                 let message = failure.message.clone();
                 command_failure = Some(failure);
                 message
             }),
+            "file/read_document" => {
+                let root = workspace_root.to_path_buf();
+                let params = request.params.clone();
+                tokio::task::spawn_blocking(move || documents::read(&root, &params, &cancel))
+                    .await
+                    .unwrap_or_else(|e| Err(format!("DOCUMENT_PARSE_FAILED: {e}")))
+            }
+            "file/read_text"
+                if request.params["path"].as_str().is_some_and(|raw| {
+                    Path::new(raw)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .is_some_and(|ext| {
+                            ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"]
+                                .contains(&ext.to_lowercase().as_str())
+                        })
+                }) =>
+            {
+                let root = workspace_root.to_path_buf();
+                let params = request.params.clone();
+                tokio::task::spawn_blocking(move || documents::read(&root, &params, &cancel))
+                    .await
+                    .unwrap_or_else(|e| Err(format!("DOCUMENT_PARSE_FAILED: {e}")))
+            }
             method if method.starts_with("file/") => {
                 files.lock().unwrap().call(method, &request.params, false)
             }
@@ -640,7 +703,6 @@ fn list_workspace(workspace_root: &Path, params: &Value) -> Result<Value, String
 
     let mut entries = fs::read_dir(&target)
         .map_err(|error| error.to_string())?
-        .take(200)
         .map(|entry| {
             let entry = entry.map_err(|error| error.to_string())?;
             let metadata = entry.metadata().map_err(|error| error.to_string())?;
@@ -652,23 +714,22 @@ fn list_workspace(workspace_root: &Path, params: &Value) -> Result<Value, String
         })
         .collect::<Result<Vec<_>, String>>()?;
     entries.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
-
-    Ok(json!({ "path": outputs::display_path(&target), "entries": entries }))
+    let offset = params["cursor"]
+        .as_str()
+        .unwrap_or("0")
+        .parse::<usize>()
+        .map_err(|_| "INVALID_CURSOR")?;
+    if offset > entries.len() {
+        return Err("INVALID_CURSOR".into());
+    }
+    let next = entries.len().min(offset.saturating_add(200));
+    Ok(
+        json!({ "path": outputs::display_path(&target), "entries": &entries[offset..next],"nextCursor":if next<entries.len(){Some(next.to_string())}else{None},"totalEntries":entries.len() }),
+    )
 }
 
 fn read_file(workspace_root: &Path, params: &Value) -> Result<Value, String> {
-    let requested_path = required_string(params, "path")?;
-    let target = resolve_existing_path(workspace_root, requested_path)?;
-    let metadata = target.metadata().map_err(|error| error.to_string())?;
-    if !metadata.is_file() {
-        return Err("requested path is not a file".into());
-    }
-    if metadata.len() > MAX_FILE_BYTES {
-        return Err(format!("file exceeds {MAX_FILE_BYTES} byte Spike limit"));
-    }
-
-    let content = fs::read_to_string(&target).map_err(|error| error.to_string())?;
-    Ok(json!({ "path": requested_path, "bytes": metadata.len(), "content": content }))
+    workspace::read_text(workspace_root, params)
 }
 
 async fn execute_command(
@@ -693,11 +754,7 @@ async fn execute_command(
         .collect::<Result<Vec<_>, _>>()?;
 
     let requested_cwd = params.get("cwd").and_then(Value::as_str).unwrap_or(".");
-    let timeout_ms = params
-        .get("timeoutMs")
-        .and_then(Value::as_u64)
-        .unwrap_or(DEFAULT_COMMAND_TIMEOUT_MS)
-        .clamp(1_000, MAX_COMMAND_TIMEOUT_MS);
+    let timeout = command_timeout(params)?;
     let cwd = workspace::resolve(workspace_root, requested_cwd)?;
     if !cwd.is_dir() {
         return Err("cwd must be a directory".into());
@@ -709,15 +766,18 @@ async fn execute_command(
     // the configured output directory; it is not a filesystem sandbox.
     let mut command = Command::new(program);
     command.args(&args).current_dir(cwd);
-    process::run_command_detailed(
-        command,
-        program,
-        &args,
-        Duration::from_millis(timeout_ms),
-        cancel,
-        sink,
-    )
-    .await
+    process::run_command_session(command, program, &args, timeout, cancel, sink, None).await
+}
+
+fn command_timeout(params: &Value) -> Result<Option<Duration>, String> {
+    match params.get("timeoutMs") {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .filter(|n| *n > 0)
+            .map(|n| Some(Duration::from_millis(n)))
+            .ok_or("COMMAND_TIMEOUT_INVALID".into()),
+    }
 }
 
 fn resolve_existing_path(workspace_root: &Path, requested_path: &str) -> Result<PathBuf, String> {

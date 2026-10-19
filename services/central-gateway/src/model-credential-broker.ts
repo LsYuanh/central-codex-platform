@@ -74,7 +74,7 @@ class SafeSse extends Transform {
   private outputBytes=0;
   successfulTerminalEnd=0;
   private frame(bytes:Buffer){
-    if(bytes.length>4*1024*1024)throw new SafeError("MODEL_PROVIDER_SSE_FRAME_TOO_LARGE",502);
+
     let text:string;try{text=new TextDecoder("utf-8",{fatal:true}).decode(bytes);}catch{throw new SafeError("MODEL_PROVIDER_SSE_FORMAT_INVALID",502);}
     const lines=text.split(/\r?\n/);
     if(lines.some(line=>line!==""&&!line.startsWith(":")&&!/^(?:data|event|id|retry)(?::|$)/.test(line)))throw new SafeError("MODEL_PROVIDER_SSE_FORMAT_INVALID",502);
@@ -94,7 +94,7 @@ class SafeSse extends Transform {
     this.push(bytes);
   }
   override _transform(chunk:Buffer,_encoding:BufferEncoding,callback:(error?:Error|null)=>void){
-    try{this.buffer=Buffer.concat([this.buffer,chunk]);while(true){const lf=this.buffer.indexOf("\n\n"),crlf=this.buffer.indexOf("\r\n\r\n");const offset=lf<0?crlf:crlf<0?lf:Math.min(lf,crlf);if(offset<0)break;const end=offset+(offset===crlf?4:2);this.frame(this.buffer.subarray(0,end));this.buffer=this.buffer.subarray(end);}if(this.buffer.length>4*1024*1024)throw new SafeError("MODEL_PROVIDER_SSE_FRAME_TOO_LARGE",502);callback();}catch(error){callback(error instanceof Error?error:new SafeError("MODEL_PROVIDER_UNAVAILABLE"));}
+    try{this.buffer=Buffer.concat([this.buffer,chunk]);while(true){const lf=this.buffer.indexOf("\n\n"),crlf=this.buffer.indexOf("\r\n\r\n");const offset=lf<0?crlf:crlf<0?lf:Math.min(lf,crlf);if(offset<0)break;const end=offset+(offset===crlf?4:2);this.frame(this.buffer.subarray(0,end));this.buffer=this.buffer.subarray(end);}callback();}catch(error){callback(error instanceof Error?error:new SafeError("MODEL_PROVIDER_UNAVAILABLE"));}
   }
   override _flush(callback:(error?:Error|null)=>void){try{if(this.buffer.length)this.frame(this.buffer);if(!this.sawData)throw new SafeError("MODEL_PROVIDER_SSE_FORMAT_INVALID",502);callback();}catch(error){callback(error instanceof Error?error:new SafeError("MODEL_PROVIDER_UNAVAILABLE"));}}
 }
@@ -135,9 +135,9 @@ export class ModelCredentialBroker {
   private readonly userConcurrent:number;
   private readonly timeout:number;
   private constructor(private readonly options:ModelCredentialBrokerOptions){
-    this.bodyLimit=limit(options.maxBodyBytes,32*1024*1024,32*1024*1024);
-    this.concurrent=limit(options.maxConcurrent,32,1024);
-    this.userConcurrent=limit(options.maxConcurrentPerUser,4,128);
+    this.bodyLimit=limit(options.maxBodyBytes,Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER);
+    this.concurrent=limit(options.maxConcurrent,Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER);
+    this.userConcurrent=limit(options.maxConcurrentPerUser,Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER);
     this.timeout=limit(options.timeoutMs,30*60_000,2*60*60_000);
     this.readConfig();
     this.server=http.createServer({maxHeaderSize:16*1024,requestTimeout:Math.min(this.timeout,60_000),headersTimeout:Math.min(this.timeout,15_000)},(request,response)=>{void this.handle(request,response);});
@@ -464,7 +464,7 @@ export class ModelCredentialBroker {
             incoming.pipe(filter);response.once("finish",done);
           }else{
             const result:Buffer[]=[];let bytes=0;
-            incoming.on("data",chunk=>{bytes+=chunk.length;if(bytes>32*1024*1024){incoming.destroy();reject(new SafeError("MODEL_PROVIDER_JSON_TOO_LARGE",502));}else result.push(Buffer.from(chunk));});
+            incoming.on("data",chunk=>{bytes+=chunk.length;result.push(Buffer.from(chunk));});
             incoming.once("end",()=>{try{const body=Buffer.concat(result);const value=JSON.parse(body.toString("utf8"));if(responseFailed(value))throw new SafeError("MODEL_PROVIDER_UNAVAILABLE",502);const output=image?Buffer.from(JSON.stringify(sanitizeImageResponse(value))):body;response.writeHead(status,{"content-type":contentType,"cache-control":"no-store"});response.end(output);done();}catch(error){reject(error instanceof SafeError?error:new SafeError("MODEL_PROVIDER_JSON_INVALID",502));}});
           }
         });

@@ -875,7 +875,7 @@ export default function App() {
     threadsLoadingRef.current = true;
     setThreadsLoading(true);
     try {
-      const response = await codexia.threadList({ limit: 100, sortKey: "updated_at" });
+      const response = await codexia.threadListAll({ limit: 100, sortKey: "updated_at" });
       const summaries = threadSummariesFromResult(response.result).filter((thread) => !thread.archived && !archivedThreadIdsRef.current.has(thread.id) || restoredThreadIdsRef.current.has(thread.id));
       setThreads(summaries);
       for (const thread of summaries) {
@@ -1096,7 +1096,7 @@ export default function App() {
       await refreshModels(codexia);
       if (connectionGenerationRef.current !== generation) return;
 
-      const listed = await codexia.threadList({ limit: 100, sortKey: "updated_at" });
+      const listed = await codexia.threadListAll({ limit: 100, sortKey: "updated_at" });
       if (connectionGenerationRef.current !== generation) return;
       const summaries = threadSummariesFromResult(listed.result).filter((thread) => !thread.archived && !archivedThreadIdsRef.current.has(thread.id) || restoredThreadIdsRef.current.has(thread.id));
       setRunningThreadIds(new Set(summaries.filter((thread) => thread.active === true).map((thread) => thread.id)));
@@ -1226,27 +1226,43 @@ export default function App() {
 
   const sendSteering = useCallback(async () => {
     const codexia = codexiaRef.current;
-    if (engineState === "unavailable" || !codexia || !threadId || !composer.trim() || sendGuard.current || uncertainSubmission || appState !== "online") return;
+    if (engineState === "unavailable" || !codexia || !threadId || (!composer.trim() && !attachments.drafts.length) || sendGuard.current || uncertainSubmission || appState !== "online") return;
     if (mode !== "central-gateway") { setAppError(uiMessage("运行中追加需要中央网关连接")); return; }
-    if (attachments.drafts.length) { setAppError(uiMessage("运行中追加目前仅支持文字，请移除附件后发送")); return; }
     if (!turnId) { setAppError(uiMessage("当前轮次尚未确认，请等待启动完成或重新选择对话")); return; }
     const target = threadId;
-    if (composerDoc.mentions.length) { setAppError(uiMessage("当前轮次结束后才能调用新选择的技能；请先移除技能标记，或等待完成后发送")); return; }
+    const selectedSkills = new Map<string, {id:string;revision:number}>();
+    for (const mention of composerDoc.mentions) {
+      const skill = skillService.rows.find(row => row.id === mention.id);
+      if (!skill?.enabled || skill.revision !== mention.revision) { setAppError(uiMessage("技能 {{p0}} 已更新、停用或移除，请删除标记并重新选择；草稿已保留", {p0:mention.name})); return; }
+      selectedSkills.set(mention.id, {id:mention.id,revision:mention.revision});
+    }
+    if (attachments.drafts.length && deviceState !== "online") { setAppError(uiMessage("Local Agent 离线，请等待设备上线后重试")); return; }
     const text = composer;
     const clientMessageId = crypto.randomUUID();
     restoreComposerFocusRef.current = composerInputRef.current;
-    sendGuard.current = true; steeringRequestRef.current = true; setSending(true); setSendStage(uiMessage("正在追加要求…")); setAppError("");
+    sendGuard.current = true; cancelSendRef.current = false; steeringRequestRef.current = true; setSending(true); setSendStage(uiMessage("正在追加要求…")); setAppError("");
     const delivery = (state: ChatMessage["delivery"]) => updateThreadMessages(target, rows => rows.map(row => row.id === clientMessageId ? {...row,delivery:state} : row));
     updateThreadMessages(target, rows => [...rows,{id:clientMessageId,role:"user",content:text,delivery:"sending",turnId}]);
     const accepted = () => {
       delivery("sent");
       sidebarOrder.activity(target, `message:${clientMessageId}`);
       threadDraftsRef.current.set(target, {text:"",attachments:[]});
-      if (threadIdRef.current === target) setComposer("");
+      if (threadIdRef.current === target) { setComposer(""); attachments.setDrafts([]); }
       updateUncertainSubmission(target, undefined);
     };
     try {
-      await codexia.turnSteer({threadId:target,expectedTurnId:turnId,clientMessageId,input:[{type:"text",text}]});
+      const refs = await attachments.prepare(deviceId);
+      const identity = refs.length ? await localAttachment<{deviceKey:string}>("attachment/identity") : undefined;
+      if (cancelSendRef.current) throw new UiError("已取消附件准备，草稿已保留");
+      updateThreadMessages(target, rows => rows.map(row => row.id === clientMessageId ? {...row,attachments:refs.map(ref=>({...ref,deviceId,state:"referenced" as const}))} : row));
+      const reply = await codexia.turnSteer({threadId:target,expectedTurnId:turnId,clientMessageId,input:[{type:"text",text}],attachments:refs,...(identity?{deviceKey:identity.deviceKey}:{}),...(selectedSkills.size?{skills:[...selectedSkills.values()]}:{})});
+      const result = asRecord(reply.result);
+      const submission = asRecord(result?.submission);
+      // Reflect confirmed attachment reads without waiting for a history refresh.
+      updateThreadMessages(target, rows => rows.map(row => row.id === clientMessageId ? {
+        ...row, ...(typeof result?.turnId === "string" ? {turnId:result.turnId} : {}),
+        ...(Array.isArray(submission?.attachments) ? {attachments:submission.attachments as ChatMessage["attachments"]} : {}),
+      } : row));
       // turn/steer emits no new turn/started. Existing lifecycle events remain authoritative.
       accepted();
     } catch (error) {
@@ -1262,7 +1278,7 @@ export default function App() {
         delivery("unknown"); updateUncertainSubmission(target, {id:clientMessageId,threadId:target});
       }
     } finally { sendGuard.current = false; steeringRequestRef.current = false; setSending(false); setSendStage(""); }
-  }, [threadId,turnId,composerDoc,composer,uncertainSubmission,appState,engineState,mode,attachments.drafts,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
+  }, [threadId,turnId,composerDoc,composer,uncertainSubmission,appState,engineState,mode,attachments,deviceId,deviceState,skillService.rows,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
 
   const sendTurn = useCallback(async (approvedPlan = false) => {
     if (configApplyingRef.current) return;
@@ -1277,7 +1293,6 @@ export default function App() {
       if (!skill?.enabled || skill.revision !== mention.revision) { setAppError(uiMessage("技能 {{p0}} 已更新、停用或移除，请删除标记并重新选择；草稿已保留", { p0: mention.name })); return; }
       selectedSkills.set(mention.id, {id:mention.id,revision:mention.revision});
     }
-    if (selectedSkills.size > 4) { setAppError(uiMessage("每条消息最多选择 4 个技能，请移除多余的技能标记")); return; }
     if (attachments.drafts.length && deviceState !== "online") { setAppError(uiMessage("Local Agent 离线，请等待设备上线后重试")); return; }
     sendGuard.current = true; cancelSendRef.current = false;
     restoreComposerFocusRef.current = composerInputRef.current;
@@ -1626,7 +1641,7 @@ export default function App() {
               <div className="conversation-list">
                 {recentThreads.length === 0 ? (
                   <div className="sidebar-empty">{appState === "online" ? t("还没有对话") : t("连接后显示对话")}</div>
-                ) : recentThreads.slice(0, 40).map(renderThread)}
+                ) : recentThreads.map(renderThread)}
               </div>
             </section>
             </div>
@@ -1744,7 +1759,7 @@ export default function App() {
                     {sending && <p className="attachment-notice" role="status">{sendStage || t("正在核对提交结果…")}{sendStage && sendStage !== t("正在追加要求…") && sendStage !== t("正在提交中央模型") && <button type="button" onClick={()=>{cancelSendRef.current=true;if(pendingMessageRef.current)void appClientRef.current?.request("message/cancel",pendingMessageRef.current).catch(e=>setAppError(errorMessage(e)));}}>{t("取消准备")}</button>}</p>}
                     {uncertainSubmission && <div className="attachment-error-text">{t("提交结果未知，草稿已保留。")}<button type="button" disabled={sending||appState!=="online"} onClick={()=>void reconcileSubmission()}>{t("核对历史")}</button></div>}
                   <div className="composer-input-wrap"><SkillComposer key={`${projectScope}:${threadId ?? newDraftKey()}`} editorRef={composerInputRef} value={composerDoc} onChange={setComposerDoc}
-                    scope={`${projectScope}:${threadId ?? newDraftKey()}`} service={skillService} skillsDisabled={goalDraft || turnRunning || mode !== "central-gateway"}
+                    scope={`${projectScope}:${threadId ?? newDraftKey()}`} service={skillService} skillsDisabled={goalDraft || mode !== "central-gateway"}
                     onPaste={attachments.paste} onSend={() => { if (mode !== "fake-central") void sendComposer(); }} manage={() => openSettings("skills")}
                     disabled={engineState === "unavailable" || sending || Boolean(uncertainSubmission) || mode === "fake-central" || appState !== "online"} placeholder={engineState === "unavailable" ? t("中央引擎不可用，请重新连接并核对任务状态") : mode === "fake-central" ? t("Fake Central 仅用于设置页的工具验证") : appState !== "online" ? t("请先在设置中连接中央网关") : goalDraft?t("描述你的目标，定义可衡量的成果，以获得最佳效果"):t("描述任务，按 Enter 发送")} /></div>
                   </div>

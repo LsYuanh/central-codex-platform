@@ -112,9 +112,9 @@ export class WindowsWorkerTransport {
     const startTimeout = bound(options.startTimeoutMs, 30000, 25, 300000);
     this.stopTimeout = bound(options.stopTimeoutMs, 20000, 25, 60000);
     this.requestTimeout = bound(options.requestTimeoutMs, 60000, 25, 300000);
-    this.frameLimit = bound(options.maxFrameBytes, 8 * 1024 * 1024, 1024, 32 * 1024 * 1024);
-    this.pendingLimit = bound(options.maxPendingRequests, 64, 1, 1024);
-    this.writeLimit = bound(options.maxPendingWriteBytes, 16 * 1024 * 1024, 1024, 64 * 1024 * 1024);
+    this.frameLimit = bound(options.maxFrameBytes, Number.MAX_SAFE_INTEGER, 1024, Number.MAX_SAFE_INTEGER);
+    this.pendingLimit = bound(options.maxPendingRequests, Number.MAX_SAFE_INTEGER, 1, Number.MAX_SAFE_INTEGER);
+    this.writeLimit = bound(options.maxPendingWriteBytes, Number.MAX_SAFE_INTEGER, 1024, Number.MAX_SAFE_INTEGER);
     this.options = options;
     this.ready = new Promise((done, reject) => { this.resolveReady = done; this.rejectReady = reject; });
     this.closed = new Promise((done, reject) => { this.resolveClosed = done; this.rejectClosed = reject; });

@@ -21,18 +21,19 @@ class Bridge{
 }
 const options={root:join(root,'users'),perUser:true,maxWorkers:2,perUserTurns:1,totalTurns:2,maxRequests:2,idleMs:10000,cooldownMs:100,create:(user,paths)=>new Bridge(user,paths),event:(...e)=>events.push(e)};
 const until=async f=>{for(let i=0;i<100;i++){if(f())return;await new Promise(r=>setTimeout(r,25));}throw Error('condition timeout');};
+const assertQueuedCancelled=async(client,method,params)=>{let cancelled=false,settled=false;const request=client.request(method,params,()=>{if(cancelled)throw Error('QUEUE_CANCELLED');}).then(v=>{settled=true;return v;});await new Promise(r=>setTimeout(r,60));assert.equal(settled,false);cancelled=true;await assert.rejects(request,/QUEUE_CANCELLED/);};
 const pass=s=>{checks.push(s);console.log('PASS '+s);};
 try{
  if(!process.env.AUDIT_ONLY){
  manager=new WorkerManager(options);const a=manager.forUser('alice'),b=manager.forUser('bob');
  const [ia,ib]=await Promise.all([a.request('info',{}),b.request('info',{})]);assert.notEqual(ia.pid,ib.pid);assert.notEqual(ia.cwd,ib.cwd);assert.notEqual(ia.home,ib.home);pass('real child processes and canonical homes separated');
- await assert.rejects(manager.forUser('charlie').request('info',{}),/WORKER_CAPACITY/);pass('worker capacity enforced');
- await a.request('turn/start',{threadId:'a'});await assert.rejects(a.request('turn/start',{threadId:'a'}),/THREAD_BUSY/);await assert.rejects(a.request('turn/start',{threadId:'a2'}),/TURN_LIMIT/);await b.request('turn/start',{threadId:'b'});pass('per-user turn quota does not consume another user allowance');
+
+ await a.request('turn/start',{threadId:'a'});await assert.rejects(a.request('turn/start',{threadId:'a'}),/THREAD_BUSY/);await assertQueuedCancelled(a,'turn/start',{threadId:'a2'});await b.request('turn/start',{threadId:'b'});pass('per-user turn quota does not consume another user allowance');
  await a.request('turn/interrupt',{threadId:'a'});await a.request('turn/start',{threadId:'a2'});pass('terminal event releases quota');
  await assert.rejects(a.request('crash',{}),/exited/);assert.equal((await b.request('info',{})).pid,ib.pid);await until(()=>manager.snapshot().length===1);await assert.rejects(a.request('info',{}),/RESTART_BACKOFF/);await new Promise(r=>setTimeout(r,120));const restarted=await a.request('thread/read',{threadId:'a'});assert.equal(restarted.thread.marker,'a');assert.notEqual(manager.snapshot().find(w=>w.userId==='alice').pid,ia.pid);assert.equal(manager.snapshot().find(w=>w.userId==='bob').activeTurns,1);pass('crashed user restarts with saved history; other worker and active turn unaffected');
- const pending=[a.request('hang',{}).catch(e=>e),a.request('hang',{}).catch(e=>e)];await assert.rejects(a.request('info',{}),/WORKER_REQUEST_LIMIT/);await Promise.all(pending);assert(await a.request('info',{}));pass('bounded pending RPCs recover after timeout');
+ const pending=[a.request('hang',{}).catch(e=>e),a.request('hang',{}).catch(e=>e)];await assertQueuedCancelled(a,'info',{});await Promise.all(pending);assert(await a.request('info',{}));pass('bounded pending RPCs recover after timeout');
  manager.close();await until(()=>bridges.every(b=>b.child.exitCode!==null||b.child.signalCode!==null));
- manager=new WorkerManager({...options,totalTurns:1,idleMs:100});await manager.forUser('a').request('turn/start',{threadId:'active'});await assert.rejects(manager.forUser('b').request('turn/start',{threadId:'other'}),/TURN_LIMIT/);await until(()=>manager.snapshot().length===1);assert.equal(manager.snapshot()[0].userId,'a');pass('global quota and idle reclaim preserve active worker');
+ manager=new WorkerManager({...options,totalTurns:1,idleMs:100});await manager.forUser('a').request('turn/start',{threadId:'active'});await assertQueuedCancelled(manager.forUser('b'),'turn/start',{threadId:'other'});await until(()=>manager.snapshot().length===1);assert.equal(manager.snapshot()[0].userId,'a');pass('global quota and idle reclaim preserve active worker');
  manager.close();await until(()=>bridges.every(b=>b.child.exitCode!==null||b.child.signalCode!==null));
  // Controlled response ordering exercises the manager boundary without timing-sensitive sleeps.
  const startReplies=[];const raceBridge={alive:true,enforcedRuntimeReady:true,pid:undefined,respond(){},close(){this.alive=false;},request(method){assert.equal(method,'turn/start');return new Promise(resolve=>startReplies.push(resolve));}};
@@ -40,11 +41,11 @@ try{
  const complete=id=>manager.notification('race',raceBridge,{method:'turn/completed',params:{threadId:'same-thread',turn:{id,status:'completed'}}});
  const oldStart=racer.request('turn/start',{threadId:'same-thread'});startReplies.shift()({turn:{id:'old-turn'}});await oldStart;complete('old-turn');assert.equal(manager.snapshot()[0].activeTurns,0);
  const newStart=racer.request('turn/start',{threadId:'same-thread'});complete('old-turn');assert.equal(manager.snapshot()[0].activeTurns,1);
- await assert.rejects(racer.request('turn/start',{threadId:'same-thread'}),/THREAD_BUSY/);await assert.rejects(racer.request('turn/start',{threadId:'another-thread'}),/TURN_LIMIT/);
+ await assert.rejects(racer.request('turn/start',{threadId:'same-thread'}),/THREAD_BUSY/);await assertQueuedCancelled(racer,'turn/start',{threadId:'another-thread'});
  startReplies.shift()({turn:{id:'new-turn'}});await newStart;assert.equal(manager.snapshot()[0].activeTurns,1);complete('old-turn');assert.equal(manager.snapshot()[0].activeTurns,1);complete('new-turn');assert.equal(manager.snapshot()[0].activeTurns,0);
  pass('late old Turn completion cannot release the pending or identified new Turn reservation');
  const earlyStart=racer.request('turn/start',{threadId:'same-thread'});complete('early-turn');assert.equal(manager.snapshot()[0].activeTurns,1);
- await assert.rejects(racer.request('turn/start',{threadId:'another-thread'}),/TURN_LIMIT/);startReplies.shift()({turn:{id:'early-turn'}});await earlyStart;assert.equal(manager.snapshot()[0].activeTurns,0);
+ await assertQueuedCancelled(racer,'turn/start',{threadId:'another-thread'});startReplies.shift()({turn:{id:'early-turn'}});await earlyStart;assert.equal(manager.snapshot()[0].activeTurns,0);
  pass('completion preceding start response retains quota until the matching Turn ID is confirmed');
  manager.close();
  const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
@@ -61,8 +62,8 @@ try{
  const queuedB=manager.forUser('async-a').request('info',{nonce:2});
  assert.equal(createCount,1);assert.equal(manager.snapshot()[0].starting,true);assert.equal(manager.snapshot()[0].pendingRequests,2);
  assert.equal(manager.enforcedRuntimeReady,false);
- await assert.rejects(manager.forUser('async-a').request('info',{nonce:3}),/WORKER_REQUEST_LIMIT/);
- await assert.rejects(manager.forUser('async-b').request('info',{}),/WORKER_CAPACITY/);
+ await assertQueuedCancelled(manager.forUser('async-a'),'info',{nonce:3});
+ await assertQueuedCancelled(manager.forUser('async-b'),'info',{});
  const shared=mockBridge();factories[0].resolve(shared);
  await within(Promise.all([queuedA,queuedB]));assert.deepEqual(shared.sent.map(call=>call.params.nonce),[1,2]);
  assert.equal(manager.snapshot()[0].pendingRequests,0);assert.equal(manager.snapshot()[0].starting,false);assert.equal(createCount,1);
@@ -89,7 +90,7 @@ try{
  assert.match((await within(cancelled)).message,/WORKER_STOPPING/);
  assert.equal(manager.snapshot()[0].stopping,true);assert.equal(manager.snapshot()[0].pendingRequests,0);
  await assert.rejects(manager.forUser('cancelled').request('info',{}),/WORKER_STOPPING/);
- await assert.rejects(manager.forUser('other').request('info',{}),/WORKER_CAPACITY/);
+ await assertQueuedCancelled(manager.forUser('other'),'info',{});
  const late=mockBridge();factories[0].resolve(late);await until(()=>late.closeCalls===1);
  assert.equal(late.sent.length,0);assert.equal(manager.snapshot().length,1);
  manager.exited('cancelled',mockBridge());assert.equal(manager.snapshot().length,1);
@@ -118,7 +119,7 @@ try{
  manager=new WorkerManager({...options,maxWorkers:2,totalTurns:1,create:asyncCreate});
  const queuedTurn=manager.forUser('turn-a').request('turn/start',{threadId:'pending'});
  assert.equal(manager.snapshot()[0].activeTurns,1);
- await assert.rejects(manager.forUser('turn-b').request('turn/start',{threadId:'denied'}),/TURN_LIMIT/);
+ await assertQueuedCancelled(manager.forUser('turn-b'),'turn/start',{threadId:'denied'});
  const turnA=mockBridge(),turnB=mockBridge();factories[0].resolve(turnA);factories[1].resolve(turnB);await within(queuedTurn);
  assert.equal(turnA.sent.length,1);assert.equal(turnB.sent.length,0);
  manager.notification('turn-a',turnA,{method:'turn/completed',params:{threadId:'pending',turn:{id:'async-pending',status:'completed'}}});

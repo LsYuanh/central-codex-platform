@@ -19,21 +19,21 @@ const hash=(b:string|Buffer)=>createHash('sha256').update(b).digest('hex');
 const id=(v:unknown):string=>{if(typeof v!=='string'||! /^[a-zA-Z0-9-]{8,80}$/.test(v))throw Error('SKILL_ID_INVALID');return v;};
 export const skillScope=(userId:string)=>hash(userId);
 const cleanPath=(v:unknown):string=>{
-  if(typeof v!=='string'||v.length>240||v.split('/').length>6||v.split('/').some(s=>!s||s==='.'||s==='..'||s.endsWith('.')||s.endsWith(' ')||/[\\:\x00-\x1f<>"|?*]/.test(s)||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(s)))throw Error('SKILL_PATH_INVALID');
+  if(typeof v!=='string'||v.split('/').some(s=>!s||s==='.'||s==='..'||s.endsWith('.')||s.endsWith(' ')||/[\\:\x00-\x1f<>"|?*]/.test(s)||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(s)))throw Error('SKILL_PATH_INVALID');
   return v;
 };
 function info(row:Stored):SkillInfo {const {userId:_user,files:_files,savedPreview:_preview,...result}=row;return result;}
 export function validateSkillFiles(files:SkillFile[]) {
-  if(!Array.isArray(files)||!files.length||files.length>64)throw Error('SKILL_PACKAGE_INVALID: 最多 64 个文件');
-  const seen=new Set<string>();let total=0;
+  if(!Array.isArray(files)||!files.length)throw Error('SKILL_PACKAGE_INVALID: 技能包至少需要一个文件');
+  const seen=new Set<string>();
   for(const f of files){
     if(!record(f))throw Error('SKILL_PACKAGE_INVALID');
     cleanPath(f.path);const key=f.path.toLowerCase();if(seen.has(key))throw Error('SKILL_DUPLICATE_PATH');seen.add(key);
-    if(typeof f.data!=='string'||f.data.length>12*1024*1024)throw Error('SKILL_PACKAGE_TOO_LARGE');
-    const bytes=Buffer.from(f.data,'base64');total+=bytes.length;
-    if(total>8*1024*1024||bytes.toString('base64')!==f.data||bytes.length!==f.bytes||hash(bytes)!==f.sha256)throw Error('SKILL_CHECKSUM_INVALID');
+    if(typeof f.data!=='string')throw Error('SKILL_PACKAGE_INVALID');
+    const bytes=Buffer.from(f.data,'base64');
+    if(bytes.toString('base64')!==f.data||bytes.length!==f.bytes||hash(bytes)!==f.sha256)throw Error('SKILL_CHECKSUM_INVALID');
   }
-  const main=files.find(f=>f.path==='SKILL.md');if(!main||main.bytes>64*1024)throw Error('SKILL_MAIN_INVALID: 需要不超过 64 KiB 的 SKILL.md');
+  const main=files.find(f=>f.path==='SKILL.md');if(!main)throw Error('SKILL_MAIN_INVALID: 需要 SKILL.md');
   const text=new TextDecoder('utf-8',{fatal:true}).decode(Buffer.from(main.data,'base64'));
   const match=/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);if(!match)throw Error('SKILL_METADATA_INVALID: SKILL.md 需要 YAML name 和 description');
   const field=(key:string)=>{
@@ -53,7 +53,7 @@ export function validateSkillFiles(files:SkillFile[]) {
     const p=JSON.parse(Buffer.from(runtime.data,'base64').toString('utf8'));
     if(!record(p)||Object.keys(p).some(k=>!['platforms','programs'].includes(k)))throw Error('SKILL_RUNTIME_INVALID');
     platforms=(p.platforms??[]) as string[];programs=(p.programs??[]) as string[];
-    if(!Array.isArray(platforms)||platforms.some(x=>!['windows','macos','linux'].includes(x))||!Array.isArray(programs)||programs.length>12||programs.some(x=>typeof x!=='string'||! /^[a-zA-Z0-9._+-]{1,64}$/.test(x)))throw Error('SKILL_RUNTIME_INVALID');
+    if(!Array.isArray(platforms)||platforms.some(x=>!['windows','macos','linux'].includes(x))||!Array.isArray(programs)||programs.some(x=>typeof x!=='string'||! /^[a-zA-Z0-9._+-]{1,64}$/.test(x)))throw Error('SKILL_RUNTIME_INVALID');
   }
   return {name,description,platforms,programs,text};
 }
@@ -72,7 +72,7 @@ export class SkillStore {
       if(state.builtinPreferences!==undefined){
         if(!record(state.builtinPreferences))throw Error('SKILL_STATE_CORRUPT');
         for(const [user,pref] of Object.entries(state.builtinPreferences)){
-          if(!record(pref)||typeof pref.automatic!=='boolean'||!Number.isSafeInteger(pref.revision)||Number(pref.revision)<0||Number(pref.revision)>=1_000_000)throw Error('SKILL_STATE_CORRUPT');
+          if(!record(pref)||typeof pref.automatic!=='boolean'||!Number.isSafeInteger(pref.revision)||Number(pref.revision)<0)throw Error('SKILL_STATE_CORRUPT');
           this.builtinPreferences[user]={automatic:pref.automatic,revision:Number(pref.revision)};
         }
       }
@@ -104,32 +104,31 @@ export class SkillStore {
     if(this.rows.some(r=>r.id===draftId))throw Error('SKILL_DRAFT_ALREADY_SAVED: 该创建请求已保存；修改请使用新的 requestKey 和 skillId');
     const previous=this.drafts.find(d=>d.id===draftId);
     if(previous){if(previous.userId!==owner.userId||previous.deviceKey!==owner.deviceKey||previous.skillId!==original?.id)throw Error('SKILL_DRAFT_CONFLICT');return this.draftResponse(previous);}
-    if(this.drafts.filter(d=>d.userId===owner.userId).length>=30)throw Error('SKILL_DRAFT_LIMIT: 请先移除不再使用的草稿');
     const made=await call('skills/create',{scope:skillScope(owner.userId),id:draftId});
     if(typeof made.path!=='string')throw Error('SKILL_AGENT_INVALID');
     if(original)await writeClientFiles(call,made.path,original.files);
     const draft:Draft={...owner,id:draftId,path:made.path,...(original?{skillId:original.id,revision:original.revision}:{})};
     this.persist(this.rows,[...this.drafts,draft]);return this.draftResponse(draft);
   }
-  private draftResponse(d:Draft){return {draft:{id:d.id,path:d.path,skillId:d.skillId,revision:d.revision},prompt:`请协助${d.skillId?'修改':'创建'}一个个人技能。先逐个澄清用途、触发条件、输入、输出和依赖，再生成完整技能包。草稿目录在当前客户端：${JSON.stringify(d.path)}。所有文件通过 device 工具在该目录创建或修改；不要在中央机操作。SKILL.md 需要 YAML frontmatter，name 使用小写英文连字符，description 使用单行双引号字符串。可包含 references/、assets/、scripts/。若需要系统或命令依赖，写入 runtime.json，例如 {"platforms":["windows"],"programs":["python"]}；没有限制则使用空数组。使用可移植相对路径，脚本参数与输入输出说明要完整。不要添加依赖插件、MCP、子代理的步骤。原生图片生成仅在当前工具列表包含 image_gen.imagegen 时可用，遵循内置图片技能的客户端保存流程。最多 64 个文件、共 8 MiB，SKILL.md 不超过 64 KiB。不要执行生成的脚本，除非用户明确要求试运行。生成后提醒用户打开“我的技能”，在本机草稿中预览并保存。用户需求：`};}
+  private draftResponse(d:Draft){return {draft:{id:d.id,path:d.path,skillId:d.skillId,revision:d.revision},prompt:`请协助${d.skillId?'修改':'创建'}一个个人技能。先逐个澄清用途、触发条件、输入、输出和依赖，再生成完整技能包。草稿目录在当前客户端：${JSON.stringify(d.path)}。所有文件通过 device 工具在该目录创建或修改；不要在中央机操作。SKILL.md 需要 YAML frontmatter，name 使用小写英文连字符，description 使用单行双引号字符串。可包含 references/、assets/、scripts/。若需要系统或命令依赖，写入 runtime.json，例如 {"platforms":["windows"],"programs":["python"]}；没有限制则使用空数组。使用可移植相对路径，脚本参数与输入输出说明要完整。不要添加依赖插件、MCP、子代理的步骤。原生图片生成仅在当前工具列表包含 image_gen.imagegen 时可用，遵循内置图片技能的客户端保存流程。不要执行生成的脚本，除非用户明确要求试运行。生成后提醒用户打开“我的技能”，在本机草稿中预览并保存。用户需求：`};}
   private draft(owner:SkillOwner,key:unknown){const d=this.drafts.find(d=>d.id===id(key)&&d.userId===owner.userId&&d.deviceKey===owner.deviceKey);if(!d)throw Error('SKILL_DRAFT_NOT_FOUND');return d;}
   async preview(owner:SkillOwner,key:unknown,call:SkillAgent){
     for(const [k,v] of this.previews)if(v.expires<Date.now())this.previews.delete(k);
-    if(this.previews.size>=16)throw Error('SKILL_PREVIEW_BUSY');
+
     const draft=this.draft(owner,key);const scope=skillScope(owner.userId);
     const snapshot=await call('skills/inspect',{scope,id:draft.id});
-    if(!Array.isArray(snapshot.files)||snapshot.files.length>64)throw Error('SKILL_PACKAGE_INVALID');
-    const files:SkillFile[]=[];let total=0;
+    if(!Array.isArray(snapshot.files))throw Error('SKILL_PACKAGE_INVALID');
+    const files:SkillFile[]=[];
     for(const f of snapshot.files){
       if(!record(f)||typeof f.bytes!=='number'||f.bytes<0||!Number.isSafeInteger(f.bytes)||typeof f.sha256!=='string')throw Error('SKILL_PACKAGE_INVALID');
-      const path=cleanPath(f.path);total+=f.bytes;if(total>8*1024*1024)throw Error('SKILL_PACKAGE_TOO_LARGE');
+      const path=cleanPath(f.path);
       const chunks:Buffer[]=[];let offset=0;
       do {const part=await call('skills/read',{scope,id:draft.id,file:path,sha256:f.sha256,offset});const chunk=Buffer.from(String(part.data),'base64');if(chunk.length>256*1024||part.nextOffset!==offset+chunk.length||(!chunk.length&&offset<f.bytes))throw Error('SKILL_TRANSFER_INVALID');chunks.push(chunk);offset+=chunk.length;}while(offset<f.bytes);
       files.push({path,bytes:f.bytes,sha256:f.sha256,data:Buffer.concat(chunks).toString('base64')});
     }
     const metadata=validateSkillFiles(files);const previewId=randomUUID();
     this.previews.set(previewId,{draft,files,...metadata,expires:Date.now()+10*60_000});
-    return {previewId,...metadata,files:files.map(f=>({path:f.path,bytes:f.bytes,sha256:f.sha256,content:/\.(md|txt|json|yaml|yml|py|js|ts|ps1|sh|csv|html|css)$/i.test(f.path)?Buffer.from(f.data,'base64').toString('utf8').slice(0,64*1024):undefined})),draftId:draft.id};
+    return {previewId,...metadata,files:files.map(f=>({path:f.path,bytes:f.bytes,sha256:f.sha256,content:/\.(md|txt|json|yaml|yml|py|js|ts|ps1|sh|csv|html|css)$/i.test(f.path)?Buffer.from(f.data,'base64').toString('utf8'):undefined})),draftId:draft.id};
   }
   save(owner:SkillOwner,p:Json){
     const committed=this.rows.find(r=>r.userId===owner.userId&&r.savedPreview===p.previewId);if(committed)return info(committed);
@@ -139,11 +138,8 @@ export class SkillStore {
     const old=draft.skillId?this.get(owner.userId,draft.skillId):undefined;
     if(old?.source==='builtin')throw Error('SKILL_BUILTIN_READONLY');
     if(old&&old.revision!==draft.revision)throw Error('SKILL_VERSION_CONFLICT: 其他客户端已修改此技能，请重新创建修改草稿');
-    if(!old&&this.rows.filter(r=>r.userId===owner.userId).length>=100)throw Error('SKILL_LIMIT');
     if([CREATOR_ID,IMAGEGEN_ID].includes(name))throw Error('SKILL_NAME_RESERVED: 该名称由远舟内置技能保留，请修改个人技能名称');
     if(this.rows.some(r=>r.userId===owner.userId&&r.name===name&&r.id!==old?.id))throw Error('SKILL_NAME_EXISTS');
-    const size=files.reduce((n,f)=>n+f.bytes,0);
-    if(this.rows.filter(r=>r.userId===owner.userId&&r.id!==old?.id).reduce((n,r)=>n+r.files.reduce((v,f)=>v+f.bytes,0),size)>32*1024*1024)throw Error('SKILL_STORAGE_LIMIT: 个人技能总容量上限 32 MiB');
     const row:Stored={id:old?.id??draft.id,userId:owner.userId,name,description,platforms,programs,files,savedPreview:String(p.previewId),revision:(old?.revision??0)+1,enabled:old?.enabled??true,automatic:old?.automatic??true,updatedAt:new Date().toISOString()};
     this.persist([...this.rows.filter(r=>r.id!==row.id),row],this.drafts.filter(d=>d.id!==draft.id));this.previews.delete(String(p.previewId));return info(row);
   }
@@ -153,7 +149,7 @@ export class SkillStore {
       if(row.revision!==p.revision)throw Error('SKILL_VERSION_CONFLICT');
       const key=this.preferenceKey(userId,row.id);
       const revision=(this.builtinPreferences[key]?.revision??0)+1;
-      if(revision>=1_000_000)throw Error('SKILL_VERSION_LIMIT');
+      if(!Number.isSafeInteger(revision))throw Error('SKILL_VERSION_LIMIT');
       this.persist(this.rows,this.drafts,{...this.builtinPreferences,[key]:{automatic:p.automatic,revision}});
       return {skill:info(this.builtin(userId,row.id))};
     }

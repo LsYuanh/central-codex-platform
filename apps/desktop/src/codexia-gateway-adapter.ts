@@ -23,7 +23,26 @@ export class CodexiaGatewayAdapter {
   }
 
   public async modelList(params: Record<string, unknown> = {}): Promise<AppServerMessage> {
-    return this.transport.request("model/list", params);
+    return this.allPages("model/list", params);
+  }
+
+  /** A page size is a transport choice, never a total catalog/history limit. */
+  private async allPages(method:string, params:Record<string,unknown>):Promise<AppServerMessage>{
+    const rows:unknown[]=[];const cursors=new Set<string>();let cursor=params.cursor;
+    while(true){
+      const response=await this.transport.request(method,{...params,...(cursor?{cursor}:{})});
+      const value=response.result as Record<string,unknown>|undefined;
+      const key=value&&['data','threads','models'].find(key=>Array.isArray(value[key]));
+      if(!value||!key)return response;
+      rows.push(...value[key] as unknown[]);
+      if(typeof value.nextCursor!=='string'||!value.nextCursor)return {...response,result:{...value,[key]:rows,nextCursor:null}};
+      if(cursors.has(value.nextCursor))throw Error('CATALOG_PAGINATION_INVALID: repeated cursor');
+      cursors.add(value.nextCursor);cursor=value.nextCursor;
+    }
+  }
+
+  public async threadListAll(params:Record<string,unknown>={}):Promise<AppServerMessage>{
+    return this.allPages("thread/list",params);
   }
 
   public async threadStart(params: Record<string, unknown>): Promise<AppServerMessage> {

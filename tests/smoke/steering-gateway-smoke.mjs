@@ -24,6 +24,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
    const turn=threads.get(p.threadId).at(-1);
    if(turn.status!=='inProgress') error={code:-32600,message:'no active turn'};
    else if(turn.id!==p.expectedTurnId) error={code:-32600,message:'expected turn does not match'};
+   else if(p.input.some(item=>item.type==='text'&&item.text.includes('steering-image'))&&!p.input.some(item=>item.type==='image'&&item.url==='data:image/png;base64,'+Buffer.from('original-image-fixture').toString('base64'))) error={code:-32600,message:'original attachment bytes missing'};
    else {turn.items.push({type:'userMessage',content:p.input}); result={turnId:turn.id};}
  }
  const reply=()=>process.stdout.write(JSON.stringify({id:q.id,...(error?{error}:{result})})+'\\n');
@@ -50,8 +51,19 @@ try {
  const agent=new WebSocket(`ws://127.0.0.1:${port}/ws/agent?deviceId=steering-test-device`);sockets.push(agent);
  await new Promise((r,j)=>{agent.once('open',r);agent.once('error',j);});
  const frame=(type,payload,requestId)=>({protocol:'agentrpc',version:1,type,timestamp:new Date().toISOString(),nonce:crypto.randomUUID(),requestId,payload});
- const ready=new Promise(r=>agent.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='agent.hello_ack')r();if(m.type==='agent.request')agent.send(JSON.stringify(frame('agent.response',{ok:true,result:{workspaceRoot:'C:/fixture',rules:[]}},m.requestId)));}));
- agent.send(JSON.stringify(frame('agent.hello',{deviceId:'steering-test-device',agent:{version:'fixture',os:'windows',arch:'x64',deviceKey:'steering-fixture-key',workspaceRoot:'C:/fixture',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context']}})));await ready;
+ const image=Buffer.from('original-image-fixture');
+ const attachment={id:'steering-image',path:'C:/fixture/image.png',name:'image.png',kind:'image',source:'localFile',mimeType:'image/png',bytes:image.length,version:'v1'};
+ const ready=new Promise(r=>agent.on('message',raw=>{
+   const m=JSON.parse(raw);if(m.type==='agent.hello_ack')r();
+   if(m.type==='agent.request'){
+     const p=m.payload;let result={workspaceRoot:'C:/fixture',rules:[]};
+     if(p.method==='file/stat')result=attachment;
+     if(p.method==='file/read_image')result={transferId:'image-transfer',totalBytes:image.length,mimeType:'image/png'};
+     if(p.method==='file/read_chunk')result={transferId:'image-transfer',offset:0,sequence:0,totalBytes:image.length,data:image.toString('base64'),done:true};
+     agent.send(JSON.stringify(frame('agent.response',{ok:true,result},m.requestId)));
+   }
+ }));
+ agent.send(JSON.stringify(frame('agent.hello',{deviceId:'steering-test-device',agent:{version:'fixture',os:'windows',arch:'x64',deviceKey:'steering-fixture-key',workspaceRoot:'C:/fixture',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context','attachments/v1','file/stat','file/read_image','file/read_chunk','file/close_transfer']}})));await ready;
  const request=await client("steering-owner"); await request("session.initialize");
  const threadId=(await request("conversation.create")).thread.id;
  const turnId=(await request("conversation.turn.create",{threadId,clientMessageId:"message-original",input:[{type:"text",text:"first"}]})).turn.id;
@@ -66,16 +78,24 @@ try {
  const history=await request("conversation.read",{threadId,includeTurns:true});
  assert.equal(history.thread.turns.length,1); assert.equal(history.thread.turns[0].items.length,3);
  assert.deepEqual(history.attachmentSubmissions.filter(s=>s.status==='sent').map(s=>s.content),["first","second","third"]);
+ // The original bytes must reach native turn/steer, and a duplicate must not append twice.
+ const withImage={...steer,clientMessageId:'message-steer-image',input:[],attachments:[attachment],deviceKey:'steering-fixture-key'};
+ const imageReply=await request('conversation.turn.steer',withImage);
+ assert.equal(imageReply.submission.attachments[0].state,'read');
+ await request('conversation.turn.steer',withImage);
+ const imageHistory=await request('conversation.read',{threadId,includeTurns:true});
+ assert.equal(imageHistory.thread.turns[0].items.length,4);
+ // Public history deliberately strips inline bytes; the native fixture validates them above.
  // Lose the connection before the delayed acknowledgement; reconcile without a resend.
  void request("conversation.turn.steer",{...steer,clientMessageId:"message-lost-ack",input:[{type:"text",text:"lost-ack"}]}).catch(()=>{});
  sockets[1].close(); const resumed=await client("steering-owner");
  await new Promise(resolve=>setTimeout(resolve,400));
  assert.equal((await resumed("conversation.message.status",{threadId,clientMessageId:"message-lost-ack"})).status,"sent");
- assert.equal((await resumed("conversation.read",{threadId,includeTurns:true})).thread.turns[0].items.length,4);
+ assert.equal((await resumed("conversation.read",{threadId,includeTurns:true})).thread.turns[0].items.length,5);
  assert.equal((await resumed("conversation.message.status",{threadId,clientMessageId:steer.clientMessageId})).status,"sent");
  await resumed("conversation.turn.cancel",{threadId,turnId});
  await assert.rejects(resumed("conversation.turn.steer",{...steer,clientMessageId:"message-after-stop"}),/no active turn/);
  assert.equal((await resumed("conversation.read",{threadId,includeTurns:true})).thread.turns.length,1);
- console.log("STEERING_GATEWAY_SMOKE_OK: routing, deduplication, ordering, ownership, mismatch, overrides, reconnect, stop");
+ console.log("STEERING_GATEWAY_SMOKE_OK: routing, image attachment bytes/state/deduplication, ordering, ownership, mismatch, overrides, reconnect, stop");
 } catch(error) {console.error(log);throw error;}
 finally {for(const socket of sockets)socket.close();gateway.kill();}

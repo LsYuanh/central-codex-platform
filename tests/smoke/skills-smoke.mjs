@@ -33,15 +33,17 @@ const ca=await readFile(caPath),password=randomBytes(32).toString('hex'),authFil
 const auth=new PlatformAuth(authFile,undefined,undefined,'device-token-v1');
 const admin=await auth.createUser('skilladmin',password,'admin'),alice=await auth.createUser('skillalice',password),bob=await auth.createUser('skillbob',password);auth.close();
 const fixture=`const fs=require('fs'),path=require('path'),rl=require('readline');let n=0;const threads=new Map([['legacy-skill-thread',{id:'legacy-skill-thread',turns:[]}]]),pending=new Map();const emit=(method,params)=>process.stdout.write(JSON.stringify({method,params})+'\\n');
-rl.createInterface({input:process.stdin}).on('line',line=>{const q=JSON.parse(line);if(!q.method){const spec=pending.get(q.id);if(spec){threads.get(spec.threadId).lastTool=q.result;emit('turn/completed',{threadId:spec.threadId,turn:{id:spec.turnId,status:'completed'}});}return;}
+rl.createInterface({input:process.stdin}).on('line',line=>{const q=JSON.parse(line);if(!q.method){const spec=pending.get(q.id);if(spec){threads.get(spec.threadId).lastTool=q.result;threads.get(spec.threadId).lastToolHasImage=q.result?.contentItems?.some(i=>i.type==='inputImage'&&i.imageUrl?.startsWith('data:image/png;base64,'));emit('turn/completed',{threadId:spec.threadId,turn:{id:spec.turnId,status:'completed'}});}return;}
 let result={};if(q.method==='initialize')result={userAgent:'protocol-fixture yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1'};
 if(q.method==='skills/list'){const root=path.join(process.cwd(),'managed-skills');const rows=JSON.parse(fs.readFileSync(path.join(root,'catalog.json')));result={data:[{skills:rows.map(v=>({name:/^name: (.+)$/m.exec(fs.readFileSync(path.join(root,v,'SKILL.md'),'utf8'))[1]})),errors:[]}]};}
 if(q.method==='thread/start'){const t={id:'skill-thread-'+process.pid+'-'+ ++n,turns:[]};threads.set(t.id,t);result={thread:t};}
 if(q.method==='thread/list')result={data:[...threads.values()]};
 if(q.method==='thread/read'||q.method==='thread/resume')result={thread:threads.get(q.params.threadId)};
 if(q.method==='turn/start'){const t=threads.get(q.params.threadId);t.input=q.params.input;t.lastTool=null;result={turn:{id:'turn-'+ ++n}};}
+if(q.method==='turn/steer'){threads.get(q.params.threadId).input=q.params.input;result={turnId:q.params.expectedTurnId};}
+if(q.method==='turn/interrupt')emit('turn/completed',{threadId:q.params.threadId,turn:{id:q.params.turnId,status:'interrupted'}});
 process.stdout.write(JSON.stringify({id:q.id,result})+'\\n');
-if(q.method==='turn/start'){const text=q.params.input[0]?.text;let tool;try{tool=JSON.parse(text);}catch{};if(tool?.skill||tool?.tool){const id='tool-'+ ++n;pending.set(id,{threadId:q.params.threadId,turnId:result.turn.id});process.stdout.write(JSON.stringify({id,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:tool.tool??'device_skill_load',arguments:tool.arguments??{name:tool.skill}}})+'\\n');}else emit('turn/completed',{threadId:q.params.threadId,turn:{...result.turn,status:'completed'}});}
+if(q.method==='turn/start'){const text=q.params.input[0]?.text;let tool;try{tool=JSON.parse(text);}catch{};if(tool?.skill||tool?.tool){const id='tool-'+ ++n;pending.set(id,{threadId:q.params.threadId,turnId:result.turn.id});process.stdout.write(JSON.stringify({id,method:'item/tool/call',params:{threadId:q.params.threadId,turnId:result.turn.id,tool:tool.tool??'device_skill_load',arguments:tool.arguments??{name:tool.skill}}})+'\\n');}else if(text!=='hold-for-steering')emit('turn/completed',{threadId:q.params.threadId,turn:{...result.turn,status:'completed'}});}
 });`;
 for(const user of [admin,alice,bob]){const dir=join(root,'workers',hash(user.id),'runtime');await mkdir(dir,{recursive:true});await writeFile(join(dir,'app-server'),fixture);}
 const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -85,6 +87,20 @@ try{
  await req('conversation.turn.create',{threadId:thread.id,clientMessageId:randomUUID(),input:[{type:'text',text:'Explain $unknown variable'}]});
  await assert.rejects(req('conversation.turn.create',{threadId:thread.id,clientMessageId:randomUUID(),input:[{type:'skill',name:'bad',path:'C:/secret/SKILL.md'}]}),/SKILL|skill/);
  pass('explicit mention becomes native skill input; verified full package and script execute on real client; ordinary dollar variables remain valid');
+ const held=await req('conversation.turn.create',{threadId:thread.id,clientMessageId:randomUUID(),input:[{type:'text',text:'hold-for-steering'}]});
+ await req('conversation.turn.steer',{threadId:thread.id,expectedTurnId:held.turn.id,clientMessageId:randomUUID(),input:[{type:'text',text:'use the selected skill'}],skills:[{id:saved.id,revision:saved.revision}]});
+ assert((await req('conversation.read',{threadId:thread.id})).thread.input.some(i=>i.type==='skill'&&i.name==='skill-proof'));
+ await req('conversation.turn.cancel',{threadId:thread.id,turnId:held.turn.id});
+ pass('running-turn skill selection reaches native steering after real device preparation');
+ // Exercise the document dynamic-tool path through the authenticated gateway,
+ // including PDFium pixels as the native inputImage response variant.
+ const documentPath=join(a.workspace,'scan.pdf'),objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>'];
+ let pdf='%PDF-1.4\n';const offsets=[0];objects.forEach((o,i)=>{offsets.push(Buffer.byteLength(pdf));pdf+=`${i+1} 0 obj\n${o}\nendobj\n`;});const xref=Buffer.byteLength(pdf);pdf+='xref\n0 4\n0000000000 65535 f \n'+offsets.slice(1).map(n=>`${String(n).padStart(10,'0')} 00000 n \n`).join('')+`trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;await writeFile(documentPath,pdf);
+ await req('conversation.turn.create',{threadId:thread.id,clientMessageId:randomUUID(),input:[{type:'text',text:JSON.stringify({tool:'device_read_text',arguments:{path:documentPath,render:true}})}]});
+ let documentResult;await until(async()=>{documentResult=(await req('conversation.read',{threadId:thread.id})).thread;return documentResult.lastTool;},'native document tool response');
+ assert.equal(documentResult.lastTool.success,true,JSON.stringify(documentResult.lastTool));assert.equal(documentResult.lastToolHasImage,true);
+ assert.equal(JSON.parse(documentResult.lastTool.contentItems[0].text).result.untrusted,true);
+ pass('authenticated document dynamic tool returns device PDF text metadata and native page pixels');
  const t2=(await a2.request('conversation.create')).thread;
  await a2.request('conversation.turn.create',{threadId:t2.id,clientMessageId:randomUUID(),input:[{type:'text',text:JSON.stringify({skill:'skill-proof'})}]});
  let tool;await until(async()=>{tool=(await a2.request('conversation.read',{threadId:t2.id})).thread.lastTool;return tool;},'dynamic skill load');assert(tool.success,JSON.stringify(tool));const loaded=JSON.parse(tool.contentItems[0].text);assert.equal(loaded.revision,1);assert.match(loaded.instructions,/Use scripts/);

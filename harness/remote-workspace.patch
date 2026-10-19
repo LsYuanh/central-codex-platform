@@ -1808,15 +1808,15 @@ index 3feda36..6cc85a4 100644
 +        let Ok(bytes) = std::fs::read(root.join("catalog.json")) else {
 +            return empty();
 +        };
-+        if bytes.len() > 32768 {
-+            return empty();
-+        }
++        // Managed catalog size follows the App Server/runtime capacity.
++        // Ownership and canonical path checks below still apply.
++        // Do not impose a separate platform product quota here.
 +        let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else {
 +            return empty();
 +        };
-+        if entries.len() > 102 {
-+            return empty();
-+        }
++        // All managed skill entries remain available to the native catalog.
++        // Ownership and canonical path checks below still apply.
++        // Do not impose a separate platform product quota here.
 +        let mut roots = Vec::new();
 +        for entry in entries {
 +            let relative = std::path::Path::new(&entry);

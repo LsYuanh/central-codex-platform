@@ -13,15 +13,15 @@ type Json = Record<string, unknown>;
 const record = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
 
 export function absoluteClientPath(value: unknown): string {
-  if (typeof value !== "string" || !value.trim() || value.length > 4096 || /[\x00-\x1f]/.test(value)) throw Error("PROJECT_PATH_INVALID: 请选择有效的本机绝对目录");
+  if (typeof value !== "string" || !value.trim() || /[\x00-\x1f]/.test(value)) throw Error("PROJECT_PATH_INVALID: 请选择有效的本机绝对目录");
   // Reject drive-relative, root-relative Windows paths and device namespaces.
   if (/^(?:\\\\|\/\/)[?.]/.test(value) || !(/^[A-Za-z]:[\\/]/.test(value) || /^\\\\[^\\]+\\[^\\]+/.test(value) || value.startsWith("/"))) throw Error("PROJECT_PATH_INVALID: 项目目录必须是本机绝对路径");
   return value;
 }
 
 export function projectInput(value: unknown): Pick<ClientProject, "name" | "folders"> {
-  if (!record(value) || typeof value.name !== "string" || !value.name.trim() || value.name.trim().length > 80) throw Error("PROJECT_NAME_INVALID: 项目名称须为 1–80 个字符");
-  if (!Array.isArray(value.folders) || !value.folders.length || value.folders.length > 8) throw Error("PROJECT_FOLDERS_INVALID: 请保留 1–8 个源文件夹");
+  if (!record(value) || typeof value.name !== "string" || !value.name.trim()) throw Error("PROJECT_NAME_INVALID: 请输入项目名称");
+  if (!Array.isArray(value.folders) || !value.folders.length) throw Error("PROJECT_FOLDERS_INVALID: 请至少保留一个源文件夹");
   return { name: value.name.trim(), folders: value.folders.map(absoluteClientPath) };
 }
 
@@ -59,7 +59,6 @@ export class ProjectCatalog {
     }
     const old = value.id === undefined ? undefined : this.get(owner.userId, owner.deviceId, value.id);
     if (old && (old.deviceKey !== owner.deviceKey || old.revision !== value.revision)) throw Error("PROJECT_CONFLICT: 项目或设备身份已变化，请重新打开编辑窗口");
-    if (!old && this.list(owner.userId, owner.deviceId).length >= 100) throw Error("PROJECT_LIMIT: 最多保留 100 个项目");
     const next: StoredProject = { ...owner, ...input, folders, id: old?.id ?? creationKey ?? randomUUID(), revision: (old?.revision ?? 0) + 1 };
     this.rows = [...this.rows.filter(p => p.id !== next.id), next];
     return publicProject(next);

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "预览不可用，仍可发送": "Preview unavailable; you can still send this file",
+  "部分已读取": "Partially read",
   "编辑目标": "Edit goal", "关闭目标编辑器": "Close goal editor", "撤销修改": "Revert changes", "未保存的修改": "Unsaved changes", "已同步目标": "Goal synced",
   "目标保存已停止，草稿已保留。": "Goal update stopped; your draft is preserved.",
   "目标已被清除，编辑内容已保留。": "The goal was cleared; your edits are preserved.",
