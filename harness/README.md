@@ -17,7 +17,7 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
-### 0.163.0 candidate adaptation (2026-10-20, local Mac QA only)
+### 0.163.0 candidate adaptation (2026-10-20, published for Mac ARM64)
 
 The scheduled run `39395265486` discovered 0.163.0 and stopped on
 `UPSTREAM_PATCH_CONFLICT`. The new exact-commit/archive-pinned candidate reuses
@@ -35,10 +35,16 @@ receive a separate reviewed transport adaptation before use.
 On an isolated Mac QA directory, fresh online discovery and patch preparation
 passed; all 32 patched/lock files matched the compiled source. Rust 1.95.0
 compilation, 13 native/gateway probes and 15 local release/adaptation tests passed.
-See `verification/runtime-adaptation-01630-20261020.json`. No real model/device,
-hosted release job, installation package, signing or deployment was performed.
-The deployed runtime remains at the last recorded 0.162.1 release. This change
-is local only; integrating it into main affects the enabled scheduled publisher.
+See `verification/runtime-adaptation-01630-20261020.json` for that initial local phase.
+Commit `942e703` was subsequently pushed to main and passed hosted run
+`39403895686`: all 16 builder command steps, including 13 probes and 10 central
+updater Rust tests, then signing publication. The stable channel now points to
+`runtime-0.163.0-1792490901637`. Independent fixed-key signature, public asset
+digest, archive download and all 873 package file hashes passed.
+See `verification/runtime-published-01630-20261020.json`.
+No central installation or service switch was performed in this publication task;
+native activation and real model/device acceptance on 0.163.0 remain unverified.
+The last confirmed deployment remains 0.162.1. Windows 0.163.0 remains blocked.
 
 ### Platform capacity alignment (2026-10-19, source only)
 

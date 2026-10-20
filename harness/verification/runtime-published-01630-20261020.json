@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-20",
+  "scope": "macOS ARM64 App Server 0.163.0 hosted validation and signed publication; central installation not performed",
+  "publication": {
+    "signatureVerified": true,
+    "publicAssetDigestMatched": true,
+    "downloadedArchiveVerified": true,
+    "sourceCommit": "942e7036d1efec5a2dfb532733d3bec7b8ad720f",
+    "releaseTag": "runtime-0.163.0-1792490901637",
+    "version": "0.163.0",
+    "sequence": 1792490901637,
+    "packageId": "macos-arm64-node24-qa1-734d449556ed7587",
+    "archiveBytes": 169308702,
+    "archiveSha256": "50b9879c9e8a009234e663759a430c0d8c794a6f4b5fa1a88ae92c58829942ab",
+    "upstreamCommit": "83086188ae0614bd882818ff1aa23f3194962012",
+    "combinedPatchSha256": "476f92ce2debdff5e2ad3b8824e9cd7e368cbe62e6bd59d763d9bbd4361638ed",
+    "runUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/39403895686",
+    "status": "success",
+    "validationCommandStepsPassed": 16,
+    "centralUpdaterRustTestsPassed": 10,
+    "workflowDurationSeconds": 977,
+    "validationDurationSeconds": 936,
+    "publishDurationSeconds": 27,
+    "manifestSha256": "734d449556ed7587a3d171cbb04f15632cec79aa4660ba1f6403381b498eba65",
+    "independentManifestFileHashesVerified": 873,
+    "previousVersion": "0.162.1",
+    "previousSequence": 1792400248189
+  },
+  "jobs": [
+    {
+      "name": "validate / validate",
+      "conclusion": "success",
+      "startedAt": "2026-10-20T09:52:58Z",
+      "completedAt": "2026-10-20T10:08:34Z"
+    },
+    {
+      "name": "publish",
+      "conclusion": "success",
+      "startedAt": "2026-10-20T10:08:38Z",
+      "completedAt": "2026-10-20T10:09:05Z"
+    }
+  ],
+  "centralAcceptance": {
+    "installationPerformed": false,
+    "serviceSwitchPerformed": false,
+    "nativeActivationVerified": false,
+    "realModelDeviceVerified": false,
+    "lastConfirmedRuntimeVersion": "0.162.1",
+    "clientVersion": "0.3.1",
+    "centralAppSourceVersion": "0.1.7"
+  },
+  "limitations": [
+    "Windows central 0.163.0 is not adapted and is explicitly rejected",
+    "Native activation and real model/device acceptance on 0.163.0 were not performed",
+    "Full installed UI and production isolation qualification were not expanded",
+    "Workflow retained non-failing Node 20 action deprecation warnings and hosted runner notices",
+    "Diagnostics artifact download timed out; results were verified through workflow/job metadata, visible logs and independent release integrity checks"
+  ]
+}
