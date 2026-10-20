@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-20",
+  "status": "mac-adaptation-validated-locally",
+  "failure": {
+    "run": "https://github.com/LsYuanh/central-codex-platform/actions/runs/39395265486",
+    "sourceCommit": "598ff5ede07fb76289366b69e39e0b13addb8a38",
+    "code": "UPSTREAM_PATCH_CONFLICT"
+  },
+  "version": "0.163.0",
+  "commit": "83086188ae0614bd882818ff1aa23f3194962012",
+  "archiveSha256": "e57f1d4f914c71c3532a12d5c14f740909fca4e7e041fa1b3db71618c88e5567",
+  "basePatch": {
+    "path": "adaptations/0.163.0-base.patch",
+    "sha256": "532788f59f5d83a808547b85cd499109087baedebe74e287d0edb6a0dc964f03"
+  },
+  "overlay": {
+    "path": "adaptations/0.159.2.patch",
+    "sha256": "3c58220a3654691ea028cdf7a22d1917be10c57b06253b09c801a89e629c2e89"
+  },
+  "combinedPatchSha256": "476f92ce2debdff5e2ad3b8824e9cd7e368cbe62e6bd59d763d9bbd4361638ed",
+  "schemaReview": "harness/schema/reviews/0.163.0.json",
+  "discovery": {
+    "status": "ready-for-validation",
+    "platform": "darwin-arm64",
+    "freshOfficialTagAndArchive": true,
+    "sourceFilesCompared": 32,
+    "builtSourceMatchesDiscovery": true
+  },
+  "build": {
+    "status": "compiled",
+    "seconds": 215.783,
+    "platform": "darwin-arm64",
+    "rust": "1.95.0",
+    "profile": "dev; debug=0; incremental=0; jobs=2",
+    "binarySha256": "9cdcb55d28a6ee1215e877751e3f198e58fdd8ab1c3b1222ef96ee8be0d557eb"
+  },
+  "probes": [
+    {
+      "script": "harness/runtime-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/plan-goal-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/image-generation-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/model-catalog-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/thread-delete-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "harness/worker-isolation-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/model-credential-broker-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/image-generation-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/worker-routing-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/task-control-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/task-control-gateway-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/runtime-updates-smoke.mjs",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/smoke/native-account-update-smoke.mjs",
+      "exitCode": 0
+    }
+  ],
+  "localChecks": [
+    "gateway TypeScript build",
+    "15 runtime trial/release/builtin-skill tests",
+    "stable and experimental exact schema hash gates",
+    "only three patch sections differ from 0.162.1",
+    "unsupported candidate platforms rejected; older patch selections unchanged"
+  ],
+  "limitations": {
+    "windowsCentral": "0.163.0 explicitly rejected until a separate transport adaptation is reviewed",
+    "realModel": false,
+    "realDevice": false,
+    "hostedCI": false,
+    "packaged": false,
+    "signed": false,
+    "published": false,
+    "deployed": false
+  },
+  "unchanged": {
+    "embeddedBaseline": "0.156.1",
+    "previousAdaptations": [
+      "0.159.2",
+      "0.162.1"
+    ],
+    "lastRecordedDeployment": "App 0.1.7 / App Server 0.162.1 / client 0.3.1"
+  },
+  "notes": [
+    "Initial Mac QA gateway build referenced an old shared-types cache. Rebuilt shared types in an independent dependency directory; both builds and all 13 probes then passed. No protocol assertions were relaxed.",
+    "New thread/items/read and thread/readState/update methods remain denied by the actual candidate binary. Existing source and schema hashes are not replaced.",
+    "This local commit is not pushed. The scheduled GitHub workflow remains unchanged until explicitly authorized integration; pushing to main can enable a later scheduled signing/publication run under existing repository settings."
+  ]
+}

@@ -17,6 +17,29 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+### 0.163.0 candidate adaptation (2026-10-20, local Mac QA only)
+
+The scheduled run `39395265486` discovered 0.163.0 and stopped on
+`UPSTREAM_PATCH_CONFLICT`. The new exact-commit/archive-pinned candidate reuses
+the reviewed policy overlay and changes only three sections of the 0.162.1 base:
+tool registry and dynamic tool contexts preserve upstream
+`finishes_on_cancellation`, and the refactored default-shell initialization
+still avoids host shell discovery in remote mode. Older patch bytes are unchanged.
+
+The stable and experimental schemas were compared with the reviewed 0.162.1
+snapshots. Optional metadata does not enable new execution capabilities;
+`thread/items/read` and `thread/readState/update` remain denied, with native
+boundary coverage. The candidate explicitly supports `darwin` only; Windows must
+receive a separate reviewed transport adaptation before use.
+
+On an isolated Mac QA directory, fresh online discovery and patch preparation
+passed; all 32 patched/lock files matched the compiled source. Rust 1.95.0
+compilation, 13 native/gateway probes and 15 local release/adaptation tests passed.
+See `verification/runtime-adaptation-01630-20261020.json`. No real model/device,
+hosted release job, installation package, signing or deployment was performed.
+The deployed runtime remains at the last recorded 0.162.1 release. This change
+is local only; integrating it into main affects the enabled scheduled publisher.
+
 ### Platform capacity alignment (2026-10-19, source only)
 
 The fixed base and the 0.162.1 adaptation no longer impose the platform's

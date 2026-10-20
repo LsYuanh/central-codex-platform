@@ -70,6 +70,20 @@
         "scope": "Windows remote AppContainer model-only authenticated TLS named pipe transport",
         "files": "adaptations/0.162.1-windows-model-files.json"
       }
+    },
+    "0.163.0": {
+      "commit": "83086188ae0614bd882818ff1aa23f3194962012",
+      "archiveSha256": "e57f1d4f914c71c3532a12d5c14f740909fca4e7e041fa1b3db71618c88e5567",
+      "path": "adaptations/0.159.2.patch",
+      "sha256": "3c58220a3654691ea028cdf7a22d1917be10c57b06253b09c801a89e629c2e89",
+      "platforms": [
+        "darwin"
+      ],
+      "scope": "Mac remote workspace adaptation: preserve upstream tool cancellation completion and third-party metadata, deny host shell discovery after session initialization refactor; retain 0.162.1 boundaries and managed-policy overlay",
+      "basePatch": {
+        "path": "adaptations/0.163.0-base.patch",
+        "sha256": "532788f59f5d83a808547b85cd499109087baedebe74e287d0edb6a0dc964f03"
+      }
     }
   }
 }

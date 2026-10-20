@@ -64,8 +64,34 @@ test('0.162.1 replaces only the three conflicting base sections and keeps older 
     'a/codex-rs/models-manager/src/manager.rs',
   ]);
 });
-test('reviewed schema requires exact release, commit, baseline and candidate bytes',()=>{
-  const review=JSON.parse(readFileSync(new URL('../../harness/schema/reviews/0.159.2.json',import.meta.url)));
+test('0.163.0 preserves the older adaptation and changes only cancellation/shell contexts',()=>{
+  const pin=JSON.parse(readFileSync(new URL('../../harness/upstream.json',import.meta.url)));
+  const candidate=pin.candidatePatches['0.163.0'],previous=pin.candidatePatches['0.162.1'];
+  assert.equal(candidate.commit,'83086188ae0614bd882818ff1aa23f3194962012');
+  const patches=upstreamPatches(pin,'0.163.0',candidate.commit,'darwin');
+  assert.deepEqual(patches,[candidate.basePatch,candidate]);
+  assert.throws(()=>upstreamPatches(pin,'0.163.0','0'.repeat(40),'darwin'),/COMMIT_MISMATCH/);
+  for(const platform of ['win32','linux']){
+    assert.throws(()=>upstreamPatches(pin,'0.163.0',candidate.commit,platform),/PLATFORM_UNREVIEWED/);
+  }
+  assert.throws(()=>prepareWindowsModel('unused',true,{version:'0.163.0',commit:candidate.commit}),/CANDIDATE_UNREVIEWED/);
+  const read=spec=>{
+    const bytes=readFileSync(new URL('../../harness/'+spec.path,import.meta.url));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'),spec.sha256);
+    return bytes.toString().replaceAll('\r\n','\n');
+  };
+  const sections=patch=>new Map(patch.split(/(?=^diff --git )/m).filter(Boolean).map(s=>[s.split('\n')[0],s]));
+  const old=sections(read(previous.basePatch)),next=sections(read(candidate.basePatch));
+  assert.equal(read(candidate),read(previous));
+  assert.deepEqual([...next.keys()],[...old.keys()]);
+  assert.deepEqual([...old].filter(([key,value])=>next.get(key)!==value).map(([key])=>key.split(' ')[2]),[
+    'a/codex-rs/core/src/tools/registry.rs',
+    'a/codex-rs/core/src/tools/handlers/dynamic.rs',
+    'a/codex-rs/core/src/session/session.rs',
+  ]);
+});
+for(const version of ['0.159.2','0.163.0'])test(`reviewed ${version} schema requires exact release, commit, baseline and candidate bytes`,()=>{
+  const review=JSON.parse(readFileSync(new URL(`../../harness/schema/reviews/${version}.json`,import.meta.url)));
   const candidate={version:review.version,commit:review.commit};
   for(const mode of ['stable','experimental']){
     const {baseSha256,sha256}=review.schema[mode];

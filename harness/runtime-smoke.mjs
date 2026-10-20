@@ -74,6 +74,8 @@ try {
   for(const [method,params] of [
     ['thread/attachmentOwner/list',{attachmentType:'fixture',identityKey:'fixture'}],
     ['thread/prediction/request',{threadId:'fixture',sourceTurnId:'fixture'}],
+    ['thread/items/read',{threadId:'fixture',turnId:'fixture',itemIds:['fixture']}],
+    ['thread/readState/update',{threadId:'fixture',expectedRevision:'fixture',operation:{type:'read'}}],
     ['account/gatewayOAuth/read',null],['account/gatewayOAuth/login',null],['account/gatewayOAuth/cancel',null],
     ['account/bedrock/checkGovCloudRequirements',{}],
   ]) {

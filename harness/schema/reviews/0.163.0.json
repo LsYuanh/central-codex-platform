@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "version": "0.163.0",
+  "commit": "83086188ae0614bd882818ff1aa23f3194962012",
+  "schema": {
+    "stable": {
+      "baseSha256": "dfd6f7197d4caa6a240c49984d6d2441ba768ca38a657dc92e2d48f726548476",
+      "sha256": "29d1ea3a7e5ae6742c79aaacdb85a572ea3d49bbda1aee1bafd6b5880e97791b"
+    },
+    "experimental": {
+      "baseSha256": "d12fa7acdd7a0067879e7ae2b228cd19a4256b9a18dc6a6557676fcfa500a6ce",
+      "sha256": "8cdf2312711b319d578e47989e4dbffb79ba3ed018d0ae21710e170578cef613"
+    }
+  },
+  "review": [
+    "The existing remote request allowlist is unchanged. New attachmentOwner/list, prediction/request, gateway OAuth and experimental Bedrock routes remain denied. Prediction and OAuth events do not enable capabilities.",
+    "Goal set/clear add optional origin. The authenticated gateway stamps user actions as user and lifecycle pauses as automatic; callers cannot inject origin. Explicit Stop records user provenance. Legacy optional-field parsing remains compatible.",
+    "MessagePhase adds partial_answer. Existing clients retain its text as ordinary answer content without marking it final; turn/completed remains the completion signal. No UI or history payload migration is required.",
+    "Turn adds optional rootTurnId; turn/start adds optional parentTurnId and rootTurnId. The gateway does not request delegated work or enable internal subagents. Existing required fields are unchanged.",
+    "ResponseItem adds additional_tools. This does not grant tool execution permission: runtime dispatch still requires the audited remote-safe registry and unsupported tool calls remain denied.",
+    "Model provider capabilities remove namespaceTools on an unsupported route. ModelList field descriptions clarify future reasoning-effort values; existing model and effort wire fields are unchanged.",
+    "Skill paths retain string wire values via LegacyAppPathString. The managed catalog, exact projected directories and source validation remain enforced.",
+    "Thread item cursors accept item anchors and entries add optional timestamps. Item paging is outside the remote allowlist; history uses thread/read. Subagent activity adds optional model/effort metadata while internal subagents remain disabled.",
+    "CodexErrorInfo changes oneOf to anyOf and adds flexUnavailable/tooManyDenials, retaining existing variants. Misalignment reviewTarget and PlanType promax are metadata only; no continuation or approval permission is granted.",
+    "MCP discovery/resource/OAuth metadata, browser extension requirements, independent speed-mode support, environment skills/authBearerToken and realtime backendReasoningStatus are additive on unsupported routes. Existing gateway and remote policy do not expose them.",
+    "Compared the exact 0.163.0 stable and experimental snapshots with reviewed 0.162.1. Existing required fields are unchanged; the changes below are additive. Prior baseline-to-0.162.1 review remains applicable.",
+    "Thread list adds optional excludedThreadIds, which only narrows results. Experimental thread/read and thread/list add optional readState/readStates metadata. Existing per-user Workers, ownership checks and history parsing remain unchanged.",
+    "New thread/readState/update and thread/items/read methods remain outside the remote allowlist. A native boundary regression supplies valid required parameters and requires policy denial on this candidate. thread/readState/changed is metadata, not tool execution or Turn completion.",
+    "ResponseItem gains optional encrypted_content/status, and output text gains optional annotations/logprobs. These metadata fields do not grant local execution; remote dispatch still requires the audited safe registry. Turn completion remains turn/completed.",
+    "TurnToolOutput on turn/start gains optional retain (default false). It annotates supplied tool-output context for history retention, without executing a tool; existing clients omit it. New experimentalPredictionMode on thread/fork is on a denied route.",
+    "Expanded realtime voices, v3 voice lists and environment websocketRequestId are additive on unsupported routes. No realtime, environment, prediction, plugin or subagent capability is enabled.",
+    "This review binds only these exact source and schema hashes for Mac. Compilation, native probes, real model/device acceptance and publication are separate gates. Windows 0.163.0 is explicitly unreviewed."
+  ]
+}
