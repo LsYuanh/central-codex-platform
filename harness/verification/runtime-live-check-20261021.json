@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-21",
+  "checkedAt": "2026-10-21T01:19:50.663Z",
+  "scope": "Read-only central update diagnosis and current production runtime model/Windows Agent acceptance",
+  "central": {
+    "appVersion": "0.1.7",
+    "runtimeVersion": "0.162.1",
+    "sequence": 1792400248189,
+    "packageId": "macos-arm64-node24-qa1-2565d95c1c0395cd",
+    "configRevision": 16,
+    "pending": false,
+    "runningGatewayMatchesSelection": true,
+    "health": true
+  },
+  "automaticUpdate": {
+    "state": "waiting-for-package",
+    "code": null,
+    "lastCheckedAt": 1792487548575,
+    "lastCheckedAtLocal": "2026-10-20 17:12:28 +08:00",
+    "releasePublishedAtLocal": "2026-10-20 18:09:02 +08:00",
+    "successfulCheckIntervalSeconds": 86400,
+    "nextCheckEstimatedLocal": "2026-10-21 around 17:12 +08:00, subject to runtime and sleep",
+    "reason": "The last successful check preceded the signed 0.163.0 publication; the next daily check was not due.",
+    "previousFailedSequence": 1791609213646,
+    "previousFailureBelongsTo01630": false,
+    "manualUpdateTriggered": false,
+    "serviceRestarted": false
+  },
+  "realClientAcceptance": {
+    "model": "gpt-6.1-sol",
+    "clientAgentSource": "Published Windows 0.3.1 installation package extracted payload",
+    "agentSha256": "2c40649b4d38a2139e959f34e14046af9f04565e67700e26d054a8aee9b1d470",
+    "passed": true,
+    "actualWindowsLocalAgent": true,
+    "persistedCredentialReconnectVerified": true,
+    "modelToolReadCount": 2,
+    "modelToolExecCount": 1,
+    "randomProofVerified": true,
+    "resumeHistoryVerified": true,
+    "projectCatalogVerified": true,
+    "immutableProjectSnapshotVerified": true,
+    "relativeProjectExecutionVerified": true,
+    "agentExited": true,
+    "testDeviceRevoked": true,
+    "testDeviceOnlineAfterCleanup": false,
+    "localTokenRemoved": true
+  },
+  "limitations": [
+    "Results cover the currently active 0.162.1 runtime, not 0.163.0.",
+    "0.163.0 native activation and its real model/device acceptance remain pending.",
+    "No installed desktop UI, Mac client or production isolation qualification was added."
+  ]
+}
