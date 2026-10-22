@@ -17,6 +17,20 @@ The source tar, extracted repository, build products and logs are excluded by `.
 
 ## Build and protocol
 
+### v2 channel and native activation (2026-10-22)
+
+Source `cde1b12` passed hosted run `39723948841` and protected signing publication.
+The stable `central-runtime-update/v2` channel now publishes 0.163.0, sequence
+`1792645257293`, package `macos-arm64-node24-qa1-ce2ce6aa6b976e91`.
+Independent fixed-key signature, full archive and all 874 file hashes passed.
+Central App 0.1.9 downloaded and activated it through the native updater:
+`updated`, `pending=false`, matching running gateway, unchanged revision 19.
+Real GPT-6.1 Sol and the Windows 0.3.1 packaged Agent passed file, command,
+reconnect, history and project snapshot checks. App/configuration hashes and
+VPN/Codex configuration hashes remained unchanged; backups are retained.
+See `verification/runtime-v2-published-20261022.json`. Full Mac UI, real image
+generation, forced token renewal and Windows central 0.163.0 remain outside this acceptance.
+
 ### 0.163.0 candidate adaptation (2026-10-20, published for Mac ARM64)
 
 The scheduled run `39395265486` discovered 0.163.0 and stopped on
@@ -38,13 +52,13 @@ compilation, 13 native/gateway probes and 15 local release/adaptation tests pass
 See `verification/runtime-adaptation-01630-20261020.json` for that initial local phase.
 Commit `942e703` was subsequently pushed to main and passed hosted run
 `39403895686`: all 16 builder command steps, including 13 probes and 10 central
-updater Rust tests, then signing publication. The stable channel now points to
+updater Rust tests, then signing publication. At that publication, the stable channel pointed to
 `runtime-0.163.0-1792490901637`. Independent fixed-key signature, public asset
 digest, archive download and all 873 package file hashes passed.
 See `verification/runtime-published-01630-20261020.json`.
 No central installation or service switch was performed in this publication task;
-native activation and real model/device acceptance on 0.163.0 remain unverified.
-The last confirmed deployment remains 0.162.1. Windows 0.163.0 remains blocked.
+native activation and real model/device acceptance were not verified in that task.
+At that time the last confirmed deployment was 0.162.1; the 2026-10-22 acceptance above supersedes it. Windows 0.163.0 remains blocked.
 
 ### Platform capacity alignment (2026-10-19, source only)
 

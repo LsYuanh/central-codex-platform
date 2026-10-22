@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-22",
+  "scope": "Authorized compatible v2 runtime channel publication and native central auto-update acceptance",
+  "publication": {
+    "sourceCommit": "cde1b12742c79e9d3e8a3b3148c7c15331844963",
+    "signatureVerified": true,
+    "publicAssetDigestMatched": true,
+    "downloadedArchiveVerified": true,
+    "allFileHashesVerified": true,
+    "hostProtocol": "central-runtime-update/v2",
+    "releaseTag": "runtime-0.163.0-1792645257293",
+    "version": "0.163.0",
+    "sequence": 1792645257293,
+    "packageId": "macos-arm64-node24-qa1-ce2ce6aa6b976e91",
+    "archiveBytes": 169310265,
+    "archiveSha256": "cc549b968c49b327c879d116763ecac975f5c2a3c2ed9d7924aa8e4e7366b7c6",
+    "manifest": {
+      "path": "manifest.json",
+      "bytes": 177771,
+      "sha256": "ce2ce6aa6b976e9142bda94d5d057cd5e3730a78188643cc57771d3a2304c54f"
+    },
+    "fileCount": 874,
+    "upstream": {
+      "version": "0.163.0",
+      "commit": "83086188ae0614bd882818ff1aa23f3194962012",
+      "archiveSha256": "e57f1d4f914c71c3532a12d5c14f740909fca4e7e041fa1b3db71618c88e5567",
+      "patchSha256": "476f92ce2debdff5e2ad3b8824e9cd7e368cbe62e6bd59d763d9bbd4361638ed"
+    },
+    "elapsedSeconds": 236.62
+  },
+  "workflow": {
+    "runId": 39723948841,
+    "url": "https://github.com/LsYuanh/central-codex-platform/actions/runs/39723948841",
+    "conclusion": "success",
+    "validationSeconds": 1067,
+    "publicationSeconds": 31,
+    "totalSeconds": 1108,
+    "localReleaseTestsPassed": 23,
+    "hostedUpdaterTestsPassed": 12,
+    "hostedUpdaterTestsIgnored": 2,
+    "signingPolicyAndKeyUnchanged": true
+  },
+  "nativeUpdate": {
+    "appVersion": "0.1.9",
+    "runtimeVersion": "0.163.0",
+    "revision": 19,
+    "sequence": 1792645257293,
+    "packageId": "macos-arm64-node24-qa1-ce2ce6aa6b976e91",
+    "pending": false,
+    "nativeUpdateState": "updated",
+    "nativeBackupPresent": true,
+    "privateAppAndFullProfileBackup": true,
+    "configurationUnchanged": true,
+    "appUnchanged": true,
+    "vpnAndCodexConfigUnchanged": true,
+    "runningGatewayMatchesPackage": true,
+    "health": {
+      "ok": true,
+      "devices": 1,
+      "clients": 1
+    },
+    "failedSequencePreserved": true
+  },
+  "nativeUpdateMethod": {
+    "idleCheckBeforeRestart": true,
+    "sameInstalledAppRestarted": true,
+    "manualSelectionWrite": false,
+    "nativeDownloadCachePreseeded": false
+  },
+  "realClient": {
+    "passed": true,
+    "model": "gpt-6.1-sol",
+    "packagedAgentVersion": "0.3.1",
+    "platform": "windows-x64",
+    "evidence": {
+      "actualLocalAgent": true,
+      "externalProjectVerified": true,
+      "legacyWorkspaceVerified": false,
+      "workspaceReadVerified": true,
+      "modelToolReadVerified": true,
+      "modelToolExecVerified": true,
+      "randomProofVerified": true,
+      "turnCompleted": true,
+      "runtimeMarkerVerified": true,
+      "resumeHistoryVerified": true,
+      "projectCatalogVerified": true,
+      "immutableProjectSnapshotVerified": true,
+      "relativeProjectExecutionVerified": true
+    },
+    "summary": {
+      "inputSha256": "8cdb78c08ed00c8780b4e24a0db9e71ea6168c222e02b7801f53e2ace386556c",
+      "proofSha256": "407b8154555cddcbf9554a210dedbea9a29c174574b863862856a6446e45631e",
+      "toolReadCount": 2,
+      "toolExecCount": 1,
+      "marker": "yuan-zhou-remote-workspace/1"
+    },
+    "agentExited": true,
+    "revoked": true,
+    "localTokenRemoved": true,
+    "realRemoteDeviceVerified": true,
+    "transientReconnectError": "AGENT_OFFLINE, recovered"
+  },
+  "rollback": {
+    "previousChannelProtocol": "central-runtime-update/v1",
+    "previousChannelSequence": 1792573105528,
+    "previousSignedChannelPrivatelyBackedUp": true,
+    "previousReleasesRetained": true,
+    "preserveNewHistoryBeforeAnyProfileRollback": true
+  },
+  "limits": [
+    "Mac full native UI not newly accepted",
+    "Real image generation not newly accepted",
+    "Forced token expiry/renewal not tested",
+    "Windows central 0.163.0 remains unadapted",
+    "Existing ad-hoc signing and notarization limitations unchanged",
+    "No expansion of production isolation qualification"
+  ]
+}
