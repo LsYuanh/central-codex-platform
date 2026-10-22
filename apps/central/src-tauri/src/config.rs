@@ -943,6 +943,28 @@ mod tests {
         );
     }
     #[test]
+    fn update_read_retries_a_transient_lock_but_bounds_persistent_contention() {
+        let temp = fixture();
+        let root = temp.path().join("app");
+        let held = transaction(&root, true).unwrap().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            drop(held);
+        });
+        assert!(
+            crate::runtime_updates::read_update_config(&root)
+                .unwrap()
+                .config
+                .is_none()
+        );
+        release.join().unwrap();
+        let _held = transaction(&root, true).unwrap().unwrap();
+        assert_eq!(
+            crate::runtime_updates::read_update_config(&root).err(),
+            Some("UPDATE_STORAGE_BUSY")
+        );
+    }
+    #[test]
     fn subprocess_lock_entry() {
         if let Some(root) = std::env::var_os("CENTRAL_CONFIG_LOCK_TEST_ROOT") {
             assert_eq!(read(Path::new(&root)).err().unwrap().code, "OPERATION_BUSY");

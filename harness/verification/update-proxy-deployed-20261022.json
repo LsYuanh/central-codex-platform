@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-22",
+  "scope": "Authorized central App 0.1.9 and complete runtime deployment; no VPN or Codex config changes; no push or public channel publication",
+  "sourceBase": "a330a5332d68bc5062f7fa5ee136db986aa107eb",
+  "buildSourceSeedSha256": "2f1fd9fbd039a0f8a36a73e17a53705076373237a366a2885ae37c26761369bc",
+  "appVersion": "0.1.9",
+  "runtimeVersion": "0.163.0",
+  "revision": 19,
+  "fileCount": 874,
+  "runtimeArchive": {
+    "bytes": 166045488,
+    "sha256": "9643ee47e918016729291967be3242ef42631f0d38709854609d152e421d6e64"
+  },
+  "dmgDigest": {
+    "bytes": 207966092,
+    "sha256": "3b2c9b476ad718d74a2b499700143702acbd911d1f65e2df69082d918045075d"
+  },
+  "packageId": "macos-arm64-node24-qa1-74453261de9aa7ef",
+  "manifest": {
+    "path": "manifest.json",
+    "bytes": 177771,
+    "sha256": "74453261de9aa7efd9bff6bb901cdf584a626aac320f63069c2f789f3b52b1f5"
+  },
+  "verification": {
+    "windowsUpdateTests": 12,
+    "macUpdateTests": 13,
+    "windowsConfigLockTests": 1,
+    "macConfigLockTests": 1,
+    "typescriptCheck": true,
+    "viteBuild": true,
+    "cargoFmt": true,
+    "cargoCheck": true,
+    "macNativeBuild": true,
+    "appSignature": "ad-hoc",
+    "dmgVerified": true,
+    "fullPackagePreflight": true,
+    "runningGatewayMatchesInstalledPackage": true,
+    "vpnAndCodexConfigUnchanged": true,
+    "previousAppAndCompleteProfileBackedUp": true
+  },
+  "liveNetwork": {
+    "officialReleaseQuery": true,
+    "manifestSignatureVerified": true,
+    "archiveBytes": 169308697,
+    "archiveDigestVerified": true,
+    "elapsedSeconds": 221.13,
+    "downloadImplementationMatchesFinalBuild": true,
+    "activation": false
+  },
+  "realClient": {
+    "model": "gpt-6.1-sol",
+    "agentVersion": "0.3.1",
+    "passed": true,
+    "toolReadCount": 2,
+    "toolExecCount": 1,
+    "randomProofVerified": true,
+    "historyResumeVerified": true,
+    "persistedCredentialReconnectVerified": true,
+    "projectSnapshotVerified": true,
+    "testDeviceRevoked": true,
+    "agentExited": true,
+    "note": "Reconnect probe initially observed AGENT_OFFLINE, then recovered and passed."
+  },
+  "automaticUpdates": {
+    "requiredCandidateProtocol": "central-runtime-update/v2",
+    "legacyJournalsReadable": true,
+    "publicChannelPublished": false,
+    "observedState": "waiting-for-package",
+    "observedCode": "UPDATE_HOST_PROTOCOL_INCOMPATIBLE"
+  },
+  "limitations": [
+    "Public v1 channel is intentionally incompatible; no v2 activation claimed.",
+    "Native page visual inspection unavailable; no screen capture or Accessibility permissions changed.",
+    "Real image generation and forced token-expiry renewal not exercised.",
+    "Debug/ad-hoc, not notarized; production isolation qualification unchanged."
+  ]
+}

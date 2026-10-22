@@ -870,6 +870,8 @@ fn main() {
                         next_check = std::time::Instant::now()
                             + std::time::Duration::from_secs(if result.is_ok() {
                                 86400
+                            } else if result == Err("UPDATE_STORAGE_BUSY") {
+                                30
                             } else {
                                 3600
                             });

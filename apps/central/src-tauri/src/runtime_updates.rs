@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 //! Native update authority. Only a signed complete runtime can become a candidate.
-use crate::{config, runtime_package};
+use crate::{config, model_proxy, runtime_package};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -19,6 +19,9 @@ type Result<T> = std::result::Result<T, &'static str>;
 const CHANNEL: &str = include_str!("../../../../harness/runtime-update-channel.json");
 const PIN: &str = include_str!("../../../../harness/upstream.json");
 const MAX_ARCHIVE: u64 = 1024 * 1024 * 1024;
+#[cfg(test)]
+#[path = "runtime_update_network_tests.rs"]
+mod network_tests;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Channel {
@@ -95,9 +98,40 @@ fn public_download(url: &str) -> bool {
     url.starts_with("https://github.com/LsYuanh/central-codex-platform/releases/download/")
         && !url.contains(['?', '#', '\\'])
 }
-fn client() -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
+fn proxy_error(error: config::Failure) -> &'static str {
+    match error.code {
+        "MODEL_PROXY_CONFIG_INVALID" | "MODEL_PROXY_URL_INVALID" => "UPDATE_PROXY_CONFIG_INVALID",
+        "MODEL_PROXY_SYSTEM_UNSUPPORTED" => "UPDATE_PROXY_UNSUPPORTED",
+        _ => "UPDATE_PROXY_UNAVAILABLE",
+    }
+}
+pub(crate) fn read_update_config(app_data: &Path) -> Result<config::ReadResponse> {
+    // Startup and the WebView briefly share this lock. Retry only a read,
+    // never a configuration mutation or a failed/unsafe storage operation.
+    for attempt in 0..5 {
+        match config::read(app_data) {
+            Ok(value) => return Ok(value),
+            Err(error) if error.code == "OPERATION_BUSY" => {
+                if attempt == 4 {
+                    return Err("UPDATE_STORAGE_BUSY");
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(_) => return Err("UPDATE_STORAGE_FAILED"),
+        }
+    }
+    unreachable!()
+}
+fn client_builder(proxy: &model_proxy::ModelProxy) -> Result<reqwest::blocking::ClientBuilder> {
+    // Share the exact explicit proxy/bypass rules used by model requests. Do not
+    // let reqwest independently discover different environment/system settings.
+    Ok(proxy
+        .client(reqwest::blocking::Client::builder())
+        .map_err(proxy_error)?
         .https_only(true)
+        // Keep one settings snapshot, but do not reuse proxy tunnels between
+        // metadata and long archive transfers after their response has ended.
+        .pool_max_idle_per_host(0)
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(60))
         .user_agent("Yuan-Zhou-runtime-updates")
@@ -117,36 +151,120 @@ fn client() -> Result<reqwest::blocking::Client> {
             } else {
                 attempt.stop()
             }
-        }))
+        })))
+}
+fn client() -> Result<reqwest::blocking::Client> {
+    let proxy = model_proxy::resolve().map_err(proxy_error)?;
+    client_builder(&proxy)?
         .build()
         .map_err(|_| "UPDATE_NETWORK_UNAVAILABLE")
 }
-fn get(url: &str, max: u64) -> Result<Vec<u8>> {
-    let response = client()?
-        .get(url)
-        // Runtime archives can take several minutes on ordinary LAN uplinks.
-        .timeout(Duration::from_secs(if max > 2 * 1024 * 1024 {
-            600
-        } else {
-            60
-        }))
+// Only idempotent update GETs are retried. Partial bytes never reach unpacking.
+fn transfer(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    max: u64,
+    timeout: Duration,
+    range: Option<(u64, u64, u64)>,
+) -> std::result::Result<Vec<u8>, (&'static str, bool)> {
+    let mut request = client.get(url).timeout(timeout);
+    if let Some((start, end, _)) = range {
+        request = request.header(reqwest::header::RANGE, format!("bytes={start}-{end}"));
+    }
+    let response = request
         .send()
-        .map_err(|_| "UPDATE_NETWORK_UNAVAILABLE")?;
+        .map_err(|_| ("UPDATE_NETWORK_UNAVAILABLE", true))?;
     if response.status().as_u16() == 404 {
-        return Err("UPDATE_CHANNEL_NOT_PUBLISHED");
+        return Err(("UPDATE_CHANNEL_NOT_PUBLISHED", false));
     }
     if !response.status().is_success() {
-        return Err("UPDATE_DOWNLOAD_FAILED");
+        return Err((
+            "UPDATE_DOWNLOAD_FAILED",
+            response.status().is_server_error(),
+        ));
     }
+    let (limit, expected) = if let Some((start, end, total)) = range {
+        if response.status().as_u16() == 206 {
+            let expected_header = format!("bytes {start}-{end}/{total}");
+            if response
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|v| v.to_str().ok())
+                != Some(expected_header.as_str())
+            {
+                return Err(("UPDATE_DOWNLOAD_RANGE_INVALID", false));
+            }
+            (end - start + 1, Some(end - start + 1))
+        } else if start == 0 && response.status().as_u16() == 200 {
+            // Servers may ignore Range; accept only an entire, size-checked file.
+            (total, Some(total))
+        } else {
+            return Err(("UPDATE_DOWNLOAD_RANGE_INVALID", false));
+        }
+    } else {
+        (max, None)
+    };
     let mut bytes = Vec::new();
     response
-        .take(max + 1)
+        .take(limit + 1)
         .read_to_end(&mut bytes)
-        .map_err(|_| "UPDATE_DOWNLOAD_FAILED")?;
-    if bytes.len() as u64 > max {
-        return Err("UPDATE_DOWNLOAD_TOO_LARGE");
+        .map_err(|_| ("UPDATE_DOWNLOAD_FAILED", true))?;
+    if bytes.len() as u64 > limit {
+        return Err(("UPDATE_DOWNLOAD_TOO_LARGE", false));
+    }
+    if expected.is_some_and(|n| bytes.len() as u64 != n) {
+        return Err(("UPDATE_DOWNLOAD_FAILED", true));
     }
     Ok(bytes)
+}
+fn retry_transfer(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    max: u64,
+    deadline: std::time::Instant,
+    range: Option<(u64, u64, u64)>,
+) -> Result<Vec<u8>> {
+    for attempt in 0..3 {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err("UPDATE_NETWORK_UNAVAILABLE");
+        }
+        match transfer(client, url, max, remaining, range) {
+            Ok(bytes) => return Ok(bytes),
+            Err((code, retryable)) => {
+                if !retryable || attempt == 2 {
+                    return Err(code);
+                }
+                std::thread::sleep(Duration::from_millis(250 << attempt).min(remaining));
+            }
+        }
+    }
+    unreachable!()
+}
+fn get(client: &reqwest::blocking::Client, url: &str, max: u64) -> Result<Vec<u8>> {
+    retry_transfer(
+        client,
+        url,
+        max,
+        std::time::Instant::now() + Duration::from_secs(60),
+        None,
+    )
+}
+fn download_archive(client: &reqwest::blocking::Client, url: &str, total: u64) -> Result<Vec<u8>> {
+    if total == 0 || total > MAX_ARCHIVE {
+        return Err("UPDATE_DOWNLOAD_TOO_LARGE");
+    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(600);
+    let mut archive = Vec::new();
+    while (archive.len() as u64) < total {
+        let start = archive.len() as u64;
+        let end = (start + 4 * 1024 * 1024).min(total) - 1;
+        // Verify each exact Content-Range before appending; the caller still
+        // checks the complete signed SHA-256 before extracting or activating.
+        let bytes = retry_transfer(client, url, total, deadline, Some((start, end, total)))?;
+        archive.extend_from_slice(&bytes);
+    }
+    Ok(archive)
 }
 pub(crate) fn authenticate(envelope: &Envelope) -> Result<Descriptor> {
     let channel: Channel = serde_json::from_str(CHANNEL).map_err(|_| "UPDATE_CHANNEL_INVALID")?;
@@ -881,7 +999,10 @@ impl Updater {
         let result = self.check_inner(app_data);
         if let Err(code) = result {
             self.set(
-                if code == "UPDATE_CHANNEL_NOT_PUBLISHED" {
+                if matches!(
+                    code,
+                    "UPDATE_CHANNEL_NOT_PUBLISHED" | "UPDATE_HOST_PROTOCOL_INCOMPATIBLE"
+                ) {
                     "waiting-for-package"
                 } else {
                     "failed"
@@ -896,8 +1017,7 @@ impl Updater {
         result
     }
     fn check_inner(&self, app_data: &Path) -> Result<()> {
-        let baseline = config::read(app_data)
-            .map_err(|_| "UPDATE_STORAGE_FAILED")?
+        let baseline = read_update_config(app_data)?
             .config
             .map(|c| c.runtime_package_id);
         let current = selection(app_data)?
@@ -916,7 +1036,11 @@ impl Updater {
         if let Some(s) = &current {
             self.status.lock().unwrap().current_version = authenticate(&s.active)?.version;
         }
+        // One read-only proxy snapshot per check, including any archive redirects.
+        // The next scheduled/manual check picks up changed Codex/system settings.
+        let network = client()?;
         let release: serde_json::Value = serde_json::from_slice(&get(
+            &network,
             "https://api.github.com/repos/openai/codex/releases/latest",
             1024 * 1024,
         )?)
@@ -933,9 +1057,9 @@ impl Updater {
         let channel: Channel =
             serde_json::from_str(CHANNEL).map_err(|_| "UPDATE_CHANNEL_INVALID")?;
         let envelope = Envelope {
-            payload: String::from_utf8(get(&channel.manifest_url, 2 * 1024 * 1024)?)
+            payload: String::from_utf8(get(&network, &channel.manifest_url, 2 * 1024 * 1024)?)
                 .map_err(|_| "UPDATE_DESCRIPTOR_INVALID")?,
-            signature: String::from_utf8(get(&(channel.manifest_url + ".sig"), 4096)?)
+            signature: String::from_utf8(get(&network, &(channel.manifest_url + ".sig"), 4096)?)
                 .map_err(|_| "UPDATE_SIGNATURE_INVALID")?,
         };
         let d = authenticate(&envelope)?;
@@ -975,7 +1099,7 @@ impl Updater {
             .ok_or("UPDATE_DESCRIPTOR_INVALID")?;
         if runtime_package::prepare_authenticated_update(&update_root, d.package.clone()).is_err() {
             self.set("downloading", None);
-            let archive = get(&d.archive_url, d.archive_bytes)?;
+            let archive = download_archive(&network, &d.archive_url, d.archive_bytes)?;
             if archive.len() as u64 != d.archive_bytes
                 || format!("{:x}", Sha256::digest(&archive)) != d.archive_sha256
             {
