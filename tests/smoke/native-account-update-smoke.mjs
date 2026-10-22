@@ -12,7 +12,7 @@ const root=mkdtempSync(join(tmpdir(),'native-account-update-'));
 const dist=join(root,'app/gateway/dist');mkdirSync(dist,{recursive:true});
 writeFileSync(join(root,'package.json'),'{"type":"module"}');
 writeFileSync(join(root,'manifest.json'),JSON.stringify({kind:'central-gateway-candidate',nativeWorker:{protocol:process.platform==='darwin'?'macos-seatbelt/v1':'windows-worker-host/v1',appServer:{sha256:'0'.repeat(64)},seatbeltProfile:{sha256:'0'.repeat(64)},host:{sha256:'0'.repeat(64)},privateFileHelper:{sha256:'0'.repeat(64)}}}));
-for(const name of ['native-service-host.js','central-management-contract.js','service-metrics.js'])copyFileSync(resolve('services/central-gateway/dist',name),join(dist,name));
+for(const name of ['native-service-host.js','central-management-contract.js','service-metrics.js','model-proxy.js'])copyFileSync(resolve('services/central-gateway/dist',name),join(dist,name));
 const {NativeServiceHost}=await import(pathToFileURL(join(dist,'native-service-host.js')));
 const jwt=(expiry,marker)=>'e30.'+Buffer.from(JSON.stringify({exp:expiry,marker})).toString('base64url')+'.synthetic';
 const old=jwt(Math.floor(Date.now()/1000)+600,'old'),updated=jwt(Math.floor(Date.now()/1000)+3600,'renewed');

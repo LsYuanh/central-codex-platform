@@ -15,6 +15,7 @@ tauri.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml = "0.9"
 sha2 = "0.10"
 url = "2"
 tempfile = "3"
@@ -30,6 +31,7 @@ der = "0.7.10"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 [target.'cfg(windows)'.dependencies]
+winreg = "0.55"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security_Cryptography", "Win32_Security_Authorization", "Win32_Security", "Win32_System_Threading", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_JobObjects"] }
 
 [target.'cfg(unix)'.dependencies]

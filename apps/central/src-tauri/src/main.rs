@@ -16,6 +16,7 @@ mod live_qa;
 #[cfg(all(test, target_os = "macos", debug_assertions))]
 mod macos_provision_qa;
 mod model_accounts;
+mod model_proxy;
 mod people;
 #[cfg(all(test, windows, debug_assertions))]
 mod people_ui_qa;

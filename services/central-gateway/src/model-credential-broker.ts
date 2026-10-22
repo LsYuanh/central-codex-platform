@@ -9,6 +9,7 @@ import {createModelPipeTls, MODEL_PIPE_SERVER_NAME} from "./model-pipe-tls.js";
 import {readWindowsPrivateJson, WindowsPrivateJsonError} from "./windows-private-json.js";
 import {catalogVersion, fetchModelCatalog} from "./model-catalog.js";
 import {ModelTransportError} from './model-transport-error.js';
+import {ModelTransport, type ModelProxy} from './model-proxy.js';
 import {imageRoute, validateImageRequest, sanitizeImageResponse, imageProviderError} from './image-generation.js';
 
 type Provider = {id:string;kind:"chatgpt"|"api-key";credentialFile:string;baseUrl?:string};
@@ -19,6 +20,7 @@ export type ModelCredentialLease = {token:string;release:()=>void};
 export type ModelPipeLease = ModelCredentialLease & {forwardPort:number;serverName:typeof MODEL_PIPE_SERVER_NAME;certificatePem:string;expiresAt:number;closed:Promise<void>};
 export type ModelCredentialBrokerOptions = {
   configFile:string;
+  proxy?:ModelProxy;
   /** Native parent bootstrap only; decrypted secrets remain in central memory. */
   memorySource?:{readConfig:()=>unknown;readCredential:(reference:string)=>unknown};
   /** Every directory writable by a Worker; also enforced on config reloads and missing files. */
@@ -134,12 +136,14 @@ export class ModelCredentialBroker {
   private readonly concurrent:number;
   private readonly userConcurrent:number;
   private readonly timeout:number;
+  private readonly transport:ModelTransport;
   private constructor(private readonly options:ModelCredentialBrokerOptions){
     this.bodyLimit=limit(options.maxBodyBytes,Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER);
     this.concurrent=limit(options.maxConcurrent,Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER);
     this.userConcurrent=limit(options.maxConcurrentPerUser,Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER);
     this.timeout=limit(options.timeoutMs,30*60_000,2*60*60_000);
     this.readConfig();
+    this.transport=new ModelTransport(options.proxy);
     this.server=http.createServer({maxHeaderSize:16*1024,requestTimeout:Math.min(this.timeout,60_000),headersTimeout:Math.min(this.timeout,15_000)},(request,response)=>{void this.handle(request,response);});
     this.server.maxConnections=256;
     this.server.on("clientError",(_error,socket)=>socket.destroy());
@@ -303,7 +307,8 @@ export class ModelCredentialBroker {
     const {provider}=this.binding(this.readConfig(),userId),credential=this.credential(provider);
     if(provider.kind!=='chatgpt')throw Error('MODEL_CATALOG_UNSUPPORTED');
     const url=this.endpoint(provider);url.pathname=url.pathname.replace(/\/responses$/,'/models');url.searchParams.set('client_version',version);
-    const body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},AbortSignal.timeout(4500));
+    const signal=AbortSignal.timeout(4500);
+    const body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},signal,this.transport.agent(url,signal));
     const models=JSON.parse(body.toString('utf8')).models as Array<{slug:string;visibility:string}>;
     return models.filter(model=>model.visibility==='list').map(model=>model.slug);
   }
@@ -356,7 +361,7 @@ export class ModelCredentialBroker {
         response.once('close',()=>controller?.abort());
         url.pathname=url.pathname.replace(/\/responses$/,'/models');url.searchParams.set('client_version',version);
         let body:Buffer;
-        try{body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},controller.signal);}
+        try{body=await fetchModelCatalog(url,{authorization:credential.authorization,'chatgpt-account-id':credential.accountId!,originator:'codex_cli_rs'},controller.signal,this.transport.agent(url,controller.signal));}
         catch(error){return fail(error instanceof ModelTransportError?error.code:'MODEL_CATALOG_UNAVAILABLE');}
         this.emit('model.catalog',lease.userId,'succeeded');
         response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});response.end(body);return;
@@ -419,7 +424,7 @@ export class ModelCredentialBroker {
         };
         signal.addEventListener("abort",cancel,{once:true});response.once("close",cancel);
         if(signal.aborted||response.destroyed){cancel();return;}
-        upstream=(url.protocol==="https:"?https:http).request(url,{method:"POST",headers,signal,agent:false},incoming=>{
+        upstream=(url.protocol==="https:"?https:http).request(url,{method:"POST",headers,signal,agent:this.transport.agent(url,signal)},incoming=>{
           incomingResponse=incoming;
           const status=incoming.statusCode??502;
           const encoding=String(incoming.headers["content-encoding"]??"identity").trim().toLowerCase();
@@ -484,5 +489,5 @@ export class ModelCredentialBroker {
       if(admitted&&lease){this.requests--;const n=(this.perUser.get(lease.userId)??1)-1;if(n)this.perUser.set(lease.userId,n);else this.perUser.delete(lease.userId);}
     }
   }
-  async close(){if(this.closed)return;this.closed=true;clearInterval(this.sweep);for(const key of this.leases.keys())this.release(key);this.server.closeAllConnections();await Promise.all([new Promise<void>(done=>this.server.close(()=>done())),...this.endpointClosures]);}
+  async close(){if(this.closed)return;this.closed=true;clearInterval(this.sweep);for(const key of this.leases.keys())this.release(key);this.transport.close();this.server.closeAllConnections();await Promise.all([new Promise<void>(done=>this.server.close(()=>done())),...this.endpointClosures]);}
 }

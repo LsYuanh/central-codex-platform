@@ -244,6 +244,10 @@ fn authenticate_args(
     refresh: bool,
     deadline: Duration,
 ) -> Result<Zeroizing<String>> {
+    if cancel.load(Ordering::SeqCst) {
+        return Err(failure("MODEL_SHARED_CANCELLED"));
+    }
+    let proxy = crate::model_proxy::resolve()?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -261,9 +265,10 @@ fn authenticate_args(
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
         // No API-key/auth/provider overrides from the parent. Preserve only OS
         // support and explicit transport trust/proxy settings needed to log in.
-        for name in ["SystemRoot","WINDIR","SystemDrive","TEMP","TMP","TMPDIR","HTTPS_PROXY","HTTP_PROXY","ALL_PROXY","NO_PROXY","SSL_CERT_FILE","CODEX_CA_CERTIFICATE"] {
+        for name in ["SystemRoot","WINDIR","SystemDrive","TEMP","TMP","TMPDIR","SSL_CERT_FILE","CODEX_CA_CERTIFICATE"] {
             if let Some(value) = std::env::var_os(name) { command.env(name, value); }
         }
+        command.envs(proxy.environment());
         if let Some(user_home) = home.parent() {
             command.env("HOME", user_home).env("USERPROFILE", user_home);
         }

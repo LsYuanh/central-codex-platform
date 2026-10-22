@@ -8,12 +8,14 @@ import {validateCentralConfig,type CentralConfig} from './central-management-con
 import type {PlatformAuth} from './platform-auth.js';
 import type {ModelCredentialBrokerOptions} from './model-credential-broker.js';
 import {ServiceMetricsEmitter,type ServiceMetrics} from './service-metrics.js';
+import {validateModelProxy,type ModelProxy} from './model-proxy.js';
 
 const protocol='central-service-host/v1';
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const fields=(v:Record<string,unknown>,names:string[])=>Object.keys(v).every(key=>names.includes(key));
 export class NativeServiceHost {
   readonly config:CentralConfig;
+  readonly modelProxy:ModelProxy;
   readonly tls:{cert:string;key:string};
   private account:Record<string,unknown>;
   private admin:{username:string;password:string}|undefined;
@@ -29,7 +31,8 @@ export class NativeServiceHost {
   private metricsStopped=false;
   private accountRevision=0;
   constructor(private instanceId:string,bootstrap:Record<string,unknown>){
-    if(!fields(bootstrap,['config','tls','account','admin','updateValidation']))throw Error('SERVICE_BOOTSTRAP_INVALID');
+    if(!fields(bootstrap,['config','tls','account','admin','updateValidation','modelProxy']))throw Error('SERVICE_BOOTSTRAP_INVALID');
+    this.modelProxy=validateModelProxy(bootstrap.modelProxy===undefined?{}:bootstrap.modelProxy);
     if(bootstrap.updateValidation!==undefined&&typeof bootstrap.updateValidation!=='boolean')throw Error('SERVICE_BOOTSTRAP_INVALID');
     this.validating=bootstrap.updateValidation===true;
     if(process.platform!=='win32'&&process.platform!=='darwin')throw Error('SERVICE_PLATFORM_UNSUPPORTED');

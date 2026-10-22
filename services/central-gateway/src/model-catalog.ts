@@ -9,12 +9,12 @@ export function catalogVersion(method: string | undefined, path: string | undefi
   return /^\/v1\/models\?client_version=(\d{1,5}\.\d{1,5}\.\d{1,5})$/.exec(path ?? '')?.[1];
 }
 
-export async function fetchModelCatalog(url: URL, headers: Record<string, string>, signal: AbortSignal): Promise<Buffer> {
+export async function fetchModelCatalog(url: URL, headers: Record<string, string>, signal: AbortSignal, agent:http.Agent|false=false): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const fail = () => reject(Error('MODEL_CATALOG_UNAVAILABLE'));
     const transportFail = (error:unknown) => reject(new ModelTransportError('CATALOG',signal.aborted?signal.reason:error));
     const request = (url.protocol === 'https:' ? https : http).get(url, {
-      headers: {...headers, accept: 'application/json', 'accept-encoding': 'identity'}, signal, agent: false,
+      headers: {...headers, accept: 'application/json', 'accept-encoding': 'identity'}, signal, agent,
     }, response => {
       // Never follow redirects or forward upstream diagnostics to a Worker.
       if (response.statusCode !== 200 ||

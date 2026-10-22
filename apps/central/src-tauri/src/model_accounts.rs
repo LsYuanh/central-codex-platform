@@ -20,6 +20,18 @@ pub mod renewal;
 #[path = "model_shared_login.rs"]
 pub mod shared;
 
+/// Network configuration uses the same OS-owned profile as shared login.
+pub(crate) fn codex_config_path() -> Result<std::path::PathBuf> {
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        Ok(profile::source()?.with_file_name("config.toml"))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        Err(failure("MODEL_PROXY_SYSTEM_UNSUPPORTED"))
+    }
+}
+
 #[cfg(all(test, windows))]
 pub(crate) fn store_service_fixture(app_data: &Path) -> String {
     let bundle = Bundle {

@@ -660,6 +660,8 @@ impl Service {
         }
         #[derive(Serialize)]
         struct Bootstrap<'a> {
+            #[serde(rename = "modelProxy")]
+            model_proxy: &'a crate::model_proxy::ModelProxy,
             #[serde(rename = "updateValidation", skip_serializing_if = "Option::is_none")]
             update_validation: Option<bool>,
             config: &'a CentralConfig,
@@ -670,9 +672,11 @@ impl Service {
         }
         // Preallocate the admitted maximum: secret serialization never reallocates.
         let mut bootstrap = SecretWriter(Zeroizing::new(Vec::with_capacity(1024 * 1024)));
+        let model_proxy = crate::model_proxy::resolve()?;
         serde_json::to_writer(
             &mut bootstrap,
             &Bootstrap {
+                model_proxy: &model_proxy,
                 update_validation: update_validation.then_some(true),
                 config: &config,
                 tls: Tls {

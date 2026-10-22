@@ -92,6 +92,11 @@ export function readDiscoveredAccount(value: unknown): DiscoveredAccount {
   return value as DiscoveredAccount;
 }
 const errors: Record<string, string> = {
+  MODEL_PROXY_CONFIG_INVALID: '本机 Codex 代理配置格式无效，请检查 config.toml 中的 features.respect_system_proxy。修正后重新启动中央服务。',
+  MODEL_PROXY_CONFIG_UNAVAILABLE: '无法读取本机 Codex 配置，请检查中央系统用户的配置文件访问权限。',
+  MODEL_PROXY_URL_INVALID: '中央代理地址无效，请检查代理地址、协议和端口，再重新启动中央服务。',
+  MODEL_PROXY_SYSTEM_UNAVAILABLE: '无法读取中央系统代理，请稍后重试。',
+  MODEL_PROXY_SYSTEM_UNSUPPORTED: '当前代理使用了暂不支持的协议或规则。中央目前支持静态 HTTP/HTTPS 代理，不支持 PAC、仅 SOCKS 或特殊主机排除规则。',
   MODEL_SHARED_ACCOUNT_CHANGED: '本机 Codex 已切换账号，已停止更新此连接的凭据。请重新点击“复用本机 Codex 登录”，再停止并启动中央服务。',
   MODEL_SHARED_SOURCE_CHANGED: '登录在检查期间发生变化，将重新读取并核对。',
   MODEL_SHARED_RELOGIN_REQUIRED: 'Codex 登录已失效，请在中央机重新登录 Codex，再点击“复用本机 Codex 登录”。',

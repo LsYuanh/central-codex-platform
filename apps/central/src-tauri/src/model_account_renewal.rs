@@ -29,7 +29,8 @@ impl Authority {
     }
     fn new(issuer: &str) -> Result<Self> {
         Ok(Self {
-            client: Client::builder()
+            client: crate::model_proxy::resolve()?
+                .client(Client::builder())?
                 .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(Duration::from_secs(5))
                 .timeout(Duration::from_secs(15))

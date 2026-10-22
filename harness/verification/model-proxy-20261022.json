@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-22",
+  "scope": "Codex proxy configuration reuse; source and isolated verification only",
+  "deploymentChanged": false,
+  "vpnSettingsChanged": false,
+  "checks": {
+    "gatewayBuild": true,
+    "centralTypeScriptAndVite": true,
+    "cargoFmt": true,
+    "centralCargoCheckWindows": true,
+    "nativeProxyTests": 5,
+    "nativeAccountTestsPassed": 12,
+    "nativeAccountTestsIgnored": 3,
+    "syntheticAuthenticationProcessExplicitCheck": true,
+    "proxyConnectTlsSmokeWindows": true,
+    "proxyConnectTlsSmokeMac": true,
+    "brokerRegressionMacChecks": 24,
+    "nativeAccountUpdateSmoke": true,
+    "transportErrorTests": 3
+  },
+  "liveReadOnlyCatalog": {
+    "ok": true,
+    "runtimeVersion": "0.163.0",
+    "modelCount": 9,
+    "elapsedMs": 2332,
+    "tlsVerified": true,
+    "inferenceSent": false,
+    "tokenRefreshRequested": false,
+    "systemProxyUnchanged": true,
+    "productionServiceRestarted": false
+  },
+  "limitations": [
+    "Mac native App build/start and installed Tauri error page not verified",
+    "Full production model/device turn and real OAuth expiry rotation not run",
+    "Windows legacy file-based broker smoke requires a trusted private helper fixture; file safety check was not relaxed",
+    "PAC, SOCKS-only and special local-host bypass rules unsupported",
+    "Gateway proxy snapshot reload requires service restart",
+    "New native bootstrap requires a matching complete trusted gateway runtime"
+  ]
+}
