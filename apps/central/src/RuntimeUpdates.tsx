@@ -7,6 +7,7 @@ const labels:Record<string,string>={idle:'等待自动检查',checking:'正在�
   'rolling-back':'正在恢复上一版','rolled-back':'已恢复上一版',updated:'更新已生效',
   'up-to-date':'已是最新兼容版本',failed:'检查或更新失败','activation-unconfirmed':'更新验证通过，开放连接尚未确认',unsupported:'此平台暂不支持自动更新'};
 const reasons:Record<string,string>={UPDATE_CHANNEL_NOT_PUBLISHED:'更新通道尚未发布兼容运行包。',
+  UPDATE_HOST_PROTOCOL_INCOMPATIBLE:'更新通道中的运行包尚不支持当前代理配置，继续使用已安装版本。',
   UPDATE_PREVIOUSLY_FAILED:'此运行包曾验证失败，等待后续修复版本。',UPDATE_NETWORK_UNAVAILABLE:'网络连接失败，稍后会自动重试。',
   SERVICE_UPDATE_UNSUPPORTED:'当前运行包不支持空闲切换，首次启用需要升级完整中央管理应用。',
   UPDATE_SIGNATURE_INVALID:'签名校验失败，已拒绝使用该运行包。'};

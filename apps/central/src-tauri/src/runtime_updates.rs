@@ -182,7 +182,10 @@ fn validate_descriptor(d: &Descriptor) -> Result<()> {
         .as_str()
         .ok_or("UPDATE_DESCRIPTOR_INVALID")?;
     if d.schema_version != 1
-        || d.host_protocol != "central-runtime-update/v1"
+        || !matches!(
+            d.host_protocol.as_str(),
+            "central-runtime-update/v1" | "central-runtime-update/v2"
+        )
         || d.sequence == 0
         || version(&d.version).is_none()
         || d.package["version"] != d.version
@@ -557,6 +560,15 @@ fn newer_release(d: &Descriptor, current: &str, sequence: Option<u64>) -> Result
     Ok(true)
 }
 
+// v1 envelopes remain readable for existing selection/rollback journals. New
+// installations must understand the private modelProxy bootstrap introduced in 0.1.8.
+pub(crate) fn require_proxy_protocol(d: &Descriptor) -> Result<()> {
+    if d.host_protocol != "central-runtime-update/v2" {
+        return Err("UPDATE_HOST_PROTOCOL_INCOMPATIBLE");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -611,6 +623,18 @@ mod tests {
         assert_eq!(newer_release(&d, "0.157.0", Some(19)), Ok(false));
         assert_eq!(newer_release(&d, "0.155.0", Some(19)), Ok(true));
         assert_eq!(newer_release(&d, "0.156.1", None), Ok(true));
+    }
+    #[test]
+    fn proxy_host_rejects_legacy_updates_but_can_read_old_journals() {
+        let mut d = descriptor();
+        assert!(validate_descriptor(&d).is_ok());
+        assert_eq!(
+            require_proxy_protocol(&d),
+            Err("UPDATE_HOST_PROTOCOL_INCOMPATIBLE")
+        );
+        d.host_protocol = "central-runtime-update/v2".into();
+        assert!(validate_descriptor(&d).is_ok());
+        assert!(require_proxy_protocol(&d).is_ok());
     }
     #[test]
     fn unsigned_or_forged_channel_is_rejected() {
@@ -880,10 +904,13 @@ impl Updater {
             .filter(|s| baseline.as_deref() == Some(s.baseline_id.as_str()) && !s.pending);
         let pin: serde_json::Value =
             serde_json::from_str(PIN).map_err(|_| "UPDATE_CHANNEL_INVALID")?;
+        let baseline_version = baseline
+            .as_deref()
+            .and_then(runtime_package::service_version);
         self.current(
-            pin["version"]
-                .as_str()
-                .ok_or("UPDATE_CHANNEL_INVALID")?
+            baseline_version
+                .as_deref()
+                .unwrap_or(pin["version"].as_str().ok_or("UPDATE_CHANNEL_INVALID")?)
                 .into(),
         );
         if let Some(s) = &current {
@@ -912,6 +939,7 @@ impl Updater {
                 .map_err(|_| "UPDATE_SIGNATURE_INVALID")?,
         };
         let d = authenticate(&envelope)?;
+        require_proxy_protocol(&d)?;
         let failed = root(app_data)?.join("failed-sequence.json");
         if failed.exists() {
             let metadata = fs::symlink_metadata(&failed).map_err(|_| "UPDATE_STORAGE_FAILED")?;

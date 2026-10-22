@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-22",
+  "scope": "Authorized central App and complete runtime deployment; no VPN modification or public channel publication",
+  "sourceBase": "af9aa08",
+  "sourceArchiveSha256": "9c3e0d71e46065121ce84780f00153880b720785a323ed236a309dd843a1ea49",
+  "appVersion": "0.1.8",
+  "runtimeVersion": "0.163.0",
+  "revision": 17,
+  "runtimeArchive": {
+    "bytes": 166045736,
+    "sha256": "3ede8a962b51b24ae0ba0a4483e6b02304e4603c3b4c7738c42147355916ead7"
+  },
+  "packageId": "macos-arm64-node24-qa1-4d50f400f8145b37",
+  "manifest": {
+    "path": "manifest.json",
+    "bytes": 177771,
+    "sha256": "4d50f400f8145b373c8aeafb18accfdf1de3c8e91f2ded552200bd722fbdb11a"
+  },
+  "dmgDigest": {
+    "bytes": 207958950,
+    "sha256": "a852b79852b69661240d38a2904d2e4ce7069580f7b9f042dabacfb219dd34e6"
+  },
+  "fileCount": 874,
+  "verification": {
+    "macNativeBuild": true,
+    "appSignature": "ad-hoc",
+    "dmgVerified": true,
+    "fullPackagePreflight": true,
+    "sharedAuthenticationStatus": true,
+    "otherConfigurationPreserved": true,
+    "runningGatewayMatchesInstalledPackage": true,
+    "macProxyTests": 5,
+    "macUpdateTests": 11,
+    "windowsUpdateTests": 10,
+    "vpnAndCodexConfigUnchanged": true,
+    "previousAppAndCompleteProfileBackedUp": true
+  },
+  "realClient": {
+    "model": "gpt-6.1-sol",
+    "agentVersion": "0.3.1",
+    "agentSha256": "2c40649b4d38a2139e959f34e14046af9f04565e67700e26d054a8aee9b1d470",
+    "passed": true,
+    "toolReadCount": 2,
+    "toolExecCount": 1,
+    "randomProofVerified": true,
+    "historyResumeVerified": true,
+    "persistedCredentialReconnectVerified": true,
+    "testDeviceRevoked": true,
+    "agentExited": true,
+    "localTokenRemoved": true
+  },
+  "automaticUpdates": {
+    "requiredCandidateProtocol": "central-runtime-update/v2",
+    "legacyJournalsReadable": true,
+    "publicChannelPublished": false,
+    "observedCode": "UPDATE_NETWORK_UNAVAILABLE"
+  },
+  "limitations": [
+    "Native page visual inspection unavailable: screen capture permission absent; no permissions changed.",
+    "Real image generation and forced token-expiry renewal not exercised in this deployment.",
+    "Debug/ad-hoc, not notarized; production isolation qualification unchanged."
+  ]
+}

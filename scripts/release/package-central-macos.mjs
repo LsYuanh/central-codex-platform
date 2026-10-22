@@ -10,7 +10,21 @@ import {inspectPinnedService} from '../build/stage-central-service-resource.mjs'
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const args=process.argv.slice(2);
 if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('MACOS_ARM64_REQUIRED');
-if(args.length!==6||args[0]!=='--node-exe'||args[2]!=='--node-license'||args[4]!=='--app-server')throw Error('Usage: node scripts/release/package-central-macos.mjs --node-exe <absolute Node24> --node-license <distribution LICENSE> --app-server <patched absolute binary>');
+if(![6,8].includes(args.length)||args[0]!=='--node-exe'||args[2]!=='--node-license'||args[4]!=='--app-server'||(args.length===8&&args[6]!=='--verified-runtime'))throw Error('Usage: node scripts/release/package-central-macos.mjs --node-exe <absolute Node24> --node-license <distribution LICENSE> --app-server <patched absolute binary> [--verified-runtime <existing authenticated package directory>]');
+let upstream;
+if(args[7]) {
+  // Reuse a fully inventoried deployed Harness without relabeling it as the
+  // historical baseline. The operator must authenticate the source package first.
+  if(!path.isAbsolute(args[7]))throw Error('ABSOLUTE_RUNTIME_REQUIRED');
+  const prior=await verifyCandidate(args[7]);
+  const binary=prior.files.find(f=>f.path==='bin/codex-app-server');
+  const actual=await digestFile(args[5]);
+  if(!binary||binary.sha256!==actual.sha256||binary.bytes!==actual.bytes)throw Error('RUNTIME_BINARY_MISMATCH');
+  const reviewed=JSON.parse(await readFile(path.join(root,'harness/upstream.json'),'utf8'));
+  const accepted=prior.upstream.version===reviewed.version?reviewed:reviewed.candidatePatches?.[prior.upstream.version];
+  if(!accepted||accepted.commit!==prior.upstream.commit)throw Error('UNREVIEWED_RUNTIME');
+  upstream=prior.upstream;
+}
 function run(command,parameters,cwd=root){
   const result=spawnSync(command,parameters,{cwd,env:process.env,stdio:'inherit'});
   if(result.error||result.status!==0)throw Error(`BUILD_FAILED:${path.basename(command)}:${result.status}`);
@@ -19,7 +33,7 @@ for(const project of ['packages/agentrpc-types','services/central-gateway']) {
   // Source sync may preserve incremental metadata from another platform.
   run(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'-b',path.join(root,project,'tsconfig.json'),'--force']);
 }
-const staged=await stageGateway({sourceRoot:root,nodeExe:args[1],nodeLicense:args[3],appServer:args[5],seatbeltProfile:path.join(root,'harness/worker-isolated.sb')});
+const staged=await stageGateway({sourceRoot:root,nodeExe:args[1],nodeLicense:args[3],appServer:args[5],seatbeltProfile:path.join(root,'harness/worker-isolated.sb'),upstream});
 const manifest=await verifyCandidate(staged.destination);
 const pin={id:staged.packageId,label:'macOS 中央服务 · Apple Silicon 测试包',version:manifest.upstream.version,platform:'darwin',architecture:'aarch64',marker:'yuan-zhou-remote-workspace/1',qualified:false,
   manifest:{path:'manifest.json',...await digestFile(path.join(staged.destination,'manifest.json'))},fileCount:manifest.files.length,
@@ -50,7 +64,7 @@ if(!/^\d+\.\d+\.\d+$/.test(appVersion))throw Error('INVALID_APP_VERSION');
 const dmg=path.join(output,`远舟中央管理_${appVersion}_aarch64.dmg`);
 run('/usr/bin/hdiutil',['create','-volname','远舟中央管理','-srcfolder',imageRoot,'-format','UDZO',dmg]);
 run('/usr/bin/hdiutil',['verify',dmg]);
-const report={appVersion,packageId:pin.id,app,dmg,manifest:pin.manifest,dmgDigest:await digestFile(dmg),build:'debug',signature:'ad-hoc',notarized:false,qualified:false};
+const report={appVersion,runtimeVersion:manifest.upstream.version,runtimeCommit:manifest.upstream.commit,packageId:pin.id,app,dmg,manifest:pin.manifest,dmgDigest:await digestFile(dmg),build:'debug',signature:'ad-hoc',notarized:false,qualified:false};
 await writeFile(path.join(output,'build-report.json'),JSON.stringify(report,null,2)+'\n');
 await writeFile(path.join(root,'target/central-macos/latest-build.json'),JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify(report,null,2));

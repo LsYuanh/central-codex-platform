@@ -71,7 +71,7 @@ try{
   const digest=await digestFile(archive);
   // Archive URLs are immutable per version/build; only the signed channel pointer moves.
   const sequence=Date.now();const releaseTag=`runtime-${report.latestVersion}-${sequence}`;
-  const descriptor={schemaVersion:1,version:report.latestVersion,sequence,hostProtocol:'central-runtime-update/v1',archiveUrl:`https://github.com/LsYuanh/central-codex-platform/releases/download/${releaseTag}/runtime.tar.gz`,archiveBytes:digest.bytes,archiveSha256:digest.sha256,package:packagePin};
+  const descriptor={schemaVersion:1,version:report.latestVersion,sequence,hostProtocol:'central-runtime-update/v2',archiveUrl:`https://github.com/LsYuanh/central-codex-platform/releases/download/${releaseTag}/runtime.tar.gz`,archiveBytes:digest.bytes,archiveSha256:digest.sha256,package:packagePin};
   await writeFile(join(output,'latest.json'),JSON.stringify(descriptor,null,2)+'\n');
   Object.assign(report,{status:'validated',releaseTag,archiveSha256:digest.sha256});
 }catch(error){Object.assign(report,{status:'needs-adaptation',code:error.message==='RUNTIME_SCHEMA_ADAPTATION_REQUIRED'?error.message:'RUNTIME_VALIDATION_FAILED'});}

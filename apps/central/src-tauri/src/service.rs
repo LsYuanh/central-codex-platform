@@ -253,6 +253,7 @@ impl Service {
         };
         // Reauthenticate and pin all candidate bytes before interrupting service admission.
         let descriptor = runtime_updates::authenticate(&candidate).map_err(failure)?;
+        runtime_updates::require_proxy_protocol(&descriptor).map_err(failure)?;
         let root = runtime_updates::root(app_data).map_err(failure)?;
         let _candidate_guard =
             runtime_package::prepare_authenticated_update(&root, descriptor.package)

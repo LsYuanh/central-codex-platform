@@ -130,7 +130,7 @@ else if(action==='--verify') {
   const resource=path.join(installed,'Contents/Resources/central-service',result.packageId);
   const manifest=await json(path.join(resource,'manifest.json'));
   const upstream=await json(path.join(work,'harness/upstream.json'));
-  if(manifest.upstream.version!==upstream.version||manifest.upstream.commit!==upstream.commit)throw Error('RUNTIME_VERSION_CHANGED');
+  if(manifest.upstream.version!==(state.built.runtimeVersion??upstream.version)||manifest.upstream.commit!==(state.built.runtimeCommit??upstream.commit))throw Error('RUNTIME_VERSION_CHANGED');
   const verified={verified:true,version,runtimeVersion:manifest.upstream.version,packageId:result.packageId,referenceOnly:true,otherConfigurationPreserved:true,gatewaySupportsUpdates:true,status:await status()};
   await save(path.join(runDir,'verification.json'),verified);console.log(JSON.stringify(verified));
 }

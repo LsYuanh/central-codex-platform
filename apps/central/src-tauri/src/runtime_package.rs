@@ -106,6 +106,14 @@ pub fn catalog() -> Vec<PublicPackage> {
     entries
 }
 
+pub(crate) fn service_version(id: &str) -> Option<String> {
+    service_catalog()
+        .packages
+        .into_iter()
+        .find(|p| p.id == id)
+        .map(|p| p.version)
+}
+
 fn relative_path(value: &str) -> bool {
     !value.is_empty()
         && !value.contains(['\\', ':'])
