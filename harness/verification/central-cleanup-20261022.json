@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-22",
+  "scope": "User-authorized central project cache, duplicate build artifact and historical backup cleanup",
+  "deletedEntries": 156,
+  "primaryCandidateGiB": 169.52463912963867,
+  "beforeFreeBytes": 13933670400,
+  "afterFreeBytes": 100952227840,
+  "actualFreedGiB": 81.042,
+  "projectBeforeKiB": 183225156,
+  "projectAfterKiB": 5993452,
+  "deletedCategories": [
+    "Cargo build output directories and registry/git/download caches",
+    "Duplicate central runtime packages, App bundles, disk images and client installers",
+    "Historical complete App/profile backups, failed deployment profiles and archived source snapshots",
+    "Completed v2 native update data backup",
+    "Unreferenced 0.3.0 client channel files and historical gateway backup"
+  ],
+  "preserved": [
+    "Installed central App 0.1.9 and active 0.163.0 v2 runtime",
+    "Live user data, accounts, pairing credentials, TLS material and configuration",
+    "Published 0.3.1 client update manifest and both referenced files",
+    "Extracted project sources, maintenance scripts, reports and active log",
+    "Node and Rust toolchain executables"
+  ],
+  "validation": {
+    "health": {
+      "ok": true,
+      "devices": 1,
+      "clients": 1
+    },
+    "appVersion": "0.1.9",
+    "revision": 19,
+    "runtimeVersion": "0.163.0",
+    "runtimeSequence": 1792645257293,
+    "runtimePackageId": "macos-arm64-node24-qa1-ce2ce6aa6b976e91",
+    "pending": false,
+    "activeRuntimeFilesVerified": 874,
+    "protectedFingerprintsUnchanged": true,
+    "protectedFingerprintScope": [
+      "App binary",
+      "central configuration",
+      "runtime selection",
+      "VPN proxy configuration",
+      "Codex configuration"
+    ],
+    "activeClientVersion": "0.3.1",
+    "activeClientManifestUnchanged": true,
+    "activeClientHashesMatchPublishedEvidence": true,
+    "activeClientHashes": {
+      "0.3.1-windows-x86_64.exe": "4efa9a3f7970f7659339b08b9724af9a875514289a9dded53cc6fc5e6f9e96b1",
+      "0.3.1-darwin-aarch64.app.tar.gz": "2c6451ebf32470fbbef6368bcce326d639b7839aa4f3f33e5ea8c69e6b8712f0"
+    },
+    "allPrimaryCandidatesAbsent": true,
+    "serviceRestarted": false,
+    "noCompilerProcessesOrOpenCandidateFilesAtDeletionCheck": true
+  },
+  "rollback": {
+    "historicalLocalAppAndDataSnapshotsRemoved": true,
+    "completedNativeBackupRemoved": true,
+    "selectionJournalUnchanged": true,
+    "nextUpdateBackupPolicyUnchanged": true,
+    "oldDeploymentRollbackCommandsNoLongerUsable": true
+  },
+  "limits": [
+    "No new model inference or full UI test in cleanup task",
+    "No changes to GitHub releases or this Windows workstation artifacts",
+    "Directory du totals do not represent uniquely reclaimable APFS blocks"
+  ]
+}
