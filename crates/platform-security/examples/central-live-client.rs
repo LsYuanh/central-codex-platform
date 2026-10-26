@@ -146,6 +146,21 @@ async fn run() -> Result<(), &'static str> {
                 if value.get("kind").and_then(Value::as_str)==Some("send"){
                     let message=value.get("message").ok_or("QA_HELPER_INPUT_INVALID")?;
                     socket.send(Message::Text(message.to_string().into())).await.map_err(|_|"QA_HELPER_SOCKET_FAILED")?;
+                }else if value.get("kind").and_then(Value::as_str)==Some("update-probe"){
+                    // Probe only this paired device. Keep credentials and leases
+                    // inside the native helper; never run an installer here.
+                    let credential=platform_security::device_token::load(&bootstrap.token_root,&bootstrap.namespace,&bootstrap.gateway).map_err(|_|"QA_HELPER_CREDENTIAL_FAILED")?;
+                    let client=platform_security::http(&bootstrap.ca_path).map_err(|_|"QA_HELPER_HTTP_FAILED")?;
+                    let origin=platform_security::origin(&bootstrap.gateway).map_err(|_|"QA_HELPER_TARGET_INVALID")?;
+                    let response=client.post(format!("{origin}/client-updates/prepare")).bearer_auth(credential.bearer()).header("x-update-version","0.3.3").send().await.map_err(|_|"QA_HELPER_HTTP_FAILED")?;
+                    let status=response.status().as_u16();
+                    let body:Value=response.json().await.map_err(|_|"QA_HELPER_HTTP_FAILED")?;
+                    if status==200 {
+                        let token=body["token"].as_str().filter(|s|s.len()==36).ok_or("QA_UPDATE_LEASE_INVALID")?;
+                        let released=client.post(format!("{origin}/client-updates/release")).bearer_auth(credential.bearer()).header("x-update-lease",token).send().await.map_err(|_|"QA_UPDATE_RELEASE_FAILED")?;
+                        if !released.status().is_success(){return Err("QA_UPDATE_RELEASE_FAILED");}
+                    }
+                    emit(json!({"kind":"update-probe","requestId":value["requestId"],"status":status,"reason":body["reason"],"leaseReleased":status==200}))?;
                 }else if value.get("kind").and_then(Value::as_str)==Some("close"){let _=socket.close(None).await;break;}
                 else{return Err("QA_HELPER_INPUT_INVALID");}
             }

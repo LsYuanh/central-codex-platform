@@ -37,6 +37,12 @@ async function until(predicate,ms,code){const deadline=Date.now()+ms;while(!pred
 function regular(filename){check(typeof filename==='string'&&path.isAbsolute(filename)&&!filename.split(/[\\/]/).some(p=>p==='..'),'QA_PATH_INVALID');const stat=lstatSync(filename);check(stat.isFile()&&!stat.isSymbolicLink(),'QA_BINARY_INVALID');return realpathSync(filename);}
 function writeHelper(message){check(helper&&!helper.stdin.destroyed,'QA_UI_UNAVAILABLE');const bytes=Buffer.from(JSON.stringify(message)+'\n');helper.stdin.write(bytes,()=>bytes.fill(0));}
 function send(message){writeHelper({kind:'send',message});}
+async function updateProbe(){
+  const requestId=randomUUID();let resolve,reject;const response=new Promise((r,j)=>{resolve=r;reject=j;});
+  pending.set(requestId,{resolve,reject});writeHelper({kind:'update-probe',requestId});
+  const timer=setTimeout(()=>reject(Error('QA_UPDATE_PROBE_TIMEOUT')),20000);
+  try{return await response;}finally{clearTimeout(timer);pending.delete(requestId);}
+}
 async function request(operation,payload={},timeout=45000){
   const requestId=randomUUID();let resolve,reject;const response=new Promise((r,j)=>{resolve=r;reject=j;});
   pending.set(requestId,{resolve,reject,operation});send({type:'request',requestId,operation,payload});
@@ -128,7 +134,7 @@ try{
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','proof.ps1'];
   config.commandArgs=args;
   const inputMarker='QA_INPUT_'+randomBytes(24).toString('hex');
-  const proofScript="$ErrorActionPreference='Stop'\n$proof='QA_EXEC_'+[Guid]::NewGuid().ToString('N')\n[IO.File]::WriteAllText((Join-Path (Get-Location).Path 'proof.txt'),$proof)\n[Console]::Out.WriteLine($proof)\n";
+  const proofScript="$ErrorActionPreference='Stop'\n$proof='QA_EXEC_'+[Guid]::NewGuid().ToString('N')\n[IO.File]::WriteAllText((Join-Path (Get-Location).Path 'proof.txt'),$proof)\n[Console]::Out.WriteLine($proof)\n"+(config.updatePreflight?"Start-Sleep -Seconds 15\n[IO.File]::WriteAllText((Join-Path (Get-Location).Path 'update-finished.txt'),'done')\n":"");
   writeFileSync(path.join(project,'input.txt'),inputMarker,{flag:'wx'});writeFileSync(path.join(project,'proof.ps1'),proofScript,{flag:'wx'});
   const env={};for(const name of ['SystemRoot','WINDIR','SystemDrive','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA'])if(process.env[name])env[name]=process.env[name];
   // Forward only the validated operator endpoint; the native helper independently
@@ -144,6 +150,7 @@ try{
       if(frame.kind==='paired'){check(typeof frame.deviceId==='string'&&/^[a-f0-9-]{36}$/.test(frame.deviceId),'QA_DEVICE_ID_INVALID');deviceId=frame.deviceId;if(!config.caPath){const bundledPath=regular(frame.caPath);check(bundledPath.startsWith(tokenRoot+path.sep),"QA_CA_OUTSIDE_TOKEN_ROOT");config.caPath=bundledPath;}}
       else if(frame.kind==='connected')connected=true;
       else if(frame.kind==='message')gatewayMessage(frame.message);
+      else if(frame.kind==='update-probe')pending.get(frame.requestId)?.resolve(frame);
       else if(frame.kind==='closed'){socketRevoked=frame.code===4001&&frame.reason==='DEVICE_REVOKED';if(!socketRevoked)fail('QA_UI_UNEXPECTED_CLOSE');helper.stdin.end();}
       else if(frame.kind==='cleanup')localRemoved=frame.localRemoved===true;
       else fail('QA_HELPER_PROTOCOL_INVALID');
@@ -246,18 +253,28 @@ try{
     // Native Codex persists a new Thread after its first Turn; do not resume an
     // empty Thread. Executing below must still use the captured old directory.
   }
-  const prompt=`This is an authorized, isolated client QA project ${config.legacyWorkspace?'inside the legacy workspace':'outside the default output directory'}. Perform exactly: 1. device_workspace_read_text path ${JSON.stringify(toolPath('input.txt'))}. 2. device_exec with ${JSON.stringify({program:config.powershell,args,cwd:config.toolCwd})}. Run that command exactly once. 3. device_workspace_read_text path ${JSON.stringify(toolPath('proof.txt'))}. ${config.legacyWorkspace?'4. Call device_workspace_apply_patch exactly once with this patch (approval is provided): '+JSON.stringify(config.patch)+'. ':''}Final answer contains only the two exact markers read from input.txt and proof.txt. Do not call other tools, write/edit files except the explicitly requested patch, inspect other directories, run central commands, or rerun the command. The pre-created script generates its random marker only when Local Agent runs it.`;
+  const prompt=`This is an authorized, isolated client QA project ${config.legacyWorkspace?'inside the legacy workspace':'outside the default output directory'}. Perform exactly: 1. device_workspace_read_text path ${JSON.stringify(toolPath('input.txt'))}. 2. device_exec with ${JSON.stringify({program:config.powershell,args,cwd:config.toolCwd,...(config.updatePreflight?{yieldMs:1000}:{})})}. Run that command exactly once. ${config.updatePreflight?'This intentionally leaves a harmless sleeping command session. Do not poll, cancel or wait for that session; the external QA controller handles completion. The script is also authorized to write update-finished.txt after sleeping. ':''}3. device_workspace_read_text path ${JSON.stringify(toolPath('proof.txt'))}. ${config.legacyWorkspace?'4. Call device_workspace_apply_patch exactly once with this patch (approval is provided): '+JSON.stringify(config.patch)+'. ':''}Final answer contains only the two exact markers read from input.txt and proof.txt. Do not call other tools, write/edit files except the explicitly requested patch, inspect other directories, run central commands, or rerun the command. The pre-created script generates its random marker only when Local Agent runs it.`;
   const permissionContext=config.permissionMode?`\nThe exact pre-created proof.ps1 contents are:\n${proofScript}\nI explicitly authorize this script to create proof.txt in this isolated QA project. That creation is the intended command effect. No other files may be modified.`:'';
   const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',...(personalSkill?{clientMessageId:randomUUID(),skills:[{id:personalSkill.id,revision:personalSkill.revision}]}:{}),input:[{type:'text',text:personalSkill?`$${personalSkill.name} Follow this selected personal skill exactly. Its resources are on the client. Run its proof script once as instructed and return the two markers.`:prompt+permissionContext}]});turnId=turn?.turn?.id;
+  if(config.updatePreflight){
+    await until(()=>[...toolCalls.values()].some(c=>c.tool==='device_exec'&&c.done),90000,'QA_YIELDED_COMMAND_MISSING');
+    const busy=await updateProbe();check(busy.status===409&&['active-turn','command-running','device-operation'].includes(busy.reason),'QA_UPDATE_RUNNING_NOT_BLOCKED');
+    emit({phase:'update-running-blocked',reason:busy.reason});
+  }
   await until(()=>turnDone,180000,'QA_MODEL_TURN_TIMEOUT');
   check(turnDone.status==='completed'&&!turnDone.error,'QA_MODEL_TURN_FAILED');
   const reads=[...toolCalls.values()].filter(call=>call.tool==='device_workspace_read_text'&&call.done&&call.succeeded),execs=[...toolCalls.values()].filter(call=>call.tool==='device_exec');
-  check(reads.length>=2&&execs.length===1&&execs[0].done&&execs[0].succeeded&&execs[0].exitCode===0,'QA_MODEL_TOOL_EVIDENCE_MISSING');
+  check(reads.length>=2&&execs.length===1&&execs[0].done&&execs[0].succeeded&&(config.updatePreflight?execs[0].exitCode===undefined:execs[0].exitCode===0),'QA_MODEL_TOOL_EVIDENCE_MISSING');
   const proofPath=path.join(project,'proof.txt'),proofStat=lstatSync(proofPath);check(proofStat.isFile()&&!proofStat.isSymbolicLink()&&proofStat.nlink===1&&proofStat.size<=128,'QA_PROOF_FILE_UNSAFE');
   const proof=readFileSync(proofPath,'utf8');check(/^QA_EXEC_[a-f0-9]{32}$/.test(proof)&&assistant.includes(inputMarker)&&assistant.includes(proof),'QA_RANDOM_PROOF_NOT_REPRODUCED');
   check(readFileSync(path.join(project,'proof.ps1'),'utf8')===proofScript,'QA_PROOF_SCRIPT_CHANGED');
   evidence={actualLocalAgent:true,externalProjectVerified:!config.legacyWorkspace,legacyWorkspaceVerified:!!config.legacyWorkspace,defaultOutputDirectory:workspace,projectDirectory:project,workspaceReadVerified:true,modelToolReadVerified:true,modelToolExecVerified:true,randomProofVerified:true,turnCompleted:true,runtimeMarkerVerified:true};
   summary={inputSha256:hash(inputMarker),proofSha256:hash(proof),toolReadCount:reads.length,toolExecCount:execs.length,marker};
+  if(config.updatePreflight){
+    await until(()=>existsSync(path.join(project,'update-finished.txt')),25000,'QA_SLEEPING_COMMAND_NOT_FINISHED');
+    const ready=await updateProbe();check(ready.status===200&&ready.leaseReleased,'QA_UPDATE_COMPLETED_SESSION_BLOCKED');
+    Object.assign(evidence,{updateRunningBlocked:true,updateCompletedWithoutModelPollAllowed:true,updateLeaseReleased:true,installerStarted:false});
+  }
   if(config.legacyWorkspace){
     check(config.patchApproved===true&&readFileSync(path.join(project,'compatibility-proof.txt'),'utf8')==='legacy-patch-ok\n','QA_LEGACY_PATCH_FAILED');
     const patches=[...toolCalls.values()].filter(c=>c.tool==='device_workspace_apply_patch');
