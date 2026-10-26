@@ -57,6 +57,14 @@ try {
   createInterface({input:serverProcess.stdout}).on('line',line=>{
     let message;try{message=JSON.parse(line);}catch{return;}
     if(message.method==='item/tool/call') {
+      if(message.params.namespace==='yuan_zhou_device_approval') {
+        if(message.params.tool==='prepare') {
+          assert.equal(message.params.arguments.tool,'device_skill_draft');
+          send({id:message.id,result:{success:true,contentItems:[{type:'inputText',text:JSON.stringify({token:'boundary-fixture',mode:'full',action:message.params.arguments})}]}});return;
+        }
+        assert.equal(message.params.tool,'complete');assert.equal(message.params.arguments.outcome,'approved');
+        message.params.tool='device_skill_draft';
+      }
       dynamicCalls++;
       assert.equal(message.params.tool,dynamicCalls===1?'device_workspace_context':'device_skill_draft');
       send({id:message.id,result:{success:true,contentItems:[{type:'inputText',text:'{"source":"simulated-client-fixture","os":"windows"}'}]}});

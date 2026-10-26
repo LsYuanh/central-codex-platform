@@ -69,6 +69,10 @@
         "sha256": "a0693a075f889411c7366e5dcd7f653a77226fe7e58e7a97532f7906dbf75ff9",
         "scope": "Windows remote AppContainer model-only authenticated TLS named pipe transport",
         "files": "adaptations/0.162.1-windows-model-files.json"
+      },
+      "deviceApprovalPatch": {
+        "path": "adaptations/0.162.1-device-approval.patch",
+        "sha256": "1d3179e404cda2e168f8d2010a7ea100d977196cd86c8d2481d0eaf5db9ae838"
       }
     },
     "0.163.0": {
@@ -83,6 +87,10 @@
       "basePatch": {
         "path": "adaptations/0.163.0-base.patch",
         "sha256": "532788f59f5d83a808547b85cd499109087baedebe74e287d0edb6a0dc964f03"
+      },
+      "deviceApprovalPatch": {
+        "path": "adaptations/0.163.0-device-approval.patch",
+        "sha256": "e68ad75829f257cc90a2795833e7c9f8e2d492e9a77fa2be1386570e000deec6"
       }
     }
   }

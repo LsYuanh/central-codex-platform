@@ -31,6 +31,7 @@ export function upstreamPatches(pin,version,commit,platform=process.platform) {
   // A Mac-reviewed adaptation must not silently reuse an older Windows overlay.
   if(adaptation?.platforms&&!adaptation.platforms.includes(platform))throw Error('UPSTREAM_ADAPTATION_PLATFORM_UNREVIEWED');
   return [adaptation?.basePatch??pin.patch,...(adaptation?[adaptation]:[]),
+    ...(adaptation?.deviceApprovalPatch?[adaptation.deviceApprovalPatch]:[]),
     ...(platform==='win32'?[pin.windowsPatch,adaptation?.windowsModelPatch??pin.windowsModelPatch]:[])];
 }
 export function upstreamHeaders(url,json,token) {

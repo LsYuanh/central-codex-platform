@@ -302,6 +302,7 @@ function operationForMethod(method: string): string | undefined {
     "model/list": "model.list",
     "collaborationMode/list": "collaboration.list",
     "thread/goal/get": "conversation.goal.get",
+    "thread/permissions/set": "conversation.permissions.set",
     "thread/goal/set": "conversation.goal.set",
     "thread/goal/clear": "conversation.goal.clear",
     "project/list": "project.list",

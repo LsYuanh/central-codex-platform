@@ -4,6 +4,7 @@ import { t, useLocale, message as uiMessage, errorMessage, UiError, useMessageSt
 
 import { useSkills, SkillsPanel, type Skill } from "./skills";
 import { SkillComposer, type ComposerDocument, type SkillMention } from "./SkillComposer";
+import { PermissionPicker, isPermissionMode, type PermissionMode } from "./PermissionPicker";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ComposerProjectPicker } from "./ComposerProjectPicker";
 import { useSidebarOrganization, useThreadDrag } from "./SidebarOrganization";
@@ -192,6 +193,9 @@ export default function App() {
   const [collaborationModes,setCollaborationModes] = useState<Record<string,"default"|"plan">>({});
   const [composerPopover,setComposerPopover] = useState<ComposerPopover>(null);
   const showComposerPopover = useCallback((value:ComposerPopover)=>{if(value&&modelPickerRef.current)modelPickerRef.current.open=false;setComposerPopover(value);},[]);
+  const [permissionModes,setPermissionModes] = useState<Record<string,PermissionMode>>({});
+  const [permissionSaving,setPermissionSaving] = useState(false);
+  const permission = permissionModes[threadId ?? "__new__"] ?? (threadId ? "ask" : "auto");
   const collaboration = collaborationModes[threadId ?? "__new__"] ?? "default";
   const [goalDraft,setGoalDraft]=useState(false);
   const closeGoalDetails=useCallback(()=>setComposerPopover(null),[]);
@@ -203,7 +207,7 @@ export default function App() {
   const projectService = useProjects(projectScope, appClientRef.current, mode === "central-gateway" && appState === "online" && platformCapabilities.projects === true);
   // The selector changes this draft's destination; sidebar navigation switches draft slots.
   const newDraftSlotRef = useRef("__new__:");
-  useEffect(() => { setDraftProject(undefined); setGoalDraft(false); setCollaborationModes({}); setComposerPopover(null); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
+  useEffect(() => { setDraftProject(undefined); setGoalDraft(false); setCollaborationModes({}); setPermissionModes({}); setPermissionSaving(false); setComposerPopover(null); newDraftSlotRef.current = "__new__:"; }, [projectScope]);
 
   const newDraftKey = () => newDraftSlotRef.current;
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -366,6 +370,8 @@ export default function App() {
   useEffect(() => { if (desktopRuntime) void loadRuntimeConfig(); }, [loadRuntimeConfig]);
 
   const syncRuntimeHistory = useCallback((id: string, result: unknown) => {
+    const restoredPermission = asRecord(result)?.permissionMode;
+    setPermissionModes(current=>({...current,[id]:isPermissionMode(restoredPermission)?restoredPermission:"ask"}));
     const restoredMode = asRecord(result)?.collaborationMode;
     if(restoredMode === "default" || restoredMode === "plan") setCollaborationModes(current=>({...current,[id]:restoredMode}));
     const thread = asRecord(asRecord(result)?.thread);
@@ -1281,7 +1287,7 @@ export default function App() {
   }, [threadId,turnId,composerDoc,composer,uncertainSubmission,appState,engineState,mode,attachments,deviceId,deviceState,skillService.rows,updateThreadMessages,updateUncertainSubmission,syncRuntimeHistory]);
 
   const sendTurn = useCallback(async (approvedPlan = false) => {
-    if (configApplyingRef.current) return;
+    if (configApplyingRef.current || permissionSaving) return;
     if (turnRunning) { if (!threadBusy && !attachments.adding) await sendSteering(); return; }
     const text = approvedPlan ? [t("请按上述计划开始实施。"),composer].filter(Boolean).join("\n\n") : composer;
     const selectedCollaboration = approvedPlan ? "default" : collaboration;
@@ -1311,6 +1317,7 @@ export default function App() {
         const project = draftProject ? projectService.projects.find(p => p.id === draftProject.id) : undefined;
         if (draftProject && (!project || !platformCapabilities.projects)) throw new UiError("项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留");
         const response = await codexia.threadStart({
+          ...(platformCapabilities.deviceApproval ? {permissionMode:permission} : {}),
           ...(project ? {projectId:project.id,projectRevision:project.revision} : {}),
           ...(appModel.trim() ? { model: appModel.trim() } : {}),
           ...(appServiceTier.trim() ? { serviceTier: appServiceTier.trim() } : {}),
@@ -1319,6 +1326,7 @@ export default function App() {
         targetThreadId = threadIdFromResult(response.result);
         if (!targetThreadId) throw new UiError("thread/start 返回中没有 thread.id");
         setThreadId(targetThreadId); threadIdRef.current = targetThreadId;
+        setPermissionModes(current=>({...current,[targetThreadId!]:platformCapabilities.deviceApproval?permission:"ask"}));
         setThreads(current => [{id:targetThreadId!,preview:text || refs[0]?.name,updatedAt:new Date().toISOString(),clientProject:readProject(asRecord(asRecord(response.result)?.thread)?.clientProject)},...current.filter(t=>t.id!==targetThreadId)]);
         updateThreadRunning(targetThreadId, true);
       }
@@ -1371,7 +1379,7 @@ export default function App() {
       sendGuard.current=false;pendingMessageRef.current=undefined;setSending(false);setSendStage("");
       if (creatingThread) setThreadBusy(undefined);
     }
-  }, [collaboration,models,platformCapabilities.planMode,draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composerDoc,composer,skillService.rows,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
+  }, [permissionSaving,permission,platformCapabilities.deviceApproval,collaboration,models,platformCapabilities.planMode,draftProject,projectService.projects,platformCapabilities.projects,appCwd,appEffort,appModel,appServiceTier,appState,engineState,composerDoc,composer,skillService.rows,threadBusy,threadId,turnRunning,attachments,deviceId,deviceState,mode,uncertainSubmission,updateThreadMessages,updateThreadRunning,updateThreadTurnId,updateUncertainSubmission,sendSteering]);
 
   const reconcileSubmission = async () => {
     if (!uncertainSubmission || !codexiaRef.current) return;
@@ -1394,6 +1402,7 @@ export default function App() {
   };
 
   const startNewConversation = useCallback((project?: ClientProject, initialSkill?: Skill, initialPrompt = "") => {
+    setPermissionModes(current=>({...current,__new__:"auto"}));
     if (appState !== "online" || threadBusy || sendGuard.current) return;
     persistCurrentDraft();
     setAppError("");
@@ -1533,17 +1542,32 @@ export default function App() {
     try {
       const project=draftProject?projectService.projects.find(p=>p.id===draftProject.id):undefined;
       if(draftProject&&!project)throw new UiError("项目暂不可用，请刷新项目列表或重新选择项目；草稿已保留");
-      const response=await client.threadStart({...(project?{projectId:project.id,projectRevision:project.revision}:{}),...(appModel?{model:appModel}:{}),...(appServiceTier?{serviceTier:appServiceTier}:{})});
+      const response=await client.threadStart({...(platformCapabilities.deviceApproval?{permissionMode:permission}:{}),...(project?{projectId:project.id,projectRevision:project.revision}:{}),...(appModel?{model:appModel}:{}),...(appServiceTier?{serviceTier:appServiceTier}:{})});
       const id=threadIdFromResult(response.result);
       if(!id||generation!==connectionGenerationRef.current)throw new Error(t("目标对话创建结果待核对"));
       setThreadId(id);threadIdRef.current=id;
+      setPermissionModes(current=>({...current,[id]:platformCapabilities.deviceApproval?permission:"ask"}));
       setCollaborationModes(current=>({...current,[id]:collaboration}));
       setThreads(rows=>[{id,updatedAt:new Date().toISOString(),clientProject:project},...rows.filter(row=>row.id!==id)]);
       return id;
     }finally{setThreadBusy(undefined);}
   };
 
+  const selectPermission = async (next: PermissionMode) => {
+    if (permissionSaving || turnRunning || sending || threadBusy || !platformCapabilities.deviceApproval) return;
+    const target = threadId, client = appClientRef.current, generation = connectionGenerationRef.current;
+    if (!target) {setPermissionModes(current=>({...current,__new__:next}));return;}
+    setPermissionSaving(true);
+    try {
+      await client!.request("thread/permissions/set",{threadId:target,permissionMode:next});
+      if(connectionGenerationRef.current!==generation || appClientRef.current!==client)return;
+      setPermissionModes(current=>({...current,[target]:next}));
+    } catch(error) {setAppError(errorMessage(error));}
+    finally {setPermissionSaving(false);}
+  };
+
   const sendComposer = async () => {
+    if(permissionSaving)return;
     if(!goalDraft){await sendTurn();return;}
     if(sendGuard.current||sending||threadBusy||turnRunning||configApplying||uncertainSubmission||appState!=="online"||deviceState!=="online"||!platformCapabilities.goals||collaboration==="plan")return;
     const objective=composer.trim(),client=appClientRef.current,generation=connectionGenerationRef.current;
@@ -1733,7 +1757,7 @@ export default function App() {
                   <div className="approval-heading"><span className="approval-icon">!</span><div><strong>{t("需要你的确认")}</strong><p>{approval.kind === "user-input" ? t("Codex 需要补充输入") : t("Codex 请求执行一项操作")}</p>{approval.kind!=="user-input"&&<><code className="approval-method">{approval.method}</code>{approval.method === "device/fileChange/requestApproval" && <p>{t("仅批准本次客户端补丁；Local Agent 将在执行前重新核对文件版本。目标设备、工作区及完整补丁如下。")}</p>}<pre>{JSON.stringify(approval.params, null, 2)}</pre></>}</div></div>
                   {approval.kind === "user-input" ? <UserInputQuestions key={String(approval.id)} params={approval.params} disabled={appState!=="online"} submit={sendApprovalResponse}/> :
                   approval.kind === "approval" ? (
-                    <div className="button-row"><button onClick={() => decideApproval("accept")}>{t("允许一次")}</button>{approval.method !== "device/fileChange/requestApproval" && <button className="button-secondary" onClick={() => decideApproval("acceptForSession")}>{t("本会话允许")}</button>}<button className="button-secondary" onClick={() => decideApproval("decline")}>{t("拒绝")}</button><button className="button-quiet" onClick={() => decideApproval("cancel")}>{t("取消")}</button></div>
+                    <div className="button-row"><button onClick={() => decideApproval("accept")}>{t("允许一次")}</button>{!approval.method.startsWith("device/") && <button className="button-secondary" onClick={() => decideApproval("acceptForSession")}>{t("本会话允许")}</button>}<button className="button-secondary" onClick={() => decideApproval("decline")}>{t("拒绝")}</button><button className="button-quiet" onClick={() => decideApproval("cancel")}>{t("取消")}</button></div>
                   ) : (
                     <div className="custom-response"><p>{t("该请求需要自定义 JSON 响应。")}</p><textarea value={approvalResponse} onChange={(event) => setApprovalResponse(event.target.value)} rows={4} /><button onClick={sendCustomApprovalResponse}>{t("发送 JSON 响应")}</button></div>
                   )}
@@ -1767,6 +1791,8 @@ export default function App() {
                     {mode === "central-gateway" && <ComposerActions control={goalControl} planMode={collaboration==="plan"} goalDraft={goalDraft} selectGoal={setGoalDraft} enabled={platformCapabilities.goals===true}
                       planSupported={platformCapabilities.planMode===true} planLocked={turnRunning||sending||!!threadBusy||appState!=="online"||!!uncertainSubmission} selectPlan={plan=>{setGoalDraft(false);selectCollaboration(plan?"plan":"default");}} focusComposer={()=>composerInputRef.current?.focus({preventScroll:true})}
                       pickFiles={attachments.pickFiles} pickerDisabled={attachments.pickerDisabled||goalDraft} popover={composerPopover} showPopover={showComposerPopover}/>}
+                    {mode === "central-gateway" && <PermissionPicker value={platformCapabilities.deviceApproval?permission:"ask"} supported={platformCapabilities.deviceApproval===true}
+                      disabled={turnRunning||sending||!!threadBusy||appState!=="online"||!!uncertainSubmission||goalControl.goal?.status==="active"} saving={permissionSaving} onChange={selectPermission}/>}
                     <details ref={modelPickerRef} className="model-picker" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }} onToggle={(event) => { if (!event.currentTarget.open) setOpenModelSubmenu(null); else setComposerPopover(null); }}>
                       <summary aria-label={[t("切换模型、推理强度和速度"), speedIndicatorLabel].filter(Boolean).join(". ")}>{acceleratedSpeed && <span className="model-picker-fast" title={speedIndicatorLabel} aria-hidden="true"><UiIcon name="bolt" /></span>}<span className="model-picker-name">{modelLabel}</span><span className="model-picker-meta">{appEffort || selectedModel?.defaultReasoningEffort || t("自动")}</span><span className="model-picker-chevron" aria-hidden="true"><UiIcon name="chevronDown" /></span></summary>
                       <div className="model-picker-popover">
@@ -1790,7 +1816,7 @@ export default function App() {
                       {turnRunning||goalControl.goal?.status==="active" ? (
                         <button className="send-button send-button-stop" type="button" aria-label={t("停止当前任务")} title={t("停止当前任务")} disabled={appState !== "online" || (sending && !steeringRequestRef.current)} onClick={() => void interruptTurn()}><PauseIcon /></button>
                       ) : (
-                        <button className="send-button" type="submit" aria-label={t("发送")} title={t("发送")} disabled={engineState === "unavailable" || sending || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || (goalDraft&&(deviceState!=="online"||goalControl.loading||collaboration==="plan")) || !composer.trim() && !attachments.drafts.length}><SendIcon /></button>
+                        <button className="send-button" type="submit" aria-label={t("发送")} title={t("发送")} disabled={engineState === "unavailable" || sending || permissionSaving || attachments.adding || Boolean(uncertainSubmission) || appState !== "online" || Boolean(threadBusy) || (goalDraft&&(deviceState!=="online"||goalControl.loading||collaboration==="plan")) || !composer.trim() && !attachments.drafts.length}><SendIcon /></button>
                       )}
                     </div>
                   </div>

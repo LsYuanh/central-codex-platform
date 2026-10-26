@@ -10,7 +10,7 @@ import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 const {chromium}=await loadPlaywright();
 await mkdir('target',{recursive:true});const output=await mkdtemp(resolve('target/task-control-ui-'));
-let capabilities={planMode:true,goals:true};
+let capabilities={planMode:true,goals:true,deviceApproval:true},permissionMode="auto",permissionError=false;
 let delayGoalRead=false;
 let sequence=0,goal=null,goalError=false,threadExists=false,selectedMode='default',turn=0,pendingQuestion;
 const calls=[],unexpected=[],threads=[],sockets=[];
@@ -31,8 +31,9 @@ gateway.on('connection',socket=>{sockets.push(socket);socket.on('message',raw=>{
     case 'session.initialize':data={userAgent:'task-control-protocol-fixture',platformCapabilities:capabilities};break;
     case 'model.list':data={data:[{id:'fixture',model:'fixture',displayName:'Fixture',isDefault:true,supportedReasoningEfforts:[]}]};break;
     case 'conversation.list':data={data:threadExists?[{id:'qa-thread',name:'模式验收',preview:'QA'}]:[]};break;
-    case 'conversation.create':threadExists=true;data={thread:{id:'qa-thread'}};break;
-    case 'conversation.resume':case 'conversation.read':data={thread:{id:'qa-thread',turns:threads,status:{type:'idle'}},collaborationMode:selectedMode};break;
+    case 'conversation.permissions.set':if(permissionError){error='PERMISSION_TEST_ERROR';break;} permissionMode=q.payload.permissionMode;data={permissionMode};break;
+    case 'conversation.create':permissionMode=q.payload.permissionMode;threadExists=true;data={thread:{id:'qa-thread'}};break;
+    case 'conversation.resume':case 'conversation.read':data={thread:{id:'qa-thread',turns:threads,status:{type:'idle'}},collaborationMode:selectedMode,permissionMode};break;
     case 'conversation.turn.create':{
       assert.equal(q.payload.collaborationMode.settings.developer_instructions,null);
       selectedMode=q.payload.collaborationMode.mode;const id=`turn-${++turn}`;data={turn:{id},submission:{status:'sent',turnId:id}};
@@ -60,6 +61,15 @@ try{
   for(const socket of sockets)emit(socket,'device/status',{agent:'online',deviceId:'qa'});
   const add=page.getByRole('button',{name:'添加',exact:true});
   const editor=page.locator('[contenteditable="true"]');
+  const permission=page.locator('.permission-picker summary');
+  await page.waitForFunction(()=>document.querySelector('.permission-picker summary')?.textContent==='帮我批准');
+  assert.equal(await permission.innerText(),'帮我批准');
+  await permission.focus();await permission.press('ArrowDown');
+  await page.getByRole('button',{name:/请求批准/}).waitFor();
+  await page.keyboard.press('Escape');assert.equal(await permission.evaluate(el=>el===document.activeElement),true);
+  await permission.click();await page.getByRole('button',{name:/^完全访问权限/}).click();
+  assert.equal(await permission.innerText(),'完全访问权限');
+  await permission.click();await page.getByRole('button',{name:/^帮我批准/}).click();
   await editor.fill('保留的草稿');
   const beforeMode=calls.length;
   await add.focus();await add.press('ArrowDown');
@@ -93,6 +103,15 @@ try{
   await page.screenshot({animations:'disabled',path:join(output,'plan-light.png')});
   await page.getByRole('button',{name:'开始实施',exact:true}).click();
   await page.getByText('Implementation complete.',{exact:true}).waitFor();
+  await permission.click();await page.getByRole('button',{name:/^请求批准/}).click();
+  await page.waitForFunction(()=>document.querySelector('.permission-picker summary')?.textContent==='请求批准');
+  assert.equal(permissionMode,'ask');permissionError=true;
+  await permission.click();await page.getByRole('button',{name:/^完全访问权限/}).click();
+  await page.getByRole('alert').filter({hasText:'PERMISSION_TEST_ERROR'}).waitFor();
+  assert.equal(await permission.innerText(),'请求批准');permissionError=false;
+  await permission.click();await page.screenshot({animations:'disabled',path:join(output,'permission-light.png')});
+  await page.getByRole('button',{name:/^帮我批准/}).click();
+  await page.waitForFunction(()=>document.querySelector('.permission-picker summary')?.textContent==='帮我批准');
   assert.equal(calls.filter(q=>q.operation==='conversation.turn.create').at(-1).payload.collaborationMode.mode,'default');
   await add.click();await page.getByRole('menuitem',{name:/目标/}).click();
   await page.getByRole('button',{name:'退出目标模式',exact:true}).waitFor();
@@ -254,6 +273,6 @@ try{
   assert.equal(calls.filter(q=>q.operation==='conversation.goal.get').length,beforeLegacy);
   await legacy.close();
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
-  await writeFile(join(output,'result.json'),JSON.stringify({ok:true,checks:['menu-keyboard-focus','popover-mutual-exclusion','menu-width','plan-draft-preservation','collapsed-goal-updates','goal-composer-draft-preservation','goal-start-no-extra-turn','goal-followup-keeps-objective','stop-pauses-goal','new-thread-only-on-send','thread-draft-and-goal-restore','lost-ack-reconcile-no-duplicate','english-menu','english-goal-composer','legacy-capabilities','plan-mode-wire','structured-questions','plan-visible','implement-default-mode','goal-edit-retry','no-budget-ui','pause-resume','legacy-budget-resume','goal-editor-active-save-order','stop-cancels-pending-goal-save','goal-editor-close-preserves-chat','goal-editor-revert','goal-editor-failure-stays-paused','goal-editor-remote-conflict','goal-editor-cleared-no-recreate','goal-editor-narrow-focus-trap','goal-editor-thread-draft-restore','goal-editor-english','new-goal-draft-retry','themes','narrow'],calls:calls.map(q=>q.operation)},null,2));
+  await writeFile(join(output,'result.json'),JSON.stringify({ok:true,checks:['permission-default-auto','permission-keyboard','permission-save-failure-keeps-selection','permission-three-modes','menu-keyboard-focus','popover-mutual-exclusion','menu-width','plan-draft-preservation','collapsed-goal-updates','goal-composer-draft-preservation','goal-start-no-extra-turn','goal-followup-keeps-objective','stop-pauses-goal','new-thread-only-on-send','thread-draft-and-goal-restore','lost-ack-reconcile-no-duplicate','english-menu','english-goal-composer','legacy-capabilities','plan-mode-wire','structured-questions','plan-visible','implement-default-mode','goal-edit-retry','no-budget-ui','pause-resume','legacy-budget-resume','goal-editor-active-save-order','stop-cancels-pending-goal-save','goal-editor-close-preserves-chat','goal-editor-revert','goal-editor-failure-stays-paused','goal-editor-remote-conflict','goal-editor-cleared-no-recreate','goal-editor-narrow-focus-trap','goal-editor-thread-draft-restore','goal-editor-english','new-goal-draft-retry','themes','narrow'],calls:calls.map(q=>q.operation)},null,2));
   console.log(JSON.stringify({ok:true,output}));
 }finally{await browser.close();await server.close();for(const s of sockets)s.close();await new Promise(r=>gateway.close(r));}

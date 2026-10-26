@@ -1,0 +1,209 @@
+diff --git a/codex-rs/core/src/tools/handlers/dynamic.rs b/codex-rs/core/src/tools/handlers/dynamic.rs
+--- a/codex-rs/core/src/tools/handlers/dynamic.rs
++++ b/codex-rs/core/src/tools/handlers/dynamic.rs
+@@ -120,6 +120,7 @@
+         &self,
+         invocation: ToolInvocation,
+     ) -> Result<Box<dyn crate::tools::context::ToolOutput>, FunctionCallError> {
++        let review_invocation = invocation.clone();
+         let ToolInvocation {
+             session,
+             turn,
+@@ -139,15 +140,24 @@
+         };
+ 
+         let args: Value = parse_arguments(&arguments)?;
+-        let response = request_dynamic_tool(
+-            &session,
+-            turn.as_ref(),
+-            call_id,
+-            self.tool_name.clone(),
+-            args,
+-            cancellation_token,
+-        )
+-        .await
++        let response = if crate::remote_workspace::enabled()
++            && !crate::remote_workspace::plan_tool(&self.tool_name.name)
++            && !matches!(
++                self.tool_name.name.as_str(),
++                "device_output_paths" | "device_list_outputs"
++            ) {
++            request_reviewed_device_tool(&review_invocation, args).await
++        } else {
++            request_dynamic_tool(
++                &session,
++                turn.as_ref(),
++                call_id,
++                self.tool_name.clone(),
++                args,
++                cancellation_token,
++            )
++            .await
++        }
+         .ok_or_else(|| {
+             FunctionCallError::RespondToModel(
+                 "dynamic tool call was cancelled before receiving a response".to_string(),
+@@ -281,3 +291,119 @@
+ #[cfg(test)]
+ #[path = "dynamic_tests.rs"]
+ mod tests;
++
++// Included in the pinned dynamic handler by the reviewed version overlay.
++// The reserved transport tools are never registered in the model tool catalog.
++async fn request_reviewed_device_tool(
++    invocation: &ToolInvocation,
++    arguments: Value,
++) -> Option<DynamicToolResponse> {
++    use crate::guardian::{GuardianApprovalRequest, GuardianReviewContext, GuardianReviewOptions};
++    use codex_protocol::config_types::ApprovalsReviewer;
++    use codex_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
++    use codex_protocol::protocol::{AskForApproval, ReviewDecision};
++    let transport = |name: &str| ToolName::new(Some("yuan_zhou_device_approval".into()), name);
++    let prepared = request_dynamic_tool(
++        &invocation.session,
++        &invocation.turn,
++        format!("{}:prepare", invocation.call_id),
++        transport("prepare"),
++        serde_json::json!({"tool":invocation.tool_name.name,"arguments":arguments}),
++        invocation.cancellation_token.clone(),
++    )
++    .await?;
++    if !prepared.success {
++        return Some(prepared);
++    }
++    let data: Value = match prepared.content_items.first() {
++        Some(DynamicToolCallOutputContentItem::InputText { text }) => {
++            serde_json::from_str(text).ok()?
++        }
++        _ => return None,
++    };
++    let token = data.get("token")?.as_str()?;
++    let live_config = invocation.session.get_config().await;
++    let requirements = live_config.config_layer_stack.requirements();
++    let mandatory = requirements
++        .auto_review_required_for_model(&invocation.step_context.settings.model_info.slug)
++        || requirements
++            .approvals_reviewer
++            .can_set(&ApprovalsReviewer::User)
++            .is_err();
++    let mode = if mandatory {
++        "auto"
++    } else {
++        data.get("mode")?.as_str()?
++    };
++    let (outcome, reason) = match mode {
++        "full" => ("approved", String::new()),
++        "ask" => ("manual", String::new()),
++        "auto" => {
++            let mut context = GuardianReviewContext::from(&invocation.step_context);
++            // Review a remote operation as an external tool, without granting central permissions.
++            context.approval_policy = AskForApproval::OnRequest;
++            context.approvals_reviewer = ApprovalsReviewer::AutoReview;
++            let request = GuardianApprovalRequest::McpToolCall {
++                id: invocation.call_id.clone(), server: "yuan_zhou_local_agent".into(),
++                tool_name: invocation.tool_name.name.clone(), arguments: Some(data["action"].clone()),
++                connector_id: None, connector_name: Some("远舟客户端 Local Agent".into()),
++                connector_description: None, connected_account_email: None, tool_title: None,
++                tool_description: Some("Execute the exact prepared operation on the connected client. Paths are client paths, never central paths. No implicit authorization follows from the default output directory.".into()),
++                annotations: None,
++            };
++            let review = crate::guardian::spawn_approval_decision(
++                invocation.session.clone(),
++                context,
++                crate::guardian::new_guardian_review_id(),
++                request,
++                crate::tools::sandboxing::ApprovalRequestReasons {
++                    approval: Some("Client device operation".into()),
++                    retry: None,
++                },
++                GuardianReviewOptions {
++                    require_guardian: true,
++                    require_synchronous_review: true,
++                    plugin_attribution_override: None,
++                    approval_request_source:
++                        codex_analytics::GuardianApprovalRequestSource::MainTurn,
++                    external_cancel: Some(invocation.cancellation_token.clone()),
++                },
++            );
++            match review.await.ok().flatten() {
++                Some(ReviewDecision::Approved | ReviewDecision::ApprovedForSession) => {
++                    ("approved", String::new())
++                }
++                Some(ReviewDecision::Denied { rejection }) => ("denied", rejection),
++                Some(ReviewDecision::Abort) => ("cancelled", "Native review cancelled".into()),
++                Some(ReviewDecision::TimedOut) => (
++                    "unavailable",
++                    "Native review timed out; manual approval required".into(),
++                ),
++                _ => (
++                    "unavailable",
++                    "Native reviewer unavailable; manual approval required".into(),
++                ),
++            }
++        }
++        _ => ("cancelled", "Invalid device permission mode".into()),
++    };
++    let outcome = if mandatory && outcome == "unavailable" {
++        "cancelled"
++    } else {
++        outcome
++    };
++    let outcome = if invocation.cancellation_token.is_cancelled() {
++        "cancelled"
++    } else {
++        outcome
++    };
++    request_dynamic_tool(
++        &invocation.session,
++        &invocation.turn,
++        invocation.call_id.clone(),
++        transport("complete"),
++        serde_json::json!({"token":token,"outcome":outcome,"reason":reason}),
++        invocation.cancellation_token.clone(),
++    )
++    .await
++}
+diff --git a/codex-rs/app-server/src/extensions.rs b/codex-rs/app-server/src/extensions.rs
+--- a/codex-rs/app-server/src/extensions.rs
++++ b/codex-rs/app-server/src/extensions.rs
+@@ -69,6 +69,7 @@
+         builder.turn_start_admission(admission);
+     }
+     if codex_core::remote_workspace::enabled() {
++        codex_guardian_v2::install_reviewer(&mut builder, thread_manager.clone());
+         if codex_core::remote_workspace::image_generation_enabled() {
+             // The extension emits inline bytes; client persistence belongs to Local Agent.
+             codex_image_generation_extension::install(&mut builder, auth_manager.clone(), |_| None);
+diff --git a/codex-rs/core/src/remote_workspace.rs b/codex-rs/core/src/remote_workspace.rs
+--- a/codex-rs/core/src/remote_workspace.rs
++++ b/codex-rs/core/src/remote_workspace.rs
+@@ -3,8 +3,7 @@
+ use serde_json::Value;
+ use std::sync::OnceLock;
+ 
+-pub const MARKER: &str =
+-    "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1 yuan-zhou-plan-goal/1";
++pub const MARKER: &str = "yuan-zhou-remote-workspace/1 yuan-zhou-managed-skills/1 yuan-zhou-conversation-read/1 yuan-zhou-plan-goal/1 yuan-zhou-device-approval/1";
+ 
+ /// These device operations inspect client state. General exec is deliberately
+ /// excluded: a shell string cannot reliably prove that it has no side effects.
+diff --git a/codex-rs/ext/guardian-v2/src/sync_reviewer/reviewer_config.rs b/codex-rs/ext/guardian-v2/src/sync_reviewer/reviewer_config.rs
+--- a/codex-rs/ext/guardian-v2/src/sync_reviewer/reviewer_config.rs
++++ b/codex-rs/ext/guardian-v2/src/sync_reviewer/reviewer_config.rs
+@@ -11,8 +11,14 @@
+ 
+ pub(crate) fn build_reviewer_config(parent_config: &Config) -> anyhow::Result<Config> {
+     let mut config = parent_config.clone();
+-    config.model_provider.request_max_retries = Some(1);
+-    config.model_provider.stream_max_retries = Some(1);
++    // Remote broker owns retries; the native pipe rejects client-side replay.
++    let retries = if codex_core::remote_workspace::enabled() {
++        0
++    } else {
++        1
++    };
++    config.model_provider.request_max_retries = Some(retries);
++    config.model_provider.stream_max_retries = Some(retries);
+     // Approvals wait for TurnComplete; post-turn compaction must not delay it.
+     config.model_post_turn_compact_threshold_percent = 0;
+     config.include_skill_instructions = false;

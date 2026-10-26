@@ -12,6 +12,7 @@ import net from 'node:net';
 import {WebSocket} from 'ws';
 import {PlatformAuth} from '../../services/central-gateway/dist/platform-auth.js';
 
+const testDeviceReview=process.argv.includes('--device-approval');
 const root=await mkdtemp(join(tmpdir(),'worker-routing-'));
 const sockets=[],processes=[],workerPids=new Set(),checks=[],agentRequests=[];
 const authFile=join(root,'auth.json'),stateFile=join(root,'state.json'),auditDir=join(root,'audit');
@@ -31,7 +32,7 @@ rl.createInterface({input:process.stdin}).on('line',line=>{
  const q=JSON.parse(line);if(!q.method){responses.push(q);fs.writeFileSync('responses.json',JSON.stringify(responses));return;}
  if(q.method==='model/list'&&q.params.fixture==='crash')process.exit(27);
  let result={};
- if(q.method==='initialize')result={userAgent:'routing-protocol-fixture yuan-zhou-remote-workspace/1'+(q.params.clientInfo?.name==='legacy-runtime'?'':' yuan-zhou-conversation-read/1')};
+ if(q.method==='initialize')result={userAgent:'routing-protocol-fixture yuan-zhou-remote-workspace/1'+(q.params.clientInfo?.name==='legacy-runtime'?'':' yuan-zhou-conversation-read/1')+(process.env.TEST_DEVICE_REVIEW==='1'?' yuan-zhou-device-approval/1':'')};
  if(q.method==='model/list')result={pid:process.pid,responses,reads,lastTools,deletes};
  if(q.method==='thread/delete'){
    deletes.push(q.params.threadId);
@@ -48,7 +49,7 @@ for(const user of users){const dir=join(root,'workers',createHash('sha256').upda
 const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
 const base=`https://localhost:${port}`,gateway=`wss://localhost:${port}/ws`;
 let log='';
-const env={...process.env,CODEX_BIN:process.execPath,PLATFORM_DEVICE_AUTH_MODE:'legacy-mtls-v1',PLATFORM_WORKER_ISOLATION:'protocol-fixture',TEST_GATEWAY_HOST:'127.0.0.1',TEST_GATEWAY_PORT:String(port),TEST_GATEWAY_STATE_FILE:stateFile,PLATFORM_AUTH_FILE:authFile,PLATFORM_TLS_CERT:cert,PLATFORM_TLS_KEY:key,PLATFORM_WORKER_ROOT:join(root,'workers'),PLATFORM_AUDIT_DIR:auditDir,PLATFORM_WORKER_RESTART_MS:'100',PLATFORM_WORKER_IDLE_MS:'60000'};
+const env={...process.env,TEST_DEVICE_REVIEW:testDeviceReview?'1':'0',CODEX_BIN:process.execPath,PLATFORM_DEVICE_AUTH_MODE:'legacy-mtls-v1',PLATFORM_WORKER_ISOLATION:'protocol-fixture',TEST_GATEWAY_HOST:'127.0.0.1',TEST_GATEWAY_PORT:String(port),TEST_GATEWAY_STATE_FILE:stateFile,PLATFORM_AUTH_FILE:authFile,PLATFORM_TLS_CERT:cert,PLATFORM_TLS_KEY:key,PLATFORM_WORKER_ROOT:join(root,'workers'),PLATFORM_AUDIT_DIR:auditDir,PLATFORM_WORKER_RESTART_MS:'100',PLATFORM_WORKER_IDLE_MS:'60000'};
 function start(extra={}){const child=spawn(process.execPath,[resolve('services/central-gateway/dist/index.js')],{env:{...env,...extra},windowsHide:true,stdio:['ignore','pipe','pipe']});processes.push(child);child.stdout.on('data',d=>log+=d);child.stderr.on('data',d=>log+=d);return child;}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label,ms=10000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;await sleep(30);}throw Error(`Timeout: ${label}; ${log.slice(-1200)}`);}
@@ -59,8 +60,8 @@ async function connect(path,token,onMessage){const socket=new WebSocket(path,{ca
 async function client(login,device){const events=[],pending=new Map();const socket=await connect(`${gateway}?deviceId=${device.deviceId}`,login.accessToken,m=>{events.push(m);if(m.type==='response')pending.get(m.requestId)?.(m);});return{socket,events,request:(operation,payload={})=>new Promise((resolve,reject)=>{const requestId=randomUUID(),timer=setTimeout(()=>{pending.delete(requestId);reject(Error('Request timeout: '+operation));},5000);pending.set(requestId,m=>{clearTimeout(timer);pending.delete(requestId);m.ok?resolve(m.data):reject(Error(m.error));});socket.send(JSON.stringify({type:'request',requestId,operation,payload}));})};}
 function envelope(type,payload,requestId){return{protocol:'agentrpc',version:1,type,timestamp:new Date().toISOString(),nonce:randomUUID(),...(requestId?{requestId}:{}),payload};}
 async function device(login){const keys=generateKeyPairSync('ed25519'),raw=keys.publicKey.export({format:'der',type:'spki'}).subarray(-32);const code=await post('/auth/pair-code',{},login.accessToken);const paired=await post('/auth/pair',{code:code.code,publicKey:raw.toString('base64'),name:'routing protocol Agent fixture'},login.accessToken);const challenge=await post('/auth/device/challenge',{sessionId:login.sessionId,deviceId:paired.deviceId});const proof=await post('/auth/device/prove',{nonce:challenge.nonce,signature:sign(null,Buffer.from(challenge.message),keys.privateKey).toString('base64')});
- let ready=false;const socket=await connect(`${gateway}/agent?deviceId=${paired.deviceId}`,proof.ticket,m=>{if(m.type==='agent.hello_ack')ready=true;if(m.type!=='agent.request')return;agentRequests.push(m);socket.send(JSON.stringify(envelope('agent.response',{ok:true,result:m.payload.method==='workspace/context'?{workspaceRoot:'C:/routing-fixture',os:'windows',rules:[]}:{content:'protocol fixture response'}},m.requestId)));});
- socket.send(JSON.stringify(envelope('agent.hello',{deviceId:paired.deviceId,agent:{version:'routing-fixture',os:'windows',arch:'x64',deviceKey:paired.deviceKey,workspaceRoot:'C:/routing-fixture',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context','workspace/read_text']}})));await until(()=>ready,'Agent fixture hello');return paired;}
+ let ready=false;const socket=await connect(`${gateway}/agent?deviceId=${paired.deviceId}`,proof.ticket,m=>{if(m.type==='agent.hello_ack')ready=true;if(m.type!=='agent.request')return;agentRequests.push(m);socket.send(JSON.stringify(envelope('agent.response',{ok:true,result:m.payload.method==='workspace/context'?{workspaceRoot:'C:/routing-fixture',os:'windows',rules:[]}:m.payload.method==='workspace/apply_patch'&&m.payload.params.dryRun?{patchHash:'fixture-hash',expectedVersions:{'a.txt':'missing'},expectedPaths:{'a.txt':'C:/routing-fixture/a.txt'}}:m.payload.method==='workspace/apply_patch'?{outcome:'completed'}:{content:'protocol fixture response'}},m.requestId)));});
+ socket.send(JSON.stringify(envelope('agent.hello',{deviceId:paired.deviceId,agent:{version:'routing-fixture',os:'windows',arch:'x64',deviceKey:paired.deviceKey,workspaceRoot:'C:/routing-fixture',capabilities:['client-paths/v1','remote-workspace/v1','workspace/context','workspace/read_text','workspace/apply_patch']}})));await until(()=>ready,'Agent fixture hello');return paired;}
 async function emit(index,messages){const path=join(runtimeDirs[index],'inbox.json'),temp=path+'.tmp';await writeFile(temp,JSON.stringify(messages));await rename(temp,path);await until(async()=>{try{await access(path);return false;}catch{return true;}},'fixture reads message batch');}
 const approval=threadId=>({id:'reused-upstream-approval',method:'item/tool/requestUserInput',params:{threadId,questions:[{id:'secret',question:'ALICE_PRIVATE_PROMPT'}]}});
 async function init(ui,name='worker-routing-protocol-fixture'){await ui.request('session.initialize',{clientInfo:{name,version:'1'}});const info=await ui.request('model.list');workerPids.add(info.pid);return info.pid;}
@@ -145,6 +146,61 @@ try{
  const beforeLiveTool=agentRequests.length;await emit(0,[tool()]);
  await until(async()=>{const info=await a.request('model.list');return info.responses.some(r=>r.id==='buffered-tool'&&r.result.success===true);},'live fixture tool reaches Agent');
  assert(agentRequests.length>beforeLiveTool);assert(agentRequests.some(r=>r.payload.method==='read_file'));
+ if(testDeviceReview){
+   const currentMode=()=>a.request('conversation.read',{threadId}).then(r=>r.permissionMode);
+   assert.equal(await currentMode(),'auto');
+   await assert.rejects(b.request('conversation.permissions.set',{threadId,permissionMode:'full'}),/does not belong/);
+   await assert.rejects(a.request('conversation.permissions.set',{threadId,permissionMode:'bogus'}),/PERMISSION_MODE_INVALID/);
+   let actionNumber=0;
+   async function prepareAction(mode,args={program:'powershell',args:['-Command','Write-Output reviewed']},tool='device_exec'){
+     await a.request('conversation.permissions.set',{threadId,permissionMode:mode});
+     assert.equal(await currentMode(),mode);
+     const id='prepare-'+ ++actionNumber;
+     await emit(0,[{id,method:'item/tool/call',params:{threadId,turnId:'review-turn',namespace:'yuan_zhou_device_approval',tool:'prepare',arguments:{tool,arguments:args}}}]);
+     let response;await until(async()=>{response=(await a.request('model.list')).responses.find(r=>r.id===id);return !!response;},'prepared action');
+     assert.equal(response.result.success,true,JSON.stringify(response));
+     return JSON.parse(response.result.contentItems[0].text);
+   }
+   async function completeAction(prepared,outcome,expectPrompt=false){
+     const id='complete-'+actionNumber,boundary=a.events.length;
+     await emit(0,[{id,method:'item/tool/call',params:{threadId,turnId:'review-turn',namespace:'yuan_zhou_device_approval',tool:'complete',arguments:{token:prepared.token,outcome,reason:'fixture review decision'}}}]);
+     if(expectPrompt){
+       await until(()=>a.events.slice(boundary).some(e=>e.type==='approval.request'),'manual fallback');
+       const prompt=a.events.slice(boundary).find(e=>e.type==='approval.request');
+       assert.equal(prompt.method,'device/operation/requestApproval');
+       a.socket.send(JSON.stringify({type:'approval.response',requestId:prompt.requestId,result:{decision:'accept'}}));
+     }
+     let response;await until(async()=>{response=(await a.request('model.list')).responses.find(r=>r.id===id);return !!response;},'completed reviewed action');
+     if(!expectPrompt)assert(!a.events.slice(boundary).some(e=>e.type==='approval.request'));
+     return response.result;
+   }
+   for(const [mode,outcome,manual] of [['auto','approved',false],['full','approved',false],['ask','manual',true],['auto','unavailable',true]]){
+     const before=agentRequests.length,prepared=await prepareAction(mode);
+     assert.equal(agentRequests.length,before,'prepare must not execute');
+     assert.equal(prepared.mode,mode);assert.equal(prepared.action.source,'client');
+     assert.equal((await completeAction(prepared,outcome,manual)).success,true);
+     assert.equal(agentRequests.filter(r=>r.payload.method==='exec').length>0,true);
+     await emit(0,[{id:'replay-'+actionNumber,method:'item/tool/call',params:{threadId,turnId:'review-turn',namespace:'yuan_zhou_device_approval',tool:'complete',arguments:{token:prepared.token,outcome:'approved'}}}]);
+     await until(async()=>{const r=(await a.request('model.list')).responses.find(r=>r.id==='replay-'+actionNumber);return r?.result.success===false;},'one-use token rejects replay');
+   }
+   const patchBefore=agentRequests.length,patch=await prepareAction('auto',{patch:'*** Begin Patch\n*** Add File: a.txt\n+reviewed\n*** End Patch'},'device_workspace_apply_patch');
+   assert.equal(agentRequests.length,patchBefore+1,'patch preparation only previews');
+   assert.equal(agentRequests.at(-1).payload.params.dryRun,true);
+   assert.equal(patch.action.arguments.dryRun,false);assert.deepEqual(patch.action.arguments.expectedPaths,{'a.txt':'C:/routing-fixture/a.txt'});
+   await assert.rejects(a.request('conversation.permissions.set',{threadId,permissionMode:'full'}),/PERMISSION_MODE_BUSY/);
+   const patchResult=await completeAction(patch,'approved');assert.equal(patchResult.success,true,JSON.stringify(patchResult));
+   const {__remoteWorkspace:reviewBinding,...executedPatch}=agentRequests.at(-1).payload.params;
+   assert.equal(reviewBinding.deviceKey,patch.action.deviceKey);
+   assert.deepEqual(executedPatch,patch.action.arguments,'dispatch must use the exact reviewed snapshot');
+   const beforeDenied=agentRequests.length,denied=await prepareAction('auto');
+   assert.equal((await completeAction(denied,'denied')).success,false);
+   assert.equal(agentRequests.length,beforeDenied,'native denial must never execute');
+   const beforeBypass=agentRequests.length;
+   await emit(0,[{id:'review-bypass',method:'item/tool/call',params:{threadId,turnId:'review-turn',tool:'device_exec',arguments:{program:'powershell',args:['-Command','Remove-Item file']}}}]);
+   await until(async()=>{const r=(await a.request('model.list')).responses.find(r=>r.id==='review-bypass');return r?.result.success===false;},'unwrapped mutation denied');
+   assert.equal(agentRequests.length,beforeBypass);
+   pass('device permissions persist per thread; native auto/full execution, manual/unavailable confirmation, deny, replay and raw-exec bypass prevention');
+ }
  // Trigger synchronous fail-closed shutdown on the first line of one stdout batch.
  // A second buffered tool line must not execute after runtimeUnavailable cleanup.
  const segment=join(auditDir,'audit-00000001.jsonl');await rename(segment,segment+'.preserved');await mkdir(segment);

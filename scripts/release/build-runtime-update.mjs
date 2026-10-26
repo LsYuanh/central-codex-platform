@@ -11,6 +11,7 @@ import {stageGateway,verifyCandidate,digestFile} from '../build/stage-central-ga
 const [outputArg,licenseArg,requestedVersion]=process.argv.slice(2);
 if(!outputArg||!licenseArg||process.platform!=='darwin'||process.arch!=='arm64')throw Error('Usage on isolated Mac arm64: node scripts/release/build-runtime-update.mjs NEW_OUTPUT NODE_LICENSE [STABLE_VERSION]');
 const root=resolve('.'),output=resolve(outputArg);
+const pin=JSON.parse(await readFile(join(root,'harness/upstream.json'),'utf8'));
 const sourceRevision=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'});
 const sourceCommit=sourceRevision.stdout?.trim();
 if(sourceRevision.status!==0||! /^[a-f0-9]{40}$/.test(sourceCommit))throw Error('RUNTIME_SOURCE_COMMIT_REQUIRED');
@@ -49,6 +50,11 @@ try{
   const probe=(command,args)=>{try{run(command,args);}catch{probeFailed=true;}};
   probe(process.execPath,['harness/runtime-smoke.mjs',binary]);
   probe(process.execPath,['harness/plan-goal-smoke.mjs',binary]);
+  if(pin.candidatePatches?.[report.latestVersion]?.deviceApprovalPatch) {
+    probe(process.execPath,['harness/device-approval-smoke.mjs',binary]);
+    probe(process.execPath,['tests/smoke/device-approvals-smoke.mjs']);
+    probe(process.execPath,['tests/smoke/worker-routing-smoke.mjs','--device-approval']);
+  }
   probe(process.execPath,['harness/image-generation-smoke.mjs',binary]);
   probe(process.execPath,['harness/model-catalog-smoke.mjs',binary,join(report.source,'codex-rs/models-manager/models.json'),report.latestVersion]);
   probe(process.execPath,['harness/thread-delete-smoke.mjs',binary]);

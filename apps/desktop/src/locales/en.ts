@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "操作权限": "Operation permissions",
+  "请求批准": "Ask for approval",
+  "帮我批准": "Approve for me",
+  "完全访问权限": "Full access",
+  "读取直接执行，命令和文件写入先由你确认": "Read directly; ask before commands and file writes",
+  "由 Codex 原生审核，需要你决定时再询问": "Use native Codex review; ask when your decision is needed",
+  "免除逐次审批，可操作本机账号有权访问的文件和网络": "Skip per-action approvals within this computer account’s file and network permissions",
+  "正在保存权限…": "Saving permissions…",
+  "中央运行包尚不支持权限选择，请升级后使用": "Upgrade the central runtime to enable permission selection",
+  "任务结束后可以切换权限": "Permissions can be changed after the task finishes",
   "预览不可用，仍可发送": "Preview unavailable; you can still send this file",
   "部分已读取": "Partially read",
   "编辑目标": "Edit goal", "关闭目标编辑器": "Close goal editor", "撤销修改": "Revert changes", "未保存的修改": "Unsaved changes", "已同步目标": "Goal synced",

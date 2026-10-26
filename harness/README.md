@@ -477,3 +477,9 @@ preserves evidence, and enables the QA-only controls/history fixture flags. See
 ### Built-in creator catalog capacity (2026-09-22, not deployed)
 
 The managed host catalog limit is now 101: the existing 100 personal skills plus the single platform-owned `yuan-zhou-skill-creator`. The insertion source, pinned patch and source/patch hashes were updated together. The upstream version and the managed-only scan boundary are unchanged; central native `skill-creator` remains excluded. Deploy with the matching newly built Harness, not only a gateway update. Patch preparation and tamper checks pass locally; this change has not yet had binary/model QA or been deployed to the LAN central host.
+
+### Native device approvals (2026-10-26, source only)
+
+The version-pinned `deviceApprovalPatch` overlays for 0.162.1 and 0.163.0 install only the synchronous Guardian reviewer in remote mode. They do not enable host executors, general subagents or plugins. The dynamic handler reviews remote side effects through a private prepare/complete exchange; specific read tools remain direct. Managed reviewer constraints are retained. Windows remote reviewer retries must stay at zero because the authenticated pipe transport rejects replay.
+
+`node harness/device-approval-smoke.mjs ABSOLUTE_APP_SERVER [WINDOWS_ISOLATION_LAUNCHER]` exercises the actual native Guardian against synthetic model/device fixtures, including auto allow/deny, ask/full, client-path context and central command denial. Windows uses the existing AppContainer launcher and broker pipe/TLS. This verifies the native integration, not real-model risk classification. Mac candidate packaging runs this probe when the pinned overlay exists; Mac build and real central acceptance are still required before publishing.

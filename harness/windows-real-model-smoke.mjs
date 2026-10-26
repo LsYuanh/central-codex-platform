@@ -80,6 +80,7 @@ $proof='QA_EXEC_' + [Guid]::NewGuid().ToString('N')
   readTool.inputSchema = {type: 'object', properties: {path: {type: 'string', enum: ['input.txt', 'proof.txt']}}, required: ['path'], additionalProperties: false};
   const execTool = {type: 'function', name: 'device_exec', description: 'Run the single pre-approved QA PowerShell fixture on the bound client. All arguments must match the supplied command exactly.',
     inputSchema: {type: 'object', properties: {program: {type: 'string', enum: [powershell]}, args: {type: 'array', items: {type: 'string'}}, cwd: {type: 'string', enum: ['.']}}, required: ['program', 'args', 'cwd'], additionalProperties: false}};
+  let preparedOperation;
   session = createWindowsRuntimeSession({launcher, runtime, root: join(output, 'worker'), lease, model,
     onAgentMessage(text, turnId) {
       assert(answerChecks.length < 64);
@@ -88,6 +89,18 @@ $proof='QA_EXEC_' + [Guid]::NewGuid().ToString('N')
     async onToolCall(params) {
       await bounded(turnReady, 10000, 'QA_TURN_BINDING_TIMEOUT');
       assert(threadId && taskId && params.threadId === threadId && params.turnId === taskId, 'QA_TOOL_TURN_MISMATCH');
+      if(params.namespace==='yuan_zhou_device_approval') {
+        // This existing opt-in fixture authorizes exactly one QA command, not arbitrary full access.
+        if(params.tool==='prepare') {
+          assert(!preparedOperation);assert.equal(params.arguments.tool,'device_exec');
+          assert.deepEqual(params.arguments.arguments,{program:powershell,args:commandArgs,cwd:'.'});
+          const token=randomUUID();preparedOperation={token,arguments:params.arguments.arguments};
+          return {success:true,contentItems:[{type:'inputText',text:JSON.stringify({token,mode:'full',action:params.arguments})}]};
+        }
+        assert.equal(params.tool,'complete');assert.equal(params.arguments.outcome,'approved');
+        assert(preparedOperation);assert.equal(params.arguments.token,preparedOperation.token);
+        params={...params,namespace:null,tool:'device_exec',arguments:preparedOperation.arguments};preparedOperation=undefined;
+      }
       assert(params.namespace == null, 'QA_TOOL_NAMESPACE_DENIED');
       assert(typeof params.callId === 'string' && params.callId.length > 0 && params.callId.length <= 256 && !callIds.has(params.callId), 'QA_TOOL_CALL_ID_INVALID');
       callIds.add(params.callId); assert(callIds.size <= 8, 'QA_TOOL_CALL_LIMIT');

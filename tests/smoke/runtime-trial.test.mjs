@@ -69,7 +69,7 @@ test('0.163.0 preserves the older adaptation and changes only cancellation/shell
   const candidate=pin.candidatePatches['0.163.0'],previous=pin.candidatePatches['0.162.1'];
   assert.equal(candidate.commit,'83086188ae0614bd882818ff1aa23f3194962012');
   const patches=upstreamPatches(pin,'0.163.0',candidate.commit,'darwin');
-  assert.deepEqual(patches,[candidate.basePatch,candidate]);
+  assert.deepEqual(patches,[candidate.basePatch,candidate,candidate.deviceApprovalPatch]);
   assert.throws(()=>upstreamPatches(pin,'0.163.0','0'.repeat(40),'darwin'),/COMMIT_MISMATCH/);
   for(const platform of ['win32','linux']){
     assert.throws(()=>upstreamPatches(pin,'0.163.0',candidate.commit,platform),/PLATFORM_UNREVIEWED/);
@@ -108,11 +108,11 @@ test('Windows 0.162.1 selects only its reviewed model overlay; Mac and older rel
   const pin=JSON.parse(readFileSync(new URL('../../harness/upstream.json',import.meta.url)));
   const next=pin.candidatePatches['0.162.1'];
   const mac=upstreamPatches(pin,'0.162.1',next.commit,'darwin');
-  assert.deepEqual(mac,[next.basePatch,next]);
+  assert.deepEqual(mac,[next.basePatch,next,next.deviceApprovalPatch]);
   assert.equal(createHash('sha256').update(Buffer.concat(mac.map(p=>readFileSync(new URL('../../harness/'+p.path,import.meta.url))))).digest('hex'),
-    // Capacity gates were removed from the reviewed base patch on 2026-10-19.
-    '974a6e854a7e536b0df53b787d198bea6548700cb62ed186fb882f9f5bcea26c');
-  assert.deepEqual(upstreamPatches(pin,'0.162.1',next.commit,'win32'),[next.basePatch,next,pin.windowsPatch,next.windowsModelPatch]);
+    // Includes the version-pinned native device-review overlay (2026-10-26).
+    '341e5d87e8bb0478bf370a403b4065a643cd8d5091ae018db94b96899c109f6d');
+  assert.deepEqual(upstreamPatches(pin,'0.162.1',next.commit,'win32'),[next.basePatch,next,next.deviceApprovalPatch,pin.windowsPatch,next.windowsModelPatch]);
   const old=pin.candidatePatches['0.159.2'];
   assert.deepEqual(upstreamPatches(pin,'0.159.2',old.commit,'win32'),[pin.patch,old,pin.windowsPatch,pin.windowsModelPatch]);
   assert.deepEqual(upstreamPatches(pin,pin.version,pin.commit,'win32'),[pin.patch,pin.windowsPatch,pin.windowsModelPatch]);
