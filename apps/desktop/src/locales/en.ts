@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "重试安装": "Retry installation",
   "操作权限": "Operation permissions",
   "请求批准": "Ask for approval",
   "帮我批准": "Approve for me",

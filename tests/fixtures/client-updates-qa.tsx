@@ -5,8 +5,8 @@ import {ClientUpdatePanel,SidebarSettingsRow,useClientUpdates} from "../../apps/
 import "../../apps/desktop/src/styles.css";
 const test=window as any;
 test.isTauri=true;
-test.updateFixture={checkFail:false,downloadFail:false,current:false,calls:[]};
-test.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(command:string,args:any)=>{
+test.updateFixture={checkFail:false,downloadFail:false,current:false,ready:false,installConsumed:false,calls:[]};
+test.updateFixtureInvoke=async(command:string,args:any)=>{
   const f=test.updateFixture;f.calls.push(command);
   if(command==="desktop_update_check"){if(f.checkFail)throw Error("检查更新超时，请重试");return f.current?{current:true}:{version:"0.2.0",notes:"新增版本更新\n保留设置、配对和已有对话"};}
   if(command==="desktop_update_download"){
@@ -15,10 +15,16 @@ test.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invo
     args.onEvent.onmessage({stage:"verifying",received:4194304,total:4194304});
     await new Promise(r=>setTimeout(r,f.verifyDelay??200));
     if(f.downloadFail)throw Error("更新包签名校验失败，未安装任何内容");
-    return{version:"0.2.0",notes:"新增版本更新",ready:true};
+    f.ready=true;return{version:"0.2.0",notes:"新增版本更新",ready:true};
   }
-  if(command==="desktop_update_install")throw Error("还有对话或本机操作正在进行，请结束后再安装");
-}};
+  if(command==="desktop_update_install"){
+    if(f.installConsumed)f.ready=false;
+    throw {message:f.installConsumed?"安装更新失败，请重新下载或使用安装包修复。已恢复 Local Agent。":"本机命令仍在运行，请结束后重试安装",ready:f.ready};
+  }
+};
+// Native WebView QA retains the real, immutable IPC object and aliases only
+// this fixture's core module. Browser QA uses the same invocation scenarios.
+if(!test.__TAURI_INTERNALS__)test.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invoke:test.updateFixtureInvoke};
 function Fixture(){const[enabled,setEnabled]=useState(true);const update=useClientUpdates("test",enabled);const[busy,setBusy]=useState(false);test.setUpdateBusy=setBusy;test.setUpdateEnabled=setEnabled;
   const [sidebar,setSidebar]=useState(false);test.setUpdateSidebar=setSidebar;
   return <main className="settings-page" style={{background:"var(--canvas)"}}>{sidebar && <div style={{width:280,padding:8,background:"var(--shell)"}}><SidebarSettingsRow release={update.release} openSettings={()=>test.updateFixture.navigation="settings"} openUpdates={()=>test.updateFixture.navigation="updates"}/></div>}<ClientUpdatePanel update={update} version="0.1.0" busy={busy} enabled={enabled}/></main>;

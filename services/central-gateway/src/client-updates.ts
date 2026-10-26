@@ -5,6 +5,10 @@ import { join, resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const UPDATE_LIMIT = 512 * 1024 * 1024;
+export type UpdateBusyReason = "active-turn" | "device-operation" | "command-running" | "command-state-unknown" | "agent-unavailable" | "install-lease";
+export class UpdateDeviceBusy extends Error {
+  constructor(public readonly reason: UpdateBusyReason) { super("UPDATE_DEVICE_BUSY"); }
+}
 const targets = new Set(["windows-x86_64", "darwin-aarch64", "darwin-x86_64"]);
 const filename = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,179}$/;
 export type ClientRelease = { version: string; notes: string; pub_date: string; platforms: Record<string, { file: string; signature: string }> };
@@ -31,8 +35,9 @@ export class ClientUpdates {
     if (lease && lease.expires <= Date.now()) this.leases.delete(device);
     return this.leases.has(device);
   }
-  prepare(device: string, token: string, busy: boolean, version?: string) {
-    if (this.locked(device) || busy) throw Error("UPDATE_DEVICE_BUSY");
+  prepare(device: string, token: string, busy: boolean | UpdateBusyReason, version?: string) {
+    if (this.locked(device)) throw new UpdateDeviceBusy("install-lease");
+    if (busy) throw new UpdateDeviceBusy(busy === true ? "device-operation" : busy);
     this.leases.set(device, { token, expires: Date.now() + 60_000, version });
     return { token, expiresInMs: 60_000 };
   }

@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-26",
+  "scope": "client update blocked by retained completed command sessions",
+  "status": "local implementation and validation complete; not published",
+  "baseline": {"gatewaySource": "6327e2d", "sameRegression": "completed session without model follow-up poll", "expectedStatus": 200, "actualStatus": 409, "reproduced": true},
+  "checks": {
+    "gatewayTypeScriptBuild": "passed",
+    "desktopTypeScriptCheck": "passed",
+    "desktopViteBuild": "passed",
+    "cargoFmtCheck": "passed",
+    "cargoCheckDesktop": "passed",
+    "isolatedTauriDevelopmentBuild": "passed",
+    "authenticatedTlsProtocolRegression": {"command": "node tests/smoke/worker-routing-smoke.mjs --client-updates", "passed": 15, "appServerAndAgent": "labelled protocol fixtures"},
+    "updateLeaseAndManifestSmoke": "passed",
+    "browserRetryAndConsumedPackageSmoke": "passed",
+    "nativeWebView": {"passed": true, "realRustErrorContract": true, "themes": ["light", "dark"], "updateOutcomes": "simulated", "installerStarted": false},
+    "realLocalAgent": {"version": "published Windows 0.3.2 packaged binary", "passed": true, "cases": ["yielded process prevents local restart", "process completes without model polling", "terminal session response", "disconnect cancels and clears sessions before reconnect", "exact COMMAND_SESSION_NOT_FOUND on new connection", "local restart ready after process cleanup"]}
+  },
+  "notVerified": ["affected PC logs and repair", "this fix through real central model", "macOS native build", "installed application full update"],
+  "releaseActions": {"versionChanged": false, "installerBuilt": false, "pushed": false, "deployed": false}
+}

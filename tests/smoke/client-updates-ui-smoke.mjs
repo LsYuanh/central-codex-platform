@@ -60,7 +60,18 @@ try{
   await page.evaluate(()=>window.setUpdateBusy(false));await install.click();
   await page.screenshot({path:path.join(output,"confirm-narrow.png")});
   await page.getByRole("button",{name:"稍后",exact:true}).click();assert.equal((await page.evaluate(()=>window.updateFixture.calls)).filter(c=>c==="desktop_update_install").length,0);
-  await install.click();await page.getByRole("button",{name:"确认安装并重启"}).click();await page.getByRole("alert").filter({hasText:"还有对话"}).waitFor();
+  await install.click();await page.getByRole("button",{name:"确认安装并重启"}).click();await page.getByRole("alert").filter({hasText:"本机命令仍在运行"}).waitFor();
+  const downloads=await page.evaluate(()=>window.updateFixture.calls.filter(c=>c==='desktop_update_download').length);
+  assert.equal(await page.getByRole('button',{name:'重新下载',exact:true}).count(),0);
+  await page.screenshot({path:path.join(output,'retry-install.png')});
+  await page.getByRole('button',{name:'重试安装',exact:true}).click();
+  await page.getByRole('button',{name:'确认安装并重启'}).click();
+  await page.getByRole('button',{name:'重试安装',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.updateFixture.calls.filter(c=>c==='desktop_update_download').length),downloads,'preflight refusal reuses the verified package');
+  await page.evaluate(()=>window.updateFixture.installConsumed=true);
+  await page.getByRole('button',{name:'重试安装',exact:true}).click();await page.getByRole('button',{name:'确认安装并重启'}).click();
+  await page.getByRole('button',{name:'重新下载',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'重试安装',exact:true}).count(),0,'consumed installer bytes cannot be retried');
   await page.evaluate(()=>window.updateFixture.current=true);await page.getByRole("button",{name:"检查更新",exact:true}).click();await page.getByText("已是最新版本",{exact:true}).waitFor();
   await page.evaluate(()=>window.setUpdateSidebar(true));assert.equal(await page.locator('.sidebar-update-button').count(),0);await page.evaluate(()=>window.setUpdateSidebar(false));
   for(const theme of ["light","dark"]){await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await page.setViewportSize({width:760,height:600});await page.waitForTimeout(180);await page.screenshot({path:path.join(output,`current-${theme}.png`)});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}

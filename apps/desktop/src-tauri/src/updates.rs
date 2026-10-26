@@ -293,13 +293,27 @@ pub async fn desktop_update_download(
     Ok(public(p))
 }
 
+#[derive(serde::Serialize)]
+pub struct InstallError {
+    message: String,
+    ready: bool,
+}
+impl From<&str> for InstallError {
+    fn from(message: &str) -> Self {
+        Self {
+            message: message.into(),
+            ready: false,
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn desktop_update_install(
     app: tauri::AppHandle,
     state: tauri::State<'_, UpdateState>,
     runtime: tauri::State<'_, DesktopRuntime>,
     platform: tauri::State<'_, PlatformState>,
-) -> Result<(), String> {
+) -> Result<(), InstallError> {
     let _account = platform
         .guard
         .try_lock()
@@ -310,7 +324,7 @@ pub async fn desktop_update_install(
         return Err("请先下载更新".into());
     }
     state.installing.store(true, Ordering::SeqCst);
-    let result = async {
+    let result: Result<(), String> = async {
         let config = runtime.view().await.effective;
         if p.config != config {
             return Err("配置已变更，请重新检查更新".into());
@@ -326,7 +340,17 @@ pub async fn desktop_update_install(
             .await
             .map_err(|_| "无法核对中央任务状态，请重试")?;
         if response.status().as_u16() == 409 {
-            return Err("还有对话或本机操作正在进行，请结束后再安装".into());
+            let body = response.json::<Value>().await.unwrap_or(Value::Null);
+            let message = match body["reason"].as_str() {
+                Some("active-turn") => "还有对话正在运行，请结束后重试安装",
+                Some("device-operation") => "本机操作正在进行，请完成后重试安装",
+                Some("command-running") => "本机命令仍在运行，请结束后重试安装",
+                Some("command-state-unknown") => "暂时无法确认本机命令是否结束，请稍后重试安装",
+                Some("agent-unavailable") => "本机执行组件未连接，请连接后重试安装",
+                Some("install-lease") => "已有安装准备正在进行，请稍后重试安装",
+                _ => "还有对话或本机操作正在进行，请结束后再安装",
+            };
+            return Err(message.into());
         }
         if !response.status().is_success() {
             return Err("中央尚未允许升级，请检查连接和配对状态".into());
@@ -381,7 +405,12 @@ pub async fn desktop_update_install(
     }
     .await;
     state.installing.store(false, Ordering::SeqCst);
-    result
+    // Only native state knows whether the verified download was consumed.
+    // A refused preflight must not make the UI download the same package again.
+    result.map_err(|message| InstallError {
+        message,
+        ready: p.bytes.is_some(),
+    })
 }
 
 #[cfg(test)]

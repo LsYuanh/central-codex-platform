@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Exact app-owned native messages. Unknown OS/Agent errors remain verbatim.
 export const nativeEn = {
+  "还有对话正在运行，请结束后重试安装": "A conversation is still running. Finish it, then retry installation.",
+  "本机操作正在进行，请完成后重试安装": "A local operation is in progress. Finish it, then retry installation.",
+  "本机命令仍在运行，请结束后重试安装": "A local command is still running. Finish it, then retry installation.",
+  "暂时无法确认本机命令是否结束，请稍后重试安装": "Unable to confirm whether the local command has finished. Retry installation shortly.",
+  "本机执行组件未连接，请连接后重试安装": "The local agent is disconnected. Reconnect it, then retry installation.",
+  "已有安装准备正在进行，请稍后重试安装": "An installation is already being prepared. Retry installation shortly.",
   "不支持的本机附件操作": "Unsupported local attachment operation",
   "Local Agent 未启动，请在设置中应用配置": "Local Agent is not running. Apply settings to start it",
   "附件 IPC 帧超过 1 MiB": "Attachment IPC frame exceeds 1 MiB",

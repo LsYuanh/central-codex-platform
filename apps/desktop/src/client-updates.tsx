@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-import { nativeText } from "./native-invoke";
+import { nativeMessage, nativeText } from "./native-invoke";
 import { t, useLocale, errorMessage, useMessageState } from "./i18n";
 
 import { invoke } from "./native-invoke";
@@ -47,9 +47,13 @@ export function useClientUpdates(scope: string, enabled: boolean) {
   };
   const install = async () => {
     if(lock.current) return;
-    lock.current=true; setPhase("installing");setError("");
+    lock.current=true; const gen=generation.current; setPhase("installing");setError("");
     try {await invoke("desktop_update_install");}
-    catch(e){setError(errorMessage(e));setPhase("error");setRelease(r=>({...r,ready:false}));}
+    catch(e){if(gen===generation.current){
+      const failure=e&&typeof e==="object"&&"message" in e&&typeof e.message==="string"&&"ready" in e&&typeof e.ready==="boolean"?e:undefined;
+      setError(failure?nativeMessage(failure.message as string):errorMessage(e));
+      setPhase("error");setRelease(r=>({...r,ready:failure?.ready===true}));
+    }}
     finally{lock.current=false;}
   };
   return {phase,release,error,progress,check,download,install};
@@ -92,7 +96,7 @@ export function ClientUpdatePanel({update, version, busy, enabled}: {
         {(update.release.version || update.release.ready) && <div className="update-release">
           <div className="update-release-heading"><h2>{update.release.version ? <>{t("新版本 ")}<code>{update.release.version}</code></> : t("更新包已就绪")}</h2><div className="settings-actions">
             {!update.release.ready && <button className="button-secondary" disabled={!enabled || working} onClick={() => void update.download()}>{update.phase === "error" ? t("重新下载") : t("下载更新")}</button>}
-            {update.release.ready && <button className="button-secondary update-install-button" disabled={!enabled || busy || working} onClick={() => setConfirm(true)}>{t("安装并重启")}</button>}
+            {update.release.ready && <button className="button-secondary update-install-button" disabled={!enabled || busy || working} onClick={() => setConfirm(true)}>{update.phase === "error" ? t("重试安装") : t("安装并重启")}</button>}
           </div></div>
         </div>}
         {update.release.notes && <div className="update-notes">{update.release.notes}</div>}

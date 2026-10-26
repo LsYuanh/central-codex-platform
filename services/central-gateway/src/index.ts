@@ -32,7 +32,7 @@ import { WindowsWorkerBridge } from "./windows-worker-bridge.js";
 import { ModelCredentialBroker } from "./model-credential-broker.js";
 import { readNativeServiceHost } from "./native-service-host.js";
 import { collectServiceMetrics } from "./service-metrics.js";
-import { ClientUpdates } from "./client-updates.js";
+import { ClientUpdates, UpdateDeviceBusy, type UpdateBusyReason } from "./client-updates.js";
 import { ProjectCatalog, projectInput, publicProject, projectDeviceParams, projectInstructions, absoluteClientPath, type ClientProject } from "./projects.js";
 import { SkillStore, skillScope, writeClientFiles, SKILL_INSTRUCTIONS, type SkillOwner, type SkillAgent } from "./skills.js";
 import {IMAGE_GENERATION_MARKER,legacyImageOutput} from './image-generation.js';
@@ -129,6 +129,7 @@ type AgentRequestOptions = {
   threadId?: string;
   traceId?: string;
   timeoutMs?: number;
+  cancelOnTimeout?: boolean;
   onRegistered?: (requestId: string) => void;
   onEvent?: (event: AgentEventPayload) => void;
 };
@@ -140,6 +141,8 @@ type ActiveDeviceTool = {
   threadId?: string;
   turnId?: string;
   sessionId?: string;
+  binding: RemoteWorkspaceBinding;
+  agentSocket?: WebSocket;
 };
 
 type PendingSyntheticApproval = {
@@ -447,6 +450,7 @@ const pendingAgentRequests = new Map<string, PendingAgentRequest>();
 const activeDeviceTools = new Map<string, ActiveDeviceTool>();
 const clientUpdates = new ClientUpdates(process.env.PLATFORM_CLIENT_RELEASE_DIR);
 const deviceGatewayCalls = new Map<string, number>();
+const updateSessionChecks = new Map<string, Promise<UpdateBusyReason | undefined>>();
 const turnCancelVersions = new Map<string, number>();
 const stoppedNativeTurns = new Set<string>();
 const pendingSyntheticApprovals = new Map<string, PendingSyntheticApproval>();
@@ -974,7 +978,7 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
           traceId: typeof params.callId === "string" ? params.callId : undefined,
           onRegistered: (id) => {
             agentRequestId = id;
-            activeDeviceTools.set(id, {agentRequestId:id,clientId:client.id,deviceId:client.deviceId,threadId,turnId});
+            activeDeviceTools.set(id, {agentRequestId:id,clientId:client.id,deviceId:client.deviceId,threadId,turnId,binding,agentSocket:agents.get(client.deviceId)?.socket});
           },
           onEvent: (event) => emitTool("output", {
             stream:event.stream,
@@ -1085,7 +1089,7 @@ function handleWorkerMessage(workerUserId:string|undefined, bridge:WorkerBridge,
   }
 }
 
-const httpHandler = (request: IncomingMessage, response: ServerResponse) => {
+const httpHandler = async (request: IncomingMessage, response: ServerResponse) => {
   if(nativeService)response.setHeader('x-central-service-instance',nativeService.serviceInstanceId);
   if(nativeService?.updateBlocked&&request.url!=="/healthz"){writeJson(response,503,{ok:false,error:'CENTRAL_UPDATING'});return;}
   const url = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`);
@@ -1097,8 +1101,15 @@ const httpHandler = (request: IncomingMessage, response: ServerResponse) => {
       if(!principal.deviceId || principal.authMode!=="device-token-v1")throw Error("AUTH_REQUIRED");
       const device=principal.deviceId;
       if(url.pathname==="/client-updates/prepare" && request.method==="POST") {
-        const busy=(deviceGatewayCalls.get(device)??0)>0 || workers.hasActiveThreads(id=>threadSummaryById.get(id)?.deviceId===device) ||
-          [...activeDeviceTools.values()].some(tool=>tool.deviceId===device) || [...pendingAgentRequests.values()].some(p=>p.deviceId===device);
+        if(clientUpdates.locked(device))throw new UpdateDeviceBusy("install-lease");
+        const before=clientUpdateBusyReason(device);
+        if(before)throw new UpdateDeviceBusy(before);
+        const sessionReason=await reconcileUpdateSessions(device);
+        // Recheck after the asynchronous probe: a new turn, revocation or a
+        // central update may have arrived while the Agent was answering.
+        auth.assert(principal);
+        if(auditFailed||nativeService?.updateBlocked){writeJson(response,503,{error:"CENTRAL_UPDATING"});return;}
+        const busy=clientUpdateBusyReason(device)??sessionReason??([...activeDeviceTools.values()].some(tool=>tool.deviceId===device)?"command-state-unknown":false);
         const version=String(request.headers["x-update-version"]??"");
         writeJson(response,200,clientUpdates.prepare(device,randomUUID(),busy,/^\d+\.\d+\.\d+$/.test(version)?version:undefined)); return;
       }
@@ -1111,7 +1122,7 @@ const httpHandler = (request: IncomingMessage, response: ServerResponse) => {
         writeJson(response,200,{resumed:!clientUpdates.locked(device)});return;
       }
       void clientUpdates.serve(request,response,url); return;
-    } catch(error) {writeJson(response,String(error).includes("UPDATE_DEVICE_BUSY")?409:401,{error:String(error).includes("UPDATE_DEVICE_BUSY")?"UPDATE_DEVICE_BUSY":"AUTH_REQUIRED"});return;}
+    } catch(error) {writeJson(response,error instanceof UpdateDeviceBusy?409:401,error instanceof UpdateDeviceBusy?{error:"UPDATE_DEVICE_BUSY",reason:error.reason}:{error:"AUTH_REQUIRED"});return;}
   }
   if(auth && url.pathname.startsWith("/auth/")){void auth.http(request,response);return;}
   if (url.pathname === "/healthz") {
@@ -2002,7 +2013,7 @@ function sendAgentRequest(
       if(Date.now()-started<timeout)return;
       clearInterval(timer);
       pendingAgentRequests.delete(requestId);
-      cancelAgentRequest(deviceId, requestId, options.taskId, "broker_timeout");
+      if(options.cancelOnTimeout!==false)cancelAgentRequest(deviceId, requestId, options.taskId, "broker_timeout");
       resolve({ ok: false, error: "Local Agent response timed out; execution result is unknown, reconcile before retrying", errorCode: "RESULT_UNKNOWN", retryable: false });
     }, Math.min(timeout,2_147_483_647));
     pendingAgentRequests.set(requestId, { resolve, timer, deviceId, socket, lastEventSequence: 0, onEvent: options.onEvent });
@@ -2014,6 +2025,41 @@ function cancelAgentRequest(deviceId: string, requestId: string, taskId: string 
   const session = agents.get(deviceId);
   if (!session?.ready || session.socket.readyState !== WebSocket.OPEN) return;
   send(session.socket, createEnvelope("job.cancel", { reason }, { requestId, ...(taskId ? { taskId } : {}) }) as unknown as JsonObject);
+}
+
+function clientUpdateBusyReason(device: string): UpdateBusyReason | undefined {
+  if(workers.hasActiveThreads(id=>threadSummaryById.get(id)?.deviceId===device))return "active-turn";
+  if((deviceGatewayCalls.get(device)??0)>0||[...pendingAgentRequests.values()].some(p=>p.deviceId===device))return "device-operation";
+}
+
+function reconcileUpdateSessions(device: string): Promise<UpdateBusyReason | undefined> {
+  const existing=updateSessionChecks.get(device);if(existing)return existing;
+  const check=(async ():Promise<UpdateBusyReason|undefined>=>{
+    const deadline=Date.now()+4000;
+    const records=[...activeDeviceTools.values()].filter(tool=>tool.deviceId===device);
+    for(const tool of records){
+      if(activeDeviceTools.get(tool.agentRequestId)!==tool)continue;
+      if(!tool.sessionId||Date.now()>=deadline)return "command-state-unknown";
+      const agent=agents.get(device);
+      if(!agent?.ready||agent.socket.readyState!==WebSocket.OPEN)return "agent-unavailable";
+      // This is only a status poll. In particular, a timeout must not cancel
+      // the command whose session is being inspected for an installation.
+      const result=await sendAgentRequest(device,"exec",{sessionId:tool.sessionId,program:"",args:[],yieldMs:0,offset:0},{binding:tool.binding,threadId:tool.threadId,taskId:tool.turnId,timeoutMs:Math.max(1,deadline-Date.now()),cancelOnTimeout:false});
+      if(activeDeviceTools.get(tool.agentRequestId)!==tool)continue;
+      if(agents.get(device)!==agent)return "command-state-unknown";
+      const value=result.result;
+      const ended=result.ok&&isRecord(value)&&value.sessionId===tool.sessionId&&value.running===false&&isRecord(value.completion)&&typeof value.completion.ok==="boolean";
+      // Local Agent closes all sessions before reconnecting. Only its explicit
+      // NOT_FOUND response on a replacement connection confirms an old session
+      // is gone; disconnect/timeout/cancel acknowledgement alone proves nothing.
+      const missing=agent.socket!==tool.agentSocket&&!result.ok&&result.error==="COMMAND_SESSION_NOT_FOUND";
+      if(ended||missing){activeDeviceTools.delete(tool.agentRequestId);continue;}
+      return result.ok&&isRecord(value)&&value.sessionId===tool.sessionId&&value.running===true?"command-running":"command-state-unknown";
+    }
+  })();
+  updateSessionChecks.set(device,check);
+  void check.finally(()=>{if(updateSessionChecks.get(device)===check)updateSessionChecks.delete(device);}).catch(()=>{});
+  return check;
 }
 
 function cancelDeviceTools(threadId: string, turnId?: string): void {
