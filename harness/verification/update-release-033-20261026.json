@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-26",
+  "status": "runtime published and independently verified; formal activation and client publication deferred to tonight at user request",
+  "sourceCommit": "ab6091e79c3d574c768299e61b3f01599a155a0c",
+  "tag": "v0.3.3",
+  "sourceAndTagPushed": true,
+  "clientBuildSnapshot": "e467959f5e7e2b562ddcb866b7f3de4150f48036",
+  "productionInputsMatchPublishedSource": true,
+  "snapshotDifference": ["scripts/maintenance/central-live-client-qa.mjs"],
+  "checks": {
+    "priorRegressionEvidence": "client-update-busy-20261026.json",
+    "windowsSignedNsis": "passed",
+    "macArm64Build": "passed",
+    "macStrictAdHocSignature": "passed",
+    "macDmgVerification": "passed",
+    "bothUpdaterSignatures": "passed",
+    "isolatedRealCentralModel": {"model": "gpt-6.1-sol", "permissionMode": "auto", "agent": "released Windows 0.3.2", "runningPrepareStatus": 409, "finishedWithoutModelPollingPrepareStatus": 200, "leaseReleased": true, "randomLocalProof": true, "historyResume": true},
+    "isolatedInstalledUpgrade": {"from": "0.3.2", "to": "0.3.3", "candidateCodeWithIdentityAndVersionOverrides": true, "mode": "/S /NS /UPDATE", "configurationPreserved": true, "pairingPreserved": true, "webviewDataPreserved": true, "agentAfter": 1, "oldProcessesStoppedByTestController": true, "formalUpdateIdentityGuardPreserved": true, "fullInAppUpdateVerified": false}
+  },
+  "runtime": {
+    "workflowRun": "40295704555",
+    "workflowUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/40295704555",
+    "conclusion": "success",
+    "releaseTag": "runtime-0.163.0-1793005849007",
+    "sequence": 1793005849007,
+    "packageId": "macos-arm64-node24-qa1-cc7009ecae621f53",
+    "archiveBytes": 169334828,
+    "archiveSha256": "b6fcd6c8c415f404b0c4d57c2e1c255666beec5fb7e60c1f533a0d1f3b814471",
+    "signatureVerified": true,
+    "publicAssetDigestMatched": true,
+    "downloadedArchiveVerified": true,
+    "verifiedFiles": 875,
+    "activated": false
+  },
+  "clientArtifacts": {
+    "windowsExeSha256": "bf1d6c313782d4117d11ccfc54dbfbd5f88862d4795a108ad18ab65bc109dfd7",
+    "macArchiveSha256": "8cc310d25199511d39179be7a0f2bfb0556da37a949c80cdef203572612347fb",
+    "macDmgSha256": "bec15a585c3115c091bd83059c52272d3925d1054c82863e00a53e0f6518d703",
+    "githubReleasePublished": false,
+    "centralClientChannelPublished": false,
+    "centralStagingArchiveCopied": true
+  },
+  "formalStateUnchanged": {"app": "0.1.9", "revision": 19, "runtimeSequence": 1792989794737, "clientChannel": "0.3.2", "restartRejectedBeforeMutation": "CENTRAL_NOT_IDLE"},
+  "cleanup": {"isolatedCentralStopped": true, "temporaryDevicesRevokedOrDisconnected": true, "qaClientAndAgentStopped": true},
+  "automation": {"id": "0-3-3", "timezone": "Asia/Shanghai", "date": "2026-10-26", "firstCheck": "20:00", "lastCheck": "23:40", "intervalMinutes": 20, "maximumChecks": 12, "stopAfterCompletion": true},
+  "remaining": ["formal idle activation through native updater", "formal real model regression with 0.3.3 packaged Agent", "GitHub client asset publication and verification", "central client channel publication and LAN verification", "affected PC verification", "full native in-app update acceptance"],
+  "browserBlocker": "Computer Use stopped because Windows browser URL could not be confidently determined. Establish a normal verified connection in a later execution; do not bypass the safety check."
+}
