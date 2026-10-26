@@ -1,6 +1,9 @@
 {
   "date": "2026-10-26",
-  "status": "runtime published and independently verified; formal activation and client publication deferred to tonight at user request",
+  "status": "runtime published and independently verified; scheduled execution arrived after its deadline, automation deleted, formal activation and client channel update remain incomplete",
+  "lastCheckedAt": "2026-10-27T04:02:00+08:00",
+  "expiredSchedule": {"triggerTimestamp": "2026-10-26T20:01:55.561Z", "deadline": "2026-10-27T00:00:00+08:00", "automationDeleted": true, "deploymentAttempted": false, "formalRuntimeSequence": 1792989794737, "formalHealthOk": true, "clientChannelVersion": "0.3.2", "timingDiscrepancyCause": "not established"},
+  "latestUserScope": "Activate the central runtime and update the existing client channel only; GitHub client release assets are not a prerequisite.",
   "sourceCommit": "ab6091e79c3d574c768299e61b3f01599a155a0c",
   "tag": "v0.3.3",
   "sourceAndTagPushed": true,
@@ -43,6 +46,6 @@
   "formalStateUnchanged": {"app": "0.1.9", "revision": 19, "runtimeSequence": 1792989794737, "clientChannel": "0.3.2", "restartRejectedBeforeMutation": "CENTRAL_NOT_IDLE"},
   "cleanup": {"isolatedCentralStopped": true, "temporaryDevicesRevokedOrDisconnected": true, "qaClientAndAgentStopped": true},
   "automation": {"id": "0-3-3", "timezone": "Asia/Shanghai", "date": "2026-10-26", "firstCheck": "20:00", "lastCheck": "23:40", "intervalMinutes": 20, "maximumChecks": 12, "stopAfterCompletion": true},
-  "remaining": ["formal idle activation through native updater", "formal real model regression with 0.3.3 packaged Agent", "GitHub client asset publication and verification", "central client channel publication and LAN verification", "affected PC verification", "full native in-app update acceptance"],
+  "remaining": ["formal idle activation through native updater", "formal real model regression with 0.3.3 packaged Agent", "central client channel publication and LAN verification", "affected PC verification", "full native in-app update acceptance"],
   "browserBlocker": "Computer Use stopped because Windows browser URL could not be confidently determined. Establish a normal verified connection in a later execution; do not bypass the safety check."
 }
