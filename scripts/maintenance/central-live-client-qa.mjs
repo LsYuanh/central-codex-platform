@@ -92,7 +92,7 @@ function gatewayMessage(message){
   if(message.eventType==='device.tool.completed'){
     const call=toolCalls.get(data.requestId);if(!call){fail('QA_TOOL_RECEIPT_UNMATCHED');return;}
     call.done=true;call.succeeded=data.status==='succeeded';call.exitCode=data.exitCode;
-    if(!call.succeeded||(call.tool==='device_exec'&&data.exitCode!==0))fail('QA_MODEL_TOOL_FAILED');
+    if(!call.succeeded||(call.tool==='device_exec'&&!config.updatePreflight&&data.exitCode!==0))fail('QA_MODEL_TOOL_FAILED');
   }
   if(message.eventType==='gateway.runtime_unavailable'||(message.eventType==='codex.notification'&&message.name==='gateway/runtimeUnavailable'))fail('QA_RUNTIME_UNAVAILABLE');
 }
@@ -113,7 +113,8 @@ async function cleanup(){
 try{
   check(process.platform==='win32'&&(process.argv.length===2||formal4510),'QA_WINDOWS_STDIN_ONLY');
   await Promise.race([bootstrap,new Promise((_,reject)=>setTimeout(()=>reject(Error('QA_BOOTSTRAP_TIMEOUT')),15000).unref())]);
-  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills','creator','permissionMode'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills','creator','permissionMode','updatePreflight'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config.updatePreflight===undefined||typeof config.updatePreflight==='boolean','QA_UPDATE_PROBE_INVALID');
   check(config.permissionMode===undefined||['ask','auto','full'].includes(config.permissionMode)&&!config.creator&&!config.skills&&!config.legacyWorkspace,'QA_PERMISSION_MODE_INVALID');
   check(config.creator===undefined||['explicit','implicit'].includes(config.creator)&&!config.skills&&!config.projects&&!config.legacyWorkspace,'QA_CREATOR_MODE_INVALID');
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname===formalHost()&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
@@ -254,7 +255,7 @@ try{
     // empty Thread. Executing below must still use the captured old directory.
   }
   const prompt=`This is an authorized, isolated client QA project ${config.legacyWorkspace?'inside the legacy workspace':'outside the default output directory'}. Perform exactly: 1. device_workspace_read_text path ${JSON.stringify(toolPath('input.txt'))}. 2. device_exec with ${JSON.stringify({program:config.powershell,args,cwd:config.toolCwd,...(config.updatePreflight?{yieldMs:1000}:{})})}. Run that command exactly once. ${config.updatePreflight?'This intentionally leaves a harmless sleeping command session. Do not poll, cancel or wait for that session; the external QA controller handles completion. The script is also authorized to write update-finished.txt after sleeping. ':''}3. device_workspace_read_text path ${JSON.stringify(toolPath('proof.txt'))}. ${config.legacyWorkspace?'4. Call device_workspace_apply_patch exactly once with this patch (approval is provided): '+JSON.stringify(config.patch)+'. ':''}Final answer contains only the two exact markers read from input.txt and proof.txt. Do not call other tools, write/edit files except the explicitly requested patch, inspect other directories, run central commands, or rerun the command. The pre-created script generates its random marker only when Local Agent runs it.`;
-  const permissionContext=config.permissionMode?`\nThe exact pre-created proof.ps1 contents are:\n${proofScript}\nI explicitly authorize this script to create proof.txt in this isolated QA project. That creation is the intended command effect. No other files may be modified.`:'';
+  const permissionContext=config.permissionMode?`\nThe exact pre-created proof.ps1 contents are:\n${proofScript}\nI explicitly authorize this script to create proof.txt${config.updatePreflight?' and update-finished.txt':''} in this isolated QA project. Those are the intended command effects. No other files may be modified.`:'';
   const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',...(personalSkill?{clientMessageId:randomUUID(),skills:[{id:personalSkill.id,revision:personalSkill.revision}]}:{}),input:[{type:'text',text:personalSkill?`$${personalSkill.name} Follow this selected personal skill exactly. Its resources are on the client. Run its proof script once as instructed and return the two markers.`:prompt+permissionContext}]});turnId=turn?.turn?.id;
   if(config.updatePreflight){
     await until(()=>[...toolCalls.values()].some(c=>c.tool==='device_exec'&&c.done),90000,'QA_YIELDED_COMMAND_MISSING');
