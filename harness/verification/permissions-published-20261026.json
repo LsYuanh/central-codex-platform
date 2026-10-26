@@ -1,0 +1,236 @@
+{
+  "date": "2026-10-26",
+  "sourceCommit": "fc2a52f8a3dfddec1a6e8b2e3ca863d9c4153256",
+  "client": {
+    "version": "0.3.2",
+    "tag": "v0.3.2",
+    "signatureVerified": true,
+    "windowsBundledAgentAndPdfium": true,
+    "macBuildAndAdHocSignatureVerified": true,
+    "macDmgVerified": true,
+    "github": {
+      "version": "0.3.2",
+      "published": true,
+      "url": "https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.2",
+      "assets": [
+        {
+          "file": "yuanzhou-0.3.2-windows-x64-setup.exe",
+          "bytes": 11385329,
+          "sha256": "008d012fc77d03aa1fda6974891e25e1ff0e2a177b5a6c6e11767a677f0745ba",
+          "anonymousDownloadVerified": true
+        },
+        {
+          "file": "yuanzhou-0.3.2-windows-x64-setup.exe.sig",
+          "bytes": 416,
+          "sha256": "6f493464cf9dc7ce1e2c5a80df4e57f80cd74b30b87ac64e68ba9145ce401763",
+          "anonymousDownloadVerified": true
+        },
+        {
+          "file": "yuanzhou-0.3.2-aarch64.app.tar.gz",
+          "bytes": 15002533,
+          "sha256": "0063905e256a5b400a7d2b7d3c5e80b978955cb26966957549466fd2fdac550a",
+          "anonymousDownloadVerified": true
+        },
+        {
+          "file": "yuanzhou-0.3.2-aarch64.app.tar.gz.sig",
+          "bytes": 424,
+          "sha256": "a581d115d631005c5e6663d3fa428c61393f90fc65b1e28e45afdf3389735c82",
+          "anonymousDownloadVerified": true
+        },
+        {
+          "file": "yuanzhou-0.3.2-macos-aarch64.dmg",
+          "bytes": 16199152,
+          "sha256": "e022bd094c2225d089f9c84e63f3dd46ae7d86b7891d52e39d409ba603aa1f40",
+          "anonymousDownloadVerified": true
+        },
+        {
+          "file": "SHA256SUMS.txt",
+          "bytes": 513,
+          "sha256": "febdb5c9c03ac056b28ab02437b9eb12186df79da3f55fb69d8ae8f303c2d4c1",
+          "anonymousDownloadVerified": true
+        }
+      ]
+    },
+    "centralChannel": {
+      "version": "0.3.2",
+      "platforms": [
+        "windows-x86_64",
+        "darwin-aarch64"
+      ],
+      "authenticatedDownloads": true,
+      "hashesMatch": true
+    },
+    "lanDownloads": {
+      "version": "0.3.2",
+      "pairedCaVerified": true,
+      "authenticatedDownloads": [
+        {
+          "platform": "windows-x86_64",
+          "bytes": 11385329,
+          "sha256": "008d012fc77d03aa1fda6974891e25e1ff0e2a177b5a6c6e11767a677f0745ba"
+        },
+        {
+          "platform": "darwin-aarch64",
+          "bytes": 15002533,
+          "sha256": "0063905e256a5b400a7d2b7d3c5e80b978955cb26966957549466fd2fdac550a"
+        }
+      ]
+    }
+  },
+  "runtime": {
+    "sourceCommit": "fc2a52f8a3dfddec1a6e8b2e3ca863d9c4153256",
+    "signatureVerified": true,
+    "publicAssetDigestMatched": true,
+    "downloadedArchiveVerified": true,
+    "allFileHashesVerified": true,
+    "hostProtocol": "central-runtime-update/v2",
+    "releaseTag": "runtime-0.163.0-1792989794737",
+    "version": "0.163.0",
+    "sequence": 1792989794737,
+    "packageId": "macos-arm64-node24-qa1-95108a512f5c44ef",
+    "archiveBytes": 169333004,
+    "archiveSha256": "be21b939a6bbf475bb5a06cf02c9e4e9be5c99a698eed34dd0743ad3497bf5d4",
+    "manifest": {
+      "path": "manifest.json",
+      "bytes": 177942,
+      "sha256": "95108a512f5c44ef90200d8d524c1deb9df229921ea549fdcd9553757cda532a"
+    },
+    "fileCount": 875,
+    "upstream": {
+      "version": "0.163.0",
+      "commit": "83086188ae0614bd882818ff1aa23f3194962012",
+      "archiveSha256": "e57f1d4f914c71c3532a12d5c14f740909fca4e7e041fa1b3db71618c88e5567",
+      "patchSha256": "c407492f10efa5ef1ce2e98cc5880ea94c3687b501e3a908c1ba20b360fa4403"
+    },
+    "elapsedSeconds": 238.72,
+    "workflowRun": 40269264091,
+    "workflowUrl": "https://github.com/LsYuanh/central-codex-platform/actions/runs/40269264091"
+  },
+  "nativeActivation": {
+    "appVersion": "0.1.9",
+    "runtimeVersion": "0.163.0",
+    "revision": 19,
+    "sequence": 1792989794737,
+    "packageId": "macos-arm64-node24-qa1-95108a512f5c44ef",
+    "pending": false,
+    "nativeUpdateState": "updated",
+    "nativeBackupPresent": true,
+    "privateAppAndFullProfileBackup": true,
+    "configurationUnchanged": true,
+    "appUnchanged": true,
+    "vpnAndCodexConfigUnchanged": true,
+    "runningGatewayMatchesPackage": true,
+    "health": {
+      "ok": true,
+      "devices": 3,
+      "clients": 3
+    },
+    "failedSequencePreserved": true
+  },
+  "formalModel": {
+    "model": "gpt-6.1-sol",
+    "clientVersion": "0.3.2",
+    "manualDecisionSource": "QA client acknowledges only the exact pre-authorized proof command",
+    "cases": [
+      {
+        "passed": true,
+        "evidence": {
+          "actualLocalAgent": true,
+          "externalProjectVerified": true,
+          "legacyWorkspaceVerified": false,
+          "workspaceReadVerified": true,
+          "modelToolReadVerified": true,
+          "modelToolExecVerified": true,
+          "randomProofVerified": true,
+          "turnCompleted": true,
+          "runtimeMarkerVerified": true,
+          "permissionMode": "auto",
+          "permissionModePersisted": true,
+          "permissionSwitchVerified": true,
+          "manualApprovalCount": 0,
+          "defaultAutoVerified": true,
+          "resumeHistoryVerified": true
+        },
+        "summary": {
+          "inputSha256": "ee0a2f764bc3d4e052916065029557f59106d813066da481802b9c5bb8794544",
+          "proofSha256": "f58ab51a6fbacadbf5e0bfd9702637de6e484da964f0096dd84a05cce85230ba",
+          "toolReadCount": 2,
+          "toolExecCount": 1,
+          "marker": "yuan-zhou-remote-workspace/1"
+        },
+        "agentExited": true,
+        "revoked": true,
+        "localTokenRemoved": true,
+        "realRemoteDeviceVerified": true
+      },
+      {
+        "passed": true,
+        "evidence": {
+          "actualLocalAgent": true,
+          "externalProjectVerified": true,
+          "legacyWorkspaceVerified": false,
+          "workspaceReadVerified": true,
+          "modelToolReadVerified": true,
+          "modelToolExecVerified": true,
+          "randomProofVerified": true,
+          "turnCompleted": true,
+          "runtimeMarkerVerified": true,
+          "permissionMode": "ask",
+          "permissionModePersisted": true,
+          "permissionSwitchVerified": true,
+          "manualApprovalCount": 1,
+          "defaultAutoVerified": false,
+          "resumeHistoryVerified": true
+        },
+        "summary": {
+          "inputSha256": "cfad8e83fe79f9ef47f6b390e8ff148dec735af58b6de0567cf9583767eaf5ad",
+          "proofSha256": "663ebe5da6918cd4ee16e5c787728a22e6b54b40674c242079acb0b08e7fc7a5",
+          "toolReadCount": 2,
+          "toolExecCount": 1,
+          "marker": "yuan-zhou-remote-workspace/1"
+        },
+        "agentExited": true,
+        "revoked": true,
+        "localTokenRemoved": true,
+        "realRemoteDeviceVerified": true
+      },
+      {
+        "passed": true,
+        "evidence": {
+          "actualLocalAgent": true,
+          "externalProjectVerified": true,
+          "legacyWorkspaceVerified": false,
+          "workspaceReadVerified": true,
+          "modelToolReadVerified": true,
+          "modelToolExecVerified": true,
+          "randomProofVerified": true,
+          "turnCompleted": true,
+          "runtimeMarkerVerified": true,
+          "permissionMode": "full",
+          "permissionModePersisted": true,
+          "permissionSwitchVerified": true,
+          "manualApprovalCount": 0,
+          "defaultAutoVerified": false,
+          "resumeHistoryVerified": true
+        },
+        "summary": {
+          "inputSha256": "8c4d3c6a8a1959388dd73196fdb5a97cc93fe40ffa94ffe1ee266d4cba58f192",
+          "proofSha256": "33778d735529d4797591db6a7edabc7e0aa8de75f414eac8892742a54f85862b",
+          "toolReadCount": 2,
+          "toolExecCount": 1,
+          "marker": "yuan-zhou-remote-workspace/1"
+        },
+        "agentExited": true,
+        "revoked": true,
+        "localTokenRemoved": true,
+        "realRemoteDeviceVerified": true
+      }
+    ]
+  },
+  "limits": [
+    "macOS remains ad-hoc signed and not notarized",
+    "Windows central 0.163.0 is not supported",
+    "No new installed-client full upgrade/lifecycle acceptance",
+    "Benign live approval does not establish all model risk classifications"
+  ]
+}
