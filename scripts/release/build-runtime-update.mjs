@@ -53,7 +53,7 @@ try{
   if(pin.candidatePatches?.[report.latestVersion]?.deviceApprovalPatch) {
     probe(process.execPath,['harness/device-approval-smoke.mjs',binary]);
     probe(process.execPath,['tests/smoke/device-approvals-smoke.mjs']);
-    probe(process.execPath,['tests/smoke/worker-routing-smoke.mjs','--device-approval']);
+    probe(process.execPath,['tests/smoke/worker-routing-smoke.mjs','--client-updates']);
   }
   probe(process.execPath,['harness/image-generation-smoke.mjs',binary]);
   probe(process.execPath,['harness/model-catalog-smoke.mjs',binary,join(report.source,'codex-rs/models-manager/models.json'),report.latestVersion]);
