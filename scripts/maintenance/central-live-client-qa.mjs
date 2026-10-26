@@ -15,6 +15,7 @@ const check=(value,code)=>{if(!value)throw Error(code);};
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const children=new Set(),pending=new Map(),toolCalls=new Map();
 let failure,config,agent,helper,agentExit,helperExit,deviceId,connected=false,threadId,turnId,turnDone,assistant='',socketRevoked=false,localRemoved=false,agentTerminal=false,completed=false,controllerEnded=false;
+let permissionPrompts=0;
 let inputBuffer=Buffer.alloc(0),bootstrapResolve,bootstrapReject;
 const bootstrap=new Promise((resolve,reject)=>{bootstrapResolve=resolve;bootstrapReject=reject;});
 function fail(code){
@@ -47,6 +48,18 @@ function gatewayMessage(message){
     const task=pending.get(message.requestId);if(task){pending.delete(message.requestId);if(!message.ok)emit({phase:'rpc-failed',operation:task.operation,errorCode:String(message.error??'').match(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/)?.[0]??'UNCLASSIFIED'});message.ok?task.resolve(message.data):task.reject(Error('QA_GATEWAY_REQUEST_FAILED'));}return;
   }
   if(message.type==='approval.request'){
+    if(config.permissionMode){
+      // This opt-in probe approves only its exact benign QA command in ask mode.
+      // An auto/full prompt is a failed acceptance, not something to click away.
+      const d=message.data??{};
+      const allowed=config.permissionMode==='ask'&&message.method==='device/operation/requestApproval'
+        &&d.threadId===threadId&&d.turnId===turnId&&d.deviceId===deviceId&&d.operation==='device_exec'&&d.program===config.powershell
+        &&d.cwd===config.toolCwd&&JSON.stringify(d.args)===JSON.stringify(config.commandArgs)&&permissionPrompts===0;
+      permissionPrompts++;
+      send({type:'approval.response',requestId:message.requestId,result:{decision:allowed?'accept':'decline'}});
+      if(!allowed)fail('QA_UNEXPECTED_APPROVAL');
+      return;
+    }
     const allowed=config.legacyWorkspace===true&&message.method==='device/fileChange/requestApproval'
       &&message.data?.deviceId===deviceId&&message.data?.threadId===threadId
       &&message.data?.patch===config.patch&&message.data?.expectedVersions?.['compatibility-proof.txt']==='missing'
@@ -94,7 +107,8 @@ async function cleanup(){
 try{
   check(process.platform==='win32'&&(process.argv.length===2||formal4510),'QA_WINDOWS_STDIN_ONLY');
   await Promise.race([bootstrap,new Promise((_,reject)=>setTimeout(()=>reject(Error('QA_BOOTSTRAP_TIMEOUT')),15000).unref())]);
-  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills','creator'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config&&Object.keys(config).every(key=>['gateway','caPath','code','agentBinary','helperBinary','workspace','output','model','legacyWorkspace','projects','skills','creator','permissionMode'].includes(key)),'QA_BOOTSTRAP_FIELDS');
+  check(config.permissionMode===undefined||['ask','auto','full'].includes(config.permissionMode)&&!config.creator&&!config.skills&&!config.legacyWorkspace,'QA_PERMISSION_MODE_INVALID');
   check(config.creator===undefined||['explicit','implicit'].includes(config.creator)&&!config.skills&&!config.projects&&!config.legacyWorkspace,'QA_CREATOR_MODE_INVALID');
   const gateway=new URL(config.gateway);check(gateway.protocol==='wss:'&&(formal4510?gateway.hostname===formalHost()&&gateway.port==='4510':['localhost','127.0.0.1'].includes(gateway.hostname)&&gateway.port&&gateway.port!=='4510')&&gateway.pathname==='/ws'&&!gateway.search&&!gateway.hash&&!gateway.username&&!gateway.password,'QA_TARGET_INVALID');
   config.agentBinary=regular(config.agentBinary);config.helperBinary=regular(config.helperBinary);if(config.caPath)config.caPath=regular(config.caPath);else check(config.code?.startsWith("yzpair1."),"QA_CA_REQUIRED");
@@ -112,6 +126,7 @@ try{
   config.patch='*** Begin Patch\n*** Add File: compatibility-proof.txt\n+legacy-patch-ok\n*** End Patch';
   config.powershell=regular(path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'));
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','proof.ps1'];
+  config.commandArgs=args;
   const inputMarker='QA_INPUT_'+randomBytes(24).toString('hex');
   const proofScript="$ErrorActionPreference='Stop'\n$proof='QA_EXEC_'+[Guid]::NewGuid().ToString('N')\n[IO.File]::WriteAllText((Join-Path (Get-Location).Path 'proof.txt'),$proof)\n[Console]::Out.WriteLine($proof)\n";
   writeFileSync(path.join(project,'input.txt'),inputMarker,{flag:'wx'});writeFileSync(path.join(project,'proof.ps1'),proofScript,{flag:'wx'});
@@ -144,6 +159,7 @@ try{
   let agentDiagnostic='';agent.stderr.on('data',chunk=>{agentDiagnostic=(agentDiagnostic+chunk.toString('utf8')).slice(-8192);if(/(?:^|\r?\n)Error: "?DEVICE_REVOKED"?\r?(?:\n|$)/.test(agentDiagnostic))agentTerminal=true;});
   const initialized=await request('session.initialize',{clientInfo:{name:'central-live-client-qa',version:'1'}});
   check(typeof initialized?.userAgent==='string'&&initialized.userAgent.includes(marker),'QA_RUNTIME_MARKER_MISSING');
+  if(config.permissionMode)check(initialized.platformCapabilities?.deviceApproval===true,'QA_DEVICE_APPROVAL_CAPABILITY_MISSING');
   const catalog=await request('model.list',{limit:100,includeHidden:false});
   check(catalog?.data?.some(model=>model.id===config.model),'QA_MODEL_NOT_LISTED');
   emit({phase:'model-listed',model:config.model});
@@ -223,7 +239,7 @@ try{
     catalogProject=(await request('project.save',{name:'项目发布验证',folders:[project,workspace],creationKey:randomUUID()})).project;
     check(catalogProject?.folders[0]===project,'QA_PROJECT_CREATE_FAILED');
   }
-  const thread=await request('conversation.create',{model:config.model,...(catalogProject?{projectId:catalogProject.id,projectRevision:catalogProject.revision}:{})});threadId=thread?.thread?.id;check(typeof threadId==='string','QA_THREAD_MISSING');
+  const thread=await request('conversation.create',{model:config.model,...(config.permissionMode&&config.permissionMode!=='auto'?{permissionMode:config.permissionMode}:{}),...(catalogProject?{projectId:catalogProject.id,projectRevision:catalogProject.revision}:{})});threadId=thread?.thread?.id;check(typeof threadId==='string','QA_THREAD_MISSING');
   if(catalogProject){
     check(thread.thread.clientProject?.folders[0]===project,'QA_PROJECT_SNAPSHOT_MISSING');
     catalogProject=(await request('project.save',{...catalogProject,folders:[workspace,project]})).project;
@@ -231,7 +247,8 @@ try{
     // empty Thread. Executing below must still use the captured old directory.
   }
   const prompt=`This is an authorized, isolated client QA project ${config.legacyWorkspace?'inside the legacy workspace':'outside the default output directory'}. Perform exactly: 1. device_workspace_read_text path ${JSON.stringify(toolPath('input.txt'))}. 2. device_exec with ${JSON.stringify({program:config.powershell,args,cwd:config.toolCwd})}. Run that command exactly once. 3. device_workspace_read_text path ${JSON.stringify(toolPath('proof.txt'))}. ${config.legacyWorkspace?'4. Call device_workspace_apply_patch exactly once with this patch (approval is provided): '+JSON.stringify(config.patch)+'. ':''}Final answer contains only the two exact markers read from input.txt and proof.txt. Do not call other tools, write/edit files except the explicitly requested patch, inspect other directories, run central commands, or rerun the command. The pre-created script generates its random marker only when Local Agent runs it.`;
-  const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',...(personalSkill?{clientMessageId:randomUUID(),skills:[{id:personalSkill.id,revision:personalSkill.revision}]}:{}),input:[{type:'text',text:personalSkill?`$${personalSkill.name} Follow this selected personal skill exactly. Its resources are on the client. Run its proof script once as instructed and return the two markers.`:prompt}]});turnId=turn?.turn?.id;
+  const permissionContext=config.permissionMode?`\nThe exact pre-created proof.ps1 contents are:\n${proofScript}\nI explicitly authorize this script to create proof.txt in this isolated QA project. That creation is the intended command effect. No other files may be modified.`:'';
+  const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',...(personalSkill?{clientMessageId:randomUUID(),skills:[{id:personalSkill.id,revision:personalSkill.revision}]}:{}),input:[{type:'text',text:personalSkill?`$${personalSkill.name} Follow this selected personal skill exactly. Its resources are on the client. Run its proof script once as instructed and return the two markers.`:prompt+permissionContext}]});turnId=turn?.turn?.id;
   await until(()=>turnDone,180000,'QA_MODEL_TURN_TIMEOUT');
   check(turnDone.status==='completed'&&!turnDone.error,'QA_MODEL_TURN_FAILED');
   const reads=[...toolCalls.values()].filter(call=>call.tool==='device_workspace_read_text'&&call.done&&call.succeeded),execs=[...toolCalls.values()].filter(call=>call.tool==='device_exec');
@@ -247,7 +264,17 @@ try{
     check(patches.length===1&&patches[0].done&&patches[0].succeeded,'QA_LEGACY_PATCH_RECEIPT_MISSING');
     evidence.legacyPatchVerified=true;
   }
+  if(config.permissionMode){
+    const alternate=config.permissionMode==='ask'?'full':'ask';
+    check((await request('conversation.permissions.set',{threadId,permissionMode:alternate})).permissionMode===alternate,'QA_PERMISSION_SWITCH_FAILED');
+    await request('conversation.permissions.set',{threadId,permissionMode:config.permissionMode});
+  }
   const resumed=await request('conversation.resume',{threadId});
+  if(config.permissionMode){
+    check(resumed.permissionMode===config.permissionMode,'QA_PERMISSION_MODE_NOT_PERSISTED');
+    check(permissionPrompts===(config.permissionMode==='ask'?1:0),'QA_PERMISSION_PROMPT_COUNT');
+    Object.assign(evidence,{permissionMode:config.permissionMode,permissionModePersisted:true,permissionSwitchVerified:true,manualApprovalCount:permissionPrompts,defaultAutoVerified:config.permissionMode==='auto'});
+  }
   if(catalogProject)check(resumed.thread?.clientProject?.folders[0]===project,'QA_PROJECT_SNAPSHOT_CHANGED');
   const history=await request('conversation.read',{threadId,includeTurns:true});
   check(history.thread?.turns?.some(t=>t.id===turnId&&t.status==='completed'),'QA_RESUMED_HISTORY_MISSING');

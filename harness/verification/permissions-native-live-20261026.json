@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-26",
+  "scope": "Prepublication native Mac ARM64 and real central model to Windows Local Agent permission acceptance",
+  "featureSource": "e03c13b",
+  "mac": {
+    "version": "0.163.0",
+    "compiled": true,
+    "compileSeconds": 526.134,
+    "packageId": "macos-arm64-node24-qa1-fe43c4f98a710cee",
+    "fileCount": 875,
+    "nativeGuardianProbe": true,
+    "runtimeBoundaryProbe": true,
+    "planGoalProbe": true,
+    "devicePermissionProtocolProbe": true,
+    "taskControlGatewayProbe": true,
+    "modelCredentialBrokerProbe": true
+  },
+  "realModel": {
+    "model": "gpt-6.1-sol",
+    "nativeGuardianAllowVerified": true,
+    "centralPlatform": "macos-arm64",
+    "clientPlatform": "windows-x64",
+    "agentVersion": "0.3.1",
+    "transport": "Isolated TLS gateway on central Mac via operator loopback forwarding; real remote Local Agent, no product SSH execution",
+    "modes": [
+      {
+        "mode": "auto",
+        "evidence": {
+          "actualLocalAgent": true,
+          "externalProjectVerified": true,
+          "legacyWorkspaceVerified": false,
+          "workspaceReadVerified": true,
+          "modelToolReadVerified": true,
+          "modelToolExecVerified": true,
+          "randomProofVerified": true,
+          "turnCompleted": true,
+          "runtimeMarkerVerified": true,
+          "permissionMode": "auto",
+          "permissionModePersisted": true,
+          "permissionSwitchVerified": true,
+          "manualApprovalCount": 0,
+          "defaultAutoVerified": true,
+          "resumeHistoryVerified": true
+        },
+        "summary": {
+          "inputSha256": "3d488561efe6bbe6158ca2f918bf0f51716ced38f63bfd2c7b2e4a81e02f325c",
+          "proofSha256": "25c914c648271ff77e1d459594d25a47e756066859c973ea314c65999a71579a",
+          "toolReadCount": 2,
+          "toolExecCount": 1,
+          "marker": "yuan-zhou-remote-workspace/1"
+        },
+        "agentExited": true,
+        "revoked": true,
+        "localTokenRemoved": true
+      },
+      {
+        "mode": "ask",
+        "evidence": {
+          "actualLocalAgent": true,
+          "externalProjectVerified": true,
+          "legacyWorkspaceVerified": false,
+          "workspaceReadVerified": true,
+          "modelToolReadVerified": true,
+          "modelToolExecVerified": true,
+          "randomProofVerified": true,
+          "turnCompleted": true,
+          "runtimeMarkerVerified": true,
+          "permissionMode": "ask",
+          "permissionModePersisted": true,
+          "permissionSwitchVerified": true,
+          "manualApprovalCount": 1,
+          "defaultAutoVerified": false,
+          "resumeHistoryVerified": true
+        },
+        "summary": {
+          "inputSha256": "52385527f29c7cbf4dbe826d5bcd4c651493e761d82e8bbdedc665ccbf4ca23b",
+          "proofSha256": "e3c8ee71a5c718fa9794091175bc8c17cf243ae603e289df713a893280c7039b",
+          "toolReadCount": 2,
+          "toolExecCount": 1,
+          "marker": "yuan-zhou-remote-workspace/1"
+        },
+        "agentExited": true,
+        "revoked": true,
+        "localTokenRemoved": true
+      },
+      {
+        "mode": "full",
+        "evidence": {
+          "actualLocalAgent": true,
+          "externalProjectVerified": true,
+          "legacyWorkspaceVerified": false,
+          "workspaceReadVerified": true,
+          "modelToolReadVerified": true,
+          "modelToolExecVerified": true,
+          "randomProofVerified": true,
+          "turnCompleted": true,
+          "runtimeMarkerVerified": true,
+          "permissionMode": "full",
+          "permissionModePersisted": true,
+          "permissionSwitchVerified": true,
+          "manualApprovalCount": 0,
+          "defaultAutoVerified": false,
+          "resumeHistoryVerified": true
+        },
+        "summary": {
+          "inputSha256": "f550f9a41a637d26f2df085c410f29ee515832d1b768f7675567538259ffa2d1",
+          "proofSha256": "cda3c02b210e07e9ab494cd0aad0efd49e33fc2af26df26ccae8fdf0e812a820",
+          "toolReadCount": 2,
+          "toolExecCount": 1,
+          "marker": "yuan-zhou-remote-workspace/1"
+        },
+        "agentExited": true,
+        "revoked": true,
+        "localTokenRemoved": true
+      }
+    ]
+  },
+  "releaseGates": {
+    "testsPassed": 15
+  },
+  "publication": {
+    "published": false,
+    "clientVersionPlanned": "0.3.2",
+    "centralAppUnchanged": "0.1.9",
+    "runtimeVersion": "0.163.0"
+  },
+  "limits": [
+    "Prepublication test service; formal 4510 activation remains a separate acceptance",
+    "Real benign approval does not prove every possible model risk classification",
+    "macOS Developer ID signing and notarization remain unqualified",
+    "Windows central 0.163.0 remains unsupported"
+  ]
+}
