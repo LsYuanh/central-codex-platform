@@ -11,6 +11,7 @@ import { ServiceControls } from "./ServiceControls";
 import { PeopleManagement } from "./PeopleManagement";
 import { OverviewMetrics } from "./OverviewMetrics";
 import { Diagnostics } from "./Diagnostics";
+import { RelaySettings } from "./RelaySettings";
 
 type Page = "overview" | "setup" | "people" | "models" | "diagnostics";
 const navigation: { id: Page; label: string; icon: Parameters<typeof UiIcon>[0]["name"] }[] = [
@@ -140,6 +141,7 @@ export default function App() {
 
         {(page === "overview" || page === "diagnostics") && <>
           {page === "diagnostics" && <><div className="page-heading"><div><p className="eyebrow">LOCAL CONFIGURATION</p><h1>设置与诊断</h1><p>查看本机状态、并发设置和诊断报告。</p></div></div><Diagnostics onConfigure={() => { setPage("setup"); setStep(2); }} /></>}
+          <RelaySettings />
           <RuntimeInspectionPanel management={management} onConfigure={() => { setPage("setup"); setStep(0); }} />
         </>}
         {page === "models" && <><div className="page-heading"><div><p className="eyebrow">MODEL ACCESS</p><h1>模型接入</h1><p>管理中央使用的模型账号。</p></div><Badge>本机安全存储</Badge></div><ModelAccounts selectedId={accountId} onSelect={selectAccount} /><p className="page-footnote">本轮所选账号将作为下次启动服务的默认模型账号，供该服务中已启用的用户使用。切换账号后需停止并重新启动服务。</p></>}

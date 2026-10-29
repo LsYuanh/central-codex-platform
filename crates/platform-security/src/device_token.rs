@@ -27,6 +27,8 @@ pub struct Credential {
     device_token: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ca_pem: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<crate::relay::Target>,
     pub device_id: String,
     pub device_key: String,
     pub user: User,
@@ -43,11 +45,43 @@ impl Drop for Credential {
     }
 }
 impl Credential {
+    pub async fn http(&self, gateway: &str, ca: &str) -> Result<crate::relay::HttpClient, String> {
+        let config = match self.ca_pem.as_deref() {
+            Some(pem) => crate::transport::config(Some(pem.as_bytes()))?,
+            None => crate::central_tls_config(ca)?,
+        };
+        crate::relay::HttpClient::new(
+            gateway,
+            self.relay.as_ref(),
+            crate::transport::http_builder(config),
+        )
+        .await
+    }
+    pub async fn post(
+        &self,
+        gateway: &str,
+        ca: &str,
+        route: &str,
+        body: Value,
+    ) -> Result<Value, String> {
+        let client = self.http(gateway, ca).await?;
+        crate::post_client(
+            client.client.clone(),
+            gateway,
+            route,
+            body,
+            Some(self.bearer()),
+        )
+        .await
+    }
+    pub async fn socket(&self, gateway: &str, ca: &str) -> Result<crate::Socket, String> {
+        crate::socket_routed(gateway, ca, self.bearer(), None, self.relay.as_ref()).await
+    }
     pub fn bearer(&self) -> &str {
         &self.device_token
     }
     pub fn public(&self) -> Value {
-        json!({"authMode":AUTH_MODE,"paired":true,"loggedIn":true,"user":{"id":self.user.id,"username":self.user.username},"deviceId":self.device_id,"deviceKey":self.device_key})
+        json!({"authMode":AUTH_MODE,"paired":true,"loggedIn":true,"user":{"id":self.user.id,"username":self.user.username},"deviceId":self.device_id,"deviceKey":self.device_key,"connectionMode":if self.relay.is_some(){"relay"}else{"lan"}})
     }
 }
 pub fn is_terminal(error: &str) -> bool {
@@ -142,6 +176,9 @@ fn locations(
     ))
 }
 fn validate(c: &Credential, namespace: &str, gateway: &str) -> Result<(), String> {
+    if let Some(relay) = &c.relay {
+        relay.validate().map_err(|_| CORRUPT)?;
+    }
     if let Some(ca) = &c.ca_pem {
         crate::pairing_bundle::validate_ca(ca).map_err(|_| CORRUPT)?;
     }
@@ -238,7 +275,7 @@ pub async fn pair(
     code: &str,
     name: &str,
 ) -> Result<Credential, String> {
-    pair_inner(app, namespace, gateway, ca, code, name, None).await
+    pair_inner(app, namespace, gateway, ca, code, name, None, None).await
 }
 pub async fn pair_bundle(
     app: &Path,
@@ -254,6 +291,7 @@ pub async fn pair_bundle(
         &bundle.token,
         name,
         Some(&bundle.ca_pem),
+        bundle.relay.as_ref(),
     )
     .await
 }
@@ -265,6 +303,7 @@ async fn pair_inner(
     code: &str,
     name: &str,
     bundled_ca: Option<&str>,
+    relay: Option<&crate::relay::Target>,
 ) -> Result<Credential, String> {
     // Validate/create the private location before consuming the single-use code.
     let _ = locations(app, namespace, gateway, true)?;
@@ -276,10 +315,13 @@ async fn pair_inner(
     if code.trim().is_empty() || code.len() > 256 || name.trim().is_empty() || name.len() > 256 {
         return Err("PAIR_INPUT_INVALID".into());
     }
-    let client = match bundled_ca {
-        Some(pem) => crate::pairing_bundle::http(pem)?,
-        None => crate::http(ca)?,
+    let config = match bundled_ca {
+        Some(pem) => crate::transport::config(Some(pem.as_bytes()))?,
+        None => crate::central_tls_config(ca)?,
     };
+    let client =
+        crate::relay::HttpClient::new(gateway, relay, crate::transport::http_builder(config))
+            .await?;
     let value = crate::post_client(
         client.clone(),
         gateway,
@@ -303,6 +345,7 @@ async fn pair_inner(
         origin: crate::origin(gateway)?,
         device_token: string("deviceToken")?,
         ca_pem: bundled_ca.map(str::to_owned),
+        relay: relay.cloned(),
         device_id: string("deviceId")?,
         device_key: string("deviceKey")?,
         user: serde_json::from_value(value["user"].clone()).map_err(|_| CORRUPT)?,
@@ -320,13 +363,10 @@ async fn pair_inner(
         return Err(e);
     }
     if let Some(previous) = previous {
-        let previous_client = match previous.ca_pem.as_deref() {
-            Some(pem) => crate::pairing_bundle::http(pem),
-            None => crate::http(ca),
-        };
+        let previous_client = previous.http(gateway, ca).await;
         if let Ok(previous_client) = previous_client {
             let _ = crate::post_client(
-                previous_client,
+                previous_client.client.clone(),
                 gateway,
                 "/auth/device/disconnect",
                 json!({}),
@@ -397,15 +437,7 @@ pub async fn status(app: &Path, namespace: &str, gateway: &str, ca: &str) -> Val
         }
     };
     let mut public = c.public();
-    match crate::post(
-        gateway,
-        ca,
-        "/auth/device/status",
-        json!({}),
-        Some(c.bearer()),
-    )
-    .await
-    {
+    match c.post(gateway, ca, "/auth/device/status", json!({})).await {
         Ok(remote) => {
             if remote["authMode"] != AUTH_MODE
                 || remote["deviceId"] != c.device_id
@@ -457,14 +489,9 @@ pub async fn disconnect(
         }
         Err(e) => return Err(e),
     };
-    let remote = crate::post(
-        gateway,
-        ca,
-        "/auth/device/disconnect",
-        json!({}),
-        Some(c.bearer()),
-    )
-    .await;
+    let remote = c
+        .post(gateway, ca, "/auth/device/disconnect", json!({}))
+        .await;
     remove(app, namespace, gateway)?;
     Ok(
         json!({"disconnected":true,"localRemoved":true,"remoteRevocationConfirmed":remote.is_ok()||remote.as_ref().err().is_some_and(|e|e=="DEVICE_REVOKED")}),
@@ -477,7 +504,7 @@ pub async fn agent_socket(
     ca: &str,
 ) -> Result<crate::Socket, String> {
     let c = load(app, namespace, gateway)?;
-    crate::socket(gateway, ca, c.bearer()).await
+    c.socket(gateway, ca).await
 }
 
 #[cfg(unix)]
@@ -872,6 +899,7 @@ mod tests {
             origin: crate::origin(gateway).unwrap(),
             device_token: format!("ydt1.{}.{}", "a".repeat(36), "b".repeat(43)),
             ca_pem: None,
+            relay: None,
             device_id: "device-test".into(),
             device_key: "c".repeat(64),
             user: User {

@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, time::Duration};
 use tokio_tungstenite::{
-    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
+    Connector, MaybeTlsStream, WebSocketStream, client_async_tls_with_config,
     tungstenite::client::IntoClientRequest,
 };
 use url::Url;
@@ -16,9 +16,10 @@ pub mod central_secret_store;
 pub mod device_certificate;
 pub mod device_token;
 pub mod pairing_bundle;
+pub mod relay;
 mod transport;
 
-pub type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+pub type Socket = WebSocketStream<MaybeTlsStream<relay::NetworkStream>>;
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Credential {
@@ -312,6 +313,15 @@ async fn socket_identity(
     bearer: &str,
     identity: Option<rustls::ClientConfig>,
 ) -> Result<Socket, String> {
+    socket_routed(url, ca, bearer, identity, None).await
+}
+pub(crate) async fn socket_routed(
+    url: &str,
+    ca: &str,
+    bearer: &str,
+    identity: Option<rustls::ClientConfig>,
+    relay: Option<&relay::Target>,
+) -> Result<Socket, String> {
     origin(url)?;
     let mut request = url.into_client_request().map_err(|_| "网关地址无效")?;
     request.headers_mut().insert(
@@ -325,16 +335,17 @@ async fn socket_identity(
         None => transport::config(ca_bytes(ca)?.as_deref())?,
     };
     let connector = Connector::Rustls(std::sync::Arc::new(config));
+    let stream = relay::NetworkStream::connect(url, relay).await?;
     let (socket, _) = tokio::time::timeout(
         Duration::from_secs(15),
-        connect_async_tls_with_config(
+        client_async_tls_with_config(
             request,
+            stream,
             Some(
                 tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
                     .max_message_size(None)
                     .max_frame_size(None),
             ),
-            false,
             Some(connector),
         ),
     )

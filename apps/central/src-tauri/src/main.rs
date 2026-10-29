@@ -20,6 +20,7 @@ mod model_proxy;
 mod people;
 #[cfg(all(test, windows, debug_assertions))]
 mod people_ui_qa;
+mod relay;
 mod runtime_package;
 mod runtime_updates;
 mod service;
@@ -691,21 +692,65 @@ async fn central_people_pair_code(
     expected_instance_id: String,
     request_id: String,
     user_id: String,
+    lan_only: Option<bool>,
 ) -> config::Result<people::MutationResult> {
     let root = config_root(&app)?;
+    let relay_target = if lan_only == Some(true) {
+        None
+    } else {
+        app.state::<Arc<relay::Manager>>()
+            .target(&root, &expected_instance_id)?
+    };
     let controller = state.inner().clone();
     let manager = people.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        manager.mutate(
+        let mut result = manager.mutate(
             &controller,
             &root,
             &expected_instance_id,
             &request_id,
             people::Mutation::PairCode { user_id },
-        )
+        )?;
+        if let Some(pairing) = &mut result.pairing {
+            let mut bundle = platform_security::pairing_bundle::Bundle::decode(
+                pairing
+                    .connection_code
+                    .as_deref()
+                    .ok_or_else(|| config::failure("OUTCOME_UNKNOWN"))?,
+            )
+            .map_err(|_| config::failure("OUTCOME_UNKNOWN"))?;
+            bundle.relay = relay_target;
+            pairing.connection_code = Some(
+                bundle
+                    .encode()
+                    .map_err(|_| config::failure("OUTCOME_UNKNOWN"))?,
+            );
+        }
+        Ok(result)
     })
     .await
     .map_err(|_| config::failure("INTERNAL_ERROR"))?
+}
+
+#[tauri::command]
+fn central_relay_status(
+    state: tauri::State<'_, Arc<relay::Manager>>,
+) -> config::Result<relay::Status> {
+    state.status()
+}
+#[tauri::command]
+async fn central_relay_save(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<relay::Manager>>,
+    service: tauri::State<'_, Arc<service::Service>>,
+    access: Option<peer_transport::relay::Access>,
+) -> config::Result<relay::Status> {
+    let root = config_root(&app)?;
+    let manager = state.inner().clone();
+    let service = service.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.save(&service, &root, access))
+        .await
+        .map_err(|_| config::failure("INTERNAL_ERROR"))?
 }
 
 #[tauri::command]
@@ -810,6 +855,7 @@ fn main() {
     let app = tauri::Builder::default()
         .manage(Arc::new(service::Service::new()))
         .manage(Arc::new(people::People::new()))
+        .manage(Arc::new(relay::Manager::new()))
         .invoke_handler(tauri::generate_handler![
             central_ui_context,
             central_choose_directory,
@@ -831,6 +877,8 @@ fn main() {
             central_model_login_cancel,
             central_model_login_open,
             central_service_status,
+            central_relay_status,
+            central_relay_save,
             central_runtime_update_status,
             central_runtime_update_check,
             central_service_context,
@@ -850,6 +898,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("无法启动中央管理应用");
     if let Ok(root) = config_root(app.handle()) {
+        tauri::async_runtime::spawn(relay::monitor(
+            Arc::downgrade(app.state::<Arc<relay::Manager>>().inner()),
+            Arc::downgrade(app.state::<Arc<service::Service>>().inner()),
+            root.clone(),
+        ));
         if let Ok(resources) = app.path().resource_dir() {
             let weak = Arc::downgrade(app.state::<Arc<service::Service>>().inner());
             let update_root = root.clone();

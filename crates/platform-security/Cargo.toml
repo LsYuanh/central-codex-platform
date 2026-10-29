@@ -6,6 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+peer-transport = { path = "../peer-transport" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -30,5 +31,11 @@ libc = "0.2"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
 [dev-dependencies]
+reqwest-updater = { package = "reqwest", version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }
+iroh = { version = "=1.4.1", default-features = false, features = ["tls-ring"] }
+iroh-relay = { version = "=1.4.1", default-features = false, features = ["server", "tls-ring"] }
+rcgen = "0.14"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+anyhow = "1"
 tempfile = "3"
 futures-util.workspace = true

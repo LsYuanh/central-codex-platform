@@ -11,6 +11,7 @@ publish.workspace = true
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+peer-transport = { path = "../../../crates/peer-transport" }
 tauri.workspace = true
 tokio.workspace = true
 serde.workspace = true

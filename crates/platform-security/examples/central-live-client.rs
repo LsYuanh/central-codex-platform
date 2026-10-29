@@ -150,7 +150,7 @@ async fn run() -> Result<(), &'static str> {
                     // Probe only this paired device. Keep credentials and leases
                     // inside the native helper; never run an installer here.
                     let credential=platform_security::device_token::load(&bootstrap.token_root,&bootstrap.namespace,&bootstrap.gateway).map_err(|_|"QA_HELPER_CREDENTIAL_FAILED")?;
-                    let client=platform_security::http(&bootstrap.ca_path).map_err(|_|"QA_HELPER_HTTP_FAILED")?;
+                    let client=credential.http(&bootstrap.gateway,&bootstrap.ca_path).await.map_err(|_|"QA_HELPER_HTTP_FAILED")?;
                     let origin=platform_security::origin(&bootstrap.gateway).map_err(|_|"QA_HELPER_TARGET_INVALID")?;
                     let response=client.post(format!("{origin}/client-updates/prepare")).bearer_auth(credential.bearer()).header("x-update-version","0.3.3").send().await.map_err(|_|"QA_HELPER_HTTP_FAILED")?;
                     let status=response.status().as_u16();

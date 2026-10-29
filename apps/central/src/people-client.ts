@@ -60,7 +60,7 @@ export const peopleLogout = async (expectedInstanceId: string) => readPeopleStat
 // authorize refresh + users + devices are serialized native HTTP calls (15s
 // each), so a read-only inventory may need more time than a single mutation.
 export const peopleList = async (expectedInstanceId: string) => readPeopleInventory(await nativeCall<unknown>('central_people_list', 50000, { expectedInstanceId }), expectedInstanceId);
-export async function peopleMutation(command: Mutation, expectedInstanceId: string, requestId: string, target: { username?: string; userId?: string; deviceId?: string }): Promise<MutationResult> {
+export async function peopleMutation(command: Mutation, expectedInstanceId: string, requestId: string, target: { username?: string; userId?: string; deviceId?: string; lanOnly?: boolean }): Promise<MutationResult> {
   return readMutationResult(await nativeCall<unknown>(`central_people_${command}`, 40000, { expectedInstanceId, requestId, ...target }), expectedInstanceId, requestId);
 }
 export function peopleCode(cause: unknown): string {
@@ -69,6 +69,8 @@ export function peopleCode(cause: unknown): string {
 export function peopleOutcomeUnknown(cause: unknown) { return ['OUTCOME_UNKNOWN', 'OPERATION_TIMEOUT', 'PEOPLE_PROTOCOL_INVALID', 'PEOPLE_REQUEST_FAILED', 'REQUEST_ID_CONFLICT', 'REQUEST_EXPIRED'].includes(peopleCode(cause)); }
 export function peopleMessage(cause: unknown): string {
   const messages: Record<string, string> = {
+    RELAY_NOT_READY: '公网中继尚未就绪，请到运行概览检查连接状态后再生成配对码。',
+    RELAY_STORAGE_FAILED: '公网中继配置读取失败，请检查本机配置。',
     OUTCOME_UNKNOWN: '操作结果尚未确认。请刷新核对，不要重复提交。',
     OPERATION_TIMEOUT: '等待已超时，原生操作可能仍在进行。请刷新核对，不要重复提交。',
     ADMIN_AUTH_REQUIRED: '管理员会话已失效，请重新登录。',

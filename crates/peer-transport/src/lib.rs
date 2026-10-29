@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
-//! Phase-one transport verification. Not yet wired into either desktop application.
+//! Encrypted byte transport. Business authentication remains in the central gateway.
+pub mod relay;
 
 use std::{
     pin::Pin,
@@ -20,11 +21,20 @@ pub const PROBE_ALPN: &[u8] = b"yuan-zhou/peer-transport-probe/2";
 pub struct PeerStream {
     send: iroh::endpoint::SendStream,
     recv: iroh::endpoint::RecvStream,
+    connection: Option<Connection>,
 }
 
 impl PeerStream {
     pub fn new(send: iroh::endpoint::SendStream, recv: iroh::endpoint::RecvStream) -> Self {
-        Self { send, recv }
+        Self {
+            send,
+            recv,
+            connection: None,
+        }
+    }
+    pub fn retain_connection(mut self, connection: Connection) -> Self {
+        self.connection = Some(connection);
+        self
     }
 }
 

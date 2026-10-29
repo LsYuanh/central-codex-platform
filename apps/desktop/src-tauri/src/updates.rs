@@ -70,7 +70,7 @@ pub async fn recover_attempt(app: &tauri::AppHandle) {
             &platform.namespace,
             gateway,
         )?;
-        let client = platform_security::http(&platform.ca(gateway)?)?;
+        let client = credential.http(gateway, &platform.ca(gateway)?).await?;
         client
             .post(format!("{origin}/client-updates/resume"))
             .bearer_auth(credential.bearer())
@@ -175,6 +175,13 @@ pub async fn desktop_update_check(
     let ca = platform.ca(&config.gateway_url)?;
     // Construct the TLS builder before entering the plugin callback so errors remain explicit.
     let tls = platform_security::central_tls_config(&ca)?;
+    let route =
+        platform_security::relay::HttpRoute::new(&config.gateway_url, c.relay.as_ref()).await?;
+    let proxy = route
+        .proxy_url()
+        .map(reqwest::Proxy::https)
+        .transpose()
+        .map_err(|_| "中继连接配置无效")?;
     let updater = app
         .updater_builder()
         .endpoints(vec![
@@ -187,6 +194,11 @@ pub async fn desktop_update_check(
         .timeout(Duration::from_secs(20))
         .no_proxy()
         .configure_client(move |builder| {
+            let builder = if let Some(proxy) = &proxy {
+                builder.proxy(proxy.clone())
+            } else {
+                builder
+            };
             builder
                 .use_preconfigured_tls(tls.clone())
                 .https_only(true)
@@ -242,10 +254,13 @@ pub async fn desktop_update_download(
         return Err("配置已变更，请重新检查更新".into());
     }
     let c = credentials(&platform, &p.config)?;
-    let client = platform_security::http_builder(&platform.ca(&p.config.gateway_url)?)?
-        .timeout(Duration::from_secs(600))
-        .build()
-        .map_err(|_| "更新下载初始化失败")?;
+    let client = platform_security::relay::HttpClient::new(
+        &p.config.gateway_url,
+        c.relay.as_ref(),
+        platform_security::http_builder(&platform.ca(&p.config.gateway_url)?)?
+            .timeout(Duration::from_secs(600)),
+    )
+    .await?;
     let mut response = client
         .get(p.update.download_url.clone())
         .bearer_auth(c.bearer())
@@ -331,7 +346,9 @@ pub async fn desktop_update_install(
         }
         let c = credentials(&platform, &config)?;
         let origin = platform_security::origin(&config.gateway_url)?;
-        let client = platform_security::http(&platform.ca(&config.gateway_url)?)?;
+        let client = c
+            .http(&config.gateway_url, &platform.ca(&config.gateway_url)?)
+            .await?;
         let response = client
             .post(format!("{origin}/client-updates/prepare"))
             .header("x-update-version", &p.update.version)

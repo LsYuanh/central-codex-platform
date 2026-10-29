@@ -20,6 +20,13 @@ impl LocalRelay {
     }
 
     pub async fn start_with_qad(qad: bool) -> Result<Self> {
+        Self::start_config(qad, None).await
+    }
+    #[allow(dead_code)]
+    pub async fn authenticated(token: &str) -> Result<Self> {
+        Self::start_config(false, Some(token.to_owned())).await
+    }
+    async fn start_config(qad: bool, token: Option<String>) -> Result<Self> {
         let generated =
             rcgen::generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()])?;
         let certificate = generated.cert.der().clone();
@@ -31,6 +38,9 @@ impl LocalRelay {
         .with_no_client_auth()
         .with_single_cert(vec![certificate.clone()], key.into())?;
         let mut relay = RelayConfig::new((Ipv4Addr::LOCALHOST, 0));
+        if let Some(token) = token {
+            relay.access = Arc::new(TokenAccess(token));
+        }
         relay.tls = Some(TlsConfig::new(
             (Ipv4Addr::LOCALHOST, 0),
             CertConfig::Manual { server_config: tls },
@@ -74,5 +84,27 @@ impl LocalRelay {
             builder = builder.bind_addr((Ipv4Addr::LOCALHOST, 0))?;
         }
         Ok(builder.bind().await?)
+    }
+}
+
+#[derive(Debug)]
+struct TokenAccess(String);
+impl iroh_relay::server::AccessControl for TokenAccess {
+    async fn on_connect(
+        &self,
+        request: &iroh_relay::server::ClientRequest,
+    ) -> iroh_relay::server::Access {
+        // Native product clients must not put admission secrets into URLs.
+        if request.uri().query().is_none()
+            && request
+                .headers()
+                .get("Authorization")
+                .and_then(|v| v.to_str().ok())
+                == Some(format!("Bearer {}", self.0).as_str())
+        {
+            iroh_relay::server::Access::Allow
+        } else {
+            iroh_relay::server::Access::Deny { reason: None }
+        }
     }
 }

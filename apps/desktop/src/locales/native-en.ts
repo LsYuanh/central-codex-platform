@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Exact app-owned native messages. Unknown OS/Agent errors remain verbatim.
 export const nativeEn = {
+  "公网中继配置无效，请管理员重新生成配对码。": "Invalid relay configuration. Ask your administrator for a new pairing code.",
+  "公网中继连接失败，请检查网络和中央中继状态后重试。": "Relay connection failed. Check the network and central relay status, then retry.",
+  "本机中继通道未能启动，请重试。": "The local relay channel could not start. Please retry.",
+  "连接方式": "Connection mode",
+  "公网中继转发": "Public relay",
+  "局域网连接": "LAN connection",
   "还有对话正在运行，请结束后重试安装": "A conversation is still running. Finish it, then retry installation.",
   "本机操作正在进行，请完成后重试安装": "A local operation is in progress. Finish it, then retry installation.",
   "本机命令仍在运行，请结束后重试安装": "A local command is still running. Finish it, then retry installation.",

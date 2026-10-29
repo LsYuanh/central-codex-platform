@@ -18,6 +18,9 @@ const notices = {
   CENTRAL_CONNECTION_REFUSED: "中央拒绝连接，请确认中央服务已启动且端口正确。",
   CENTRAL_CONNECTION_TIMEOUT: "中央连接超时，请检查网络与中央服务后重试。",
   CENTRAL_CONNECTION_FAILED: "中央连接未能建立，请检查网络、地址和中央服务后重试。",
+  RELAY_CONFIG_INVALID: "公网中继配置无效，请管理员重新生成配对码。",
+  RELAY_CONNECTION_FAILED: "公网中继连接失败，请检查网络和中央中继状态后重试。",
+  RELAY_LOCAL_BIND_FAILED: "本机中继通道未能启动，请重试。",
 } as const;
 export type CentralTransportCode = keyof typeof notices;
 export function centralTransportCode(value: unknown): CentralTransportCode | undefined {
@@ -33,7 +36,7 @@ export function centralTransportNotice(value: unknown): string | undefined {
   return code ? `${t(notices[code])}（${code}）` : undefined;
 }
 
-export type DeviceAccount={authMode:string;loggedIn:boolean;paired:boolean;user?:{id:string;username?:string}|null;deviceId?:string;deviceKey?:string;storageError?:string;authorizationError?:string;remoteAvailable?:boolean;connectionError?:string;gatewayUrl?:string};
+export type DeviceAccount={authMode:string;loggedIn:boolean;paired:boolean;user?:{id:string;username?:string}|null;deviceId?:string;deviceKey?:string;storageError?:string;authorizationError?:string;remoteAvailable?:boolean;connectionError?:string;gatewayUrl?:string;connectionMode?:'lan'|'relay'};
 const errors:Record<string,MessageKey>={
   PAIR_BUNDLE_INVALID: "一体配对码不完整或格式错误，请重新复制完整内容。",
   PAIR_BUNDLE_EXPIRED: "一体配对码已过期，请管理员重新生成。",

@@ -15,6 +15,8 @@ pub struct Bundle {
     pub ca_pem: String,
     pub token: String,
     pub expires_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<crate::relay::Target>,
 }
 impl Drop for Bundle {
     fn drop(&mut self) {
@@ -40,12 +42,16 @@ impl Bundle {
             ca_pem,
             token,
             expires_at,
+            relay: None,
         };
         value.validate(now())?;
         Ok(value)
     }
     fn validate(&self, time: u64) -> Result<(), String> {
         let invalid = || "PAIR_BUNDLE_INVALID".to_string();
+        if let Some(relay) = &self.relay {
+            relay.validate().map_err(|_| invalid())?;
+        }
         if self.version != 1
             || self.gateway.len() > 4096
             || self.token.len() < 32

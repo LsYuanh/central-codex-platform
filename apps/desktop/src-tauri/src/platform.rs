@@ -263,7 +263,7 @@ pub async fn platform_ws_open(
         return Err("CENTRAL_IDENTITY_MISMATCH".into());
     }
     let url = crate::runtime::ui_url(&config);
-    let socket = platform_security::socket(&url, &ca, c.bearer()).await?;
+    let socket = c.socket(&url, &ca).await?;
     state.require_page(page)?;
     let mut sockets = state.sockets.lock().await;
     let (tx, mut rx) = mpsc::channel::<Option<String>>(64);

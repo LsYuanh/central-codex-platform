@@ -22,7 +22,7 @@ use tokio::{
     task::JoinSet,
     time,
 };
-use tokio_tungstenite::{connect_async_with_config, tungstenite::Message};
+use tokio_tungstenite::{client_async_tls_with_config, tungstenite::Message};
 mod attachments;
 mod command_output;
 mod documents;
@@ -246,14 +246,16 @@ async fn run_connection(
         )
         .await?
     } else {
-        connect_async_with_config(
+        // Development loopback uses the same stream type; production remains credential-routed WSS.
+        client_async_tls_with_config(
             &config.gateway_url,
+            platform_security::relay::NetworkStream::connect(&config.gateway_url, None).await?,
             Some(
                 tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
                     .max_message_size(None)
                     .max_frame_size(None),
             ),
-            false,
+            None,
         )
         .await?
         .0

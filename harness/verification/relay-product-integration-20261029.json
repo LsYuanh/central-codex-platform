@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-29",
+  "scope": "relay-only product source integration and isolated Windows acceptance",
+  "releaseStatus": "unreleased",
+  "strategy": "User deferred direct connectivity; all new relay-configured business traffic uses authenticated encrypted relay immediately.",
+  "transport": {
+    "irohVersion": "1.4.1",
+    "ipTransportsEnabled": false,
+    "thirdPartyDiscoveryEnabled": false,
+    "innerTlsPreserved": true,
+    "centralIdentityPinned": true,
+    "gatewayForwardTarget": "fixed address owned by the central host",
+    "relayAdmission": "shared team token in HTTPS Authorization header",
+    "businessAuthentication": "existing device-token-v1",
+    "newBusinessQuotas": false,
+    "legacyLanSupported": true,
+    "explicitLanPairingSupported": true
+  },
+  "passed": [
+    "cargo check --workspace --locked",
+    "cargo fmt --all -- --check",
+    "desktop and central TypeScript checks and Vite builds",
+    "Local Agent 21 unit tests",
+    "platform-security 27 unit tests including native DPAPI/ACL",
+    "central-app 93 unit tests; 13 environment-dependent tests explicitly ignored",
+    "3 real TLS/iroh relay product integration tests",
+    "paired credential persistence and public connectionMode without secrets",
+    "reqwest 0.12 and updater reqwest 0.13 use CONNECT relay with original TLS hostname",
+    "WSS 8388625-byte exact echo",
+    "wrong admission token, incorrect inner TLS hostname and nonlocal forward target rejected",
+    "mixed private-key PEM rejected before pairing",
+    "device revocation blocks further authenticated HTTPS/WSS access",
+    "real Local Agent reads temporary client proof file and executes PowerShell twice through relay",
+    "forwarder shutdown closes the existing connection within five seconds; same central identity restart permits Agent automatic reconnect",
+    "isolated real central Tauri UI saves initial relay config, clears password field, reloads public state and disables config",
+    "native UI repeats eight private config replacements across monitor ticks; stale read/connection results cannot overwrite a newer save",
+    "central relay UI screenshot visually inspected",
+    "16 existing LAN native token/pairing/TLS/revocation regression checks",
+    "client pairing UI state smoke and 15 central people DTO/state checks",
+    "repository layout smoke"
+  ],
+  "testBoundaries": {
+    "relayAndInnerTls": "real loopback services, synthetic identity and business HTTP/WSS server",
+    "agent": "actual Windows local-agent process; temporary client workspace",
+    "centralUi": "actual Tauri WebView and IPC with isolated application identifier; no gateway start",
+    "realCentralModelThroughNewTransport": false,
+    "newProductWanAcceptance": false,
+    "priorWanProbeEvidence": "peer-transport-cellular-wan-20261029.json",
+    "macNativeAppAcceptance": false,
+    "fullSignedUpdaterDownloadInstall": false
+  },
+  "operationalState": {
+    "productionCentralRestarted": false,
+    "existingCloudServicesModified": false,
+    "installedClientsReplaced": false,
+    "installersPackaged": false,
+    "releasedOrPushed": false
+  },
+  "remaining": [
+    "Mac native App build, service lifecycle and relay reconnect acceptance",
+    "real central model and client tools through the new product relay route",
+    "isolated public deployment, long interruption recovery and full signed updater download/install",
+    "explicit release/deployment instruction before updating installed applications or formal services"
+  ],
+  "credentialCaveat": "Device revocation removes business access but does not individually revoke a shared relay admission token. Rotate and redistribute pairing configuration when relay admission itself must be withdrawn."
+}
