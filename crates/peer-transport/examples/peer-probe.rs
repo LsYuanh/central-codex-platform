@@ -57,7 +57,14 @@ async fn main() -> Result<()> {
         bytes: number("PEER_PROBE_BYTES", 8388625)?,
     };
     ensure!(config.bytes > 0, "probe sample must be non-empty");
-    let mut builder = Endpoint::builder(presets::Minimal).alpns(vec![PROBE_ALPN.to_vec()]);
+    let mut net_report = iroh::NetReportConfig::default();
+    // Our temporary relay's plain HTTP helper is loopback-only. The library's
+    // captive-portal check targets public port 80, which belongs to existing
+    // business services here. Keep QAD/HTTPS checks, skip that unrelated request.
+    net_report.captive_portal_check = false;
+    let mut builder = Endpoint::builder(presets::Minimal)
+        .alpns(vec![PROBE_ALPN.to_vec()])
+        .net_report_config(net_report);
     if let Ok(path) = std::env::var("PEER_PROBE_SECRET_FILE") {
         // The harness creates a private 32-byte seed outside tracked source files.
         // Never accept a secret through a URL, command argument or diagnostic output.

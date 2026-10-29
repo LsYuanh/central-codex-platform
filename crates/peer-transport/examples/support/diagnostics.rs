@@ -176,7 +176,7 @@ pub fn private_trace() -> Result<bool> {
     // can include network addresses and must never be copied into public evidence.
     tracing_subscriber::fmt()
         .with_env_filter(
-            "warn,iroh::net_report=trace,iroh::socket::remote_map=trace,iroh_relay::quic=debug",
+            "warn,iroh::net_report=trace,iroh::socket=debug,iroh::socket::remote_map=trace,iroh_relay::quic=debug,noq=debug,noq_proto=debug,noq_proto::n0_nat_traversal=trace",
         )
         .with_timer(tracing_subscriber::fmt::time::uptime())
         .with_ansi(false)

@@ -1,0 +1,104 @@
+{
+  "schema": "yuan-zhou-peer-transport-network-diagnostics/v1",
+  "date": "2026-10-29",
+  "status": "same-public-exit-observation-completed-real-cellular-retest-preparing",
+  "scope": "Isolated native probe protocol v2, no product integration",
+  "topology": {
+    "windowsHotspotConnected": true,
+    "windowsEthernetDisconnectedDuringTest": true,
+    "macOfficeNetwork": true,
+    "phoneStillOnOfficeWifiConfirmedByUser": true,
+    "publicIpv4ExitSame": true,
+    "independentPublicExitsVerified": false
+  },
+  "cases": [
+    {
+      "name": "direct-preferred-90s",
+      "sampleBytes": 1048593,
+      "lengthAndSha256Matched": true,
+      "windowsObservationMs": 90064,
+      "windowsHeartbeats": 80,
+      "macHeartbeats": 80,
+      "bothComplete": true,
+      "routeBefore": "Relay",
+      "routeAfter": "Relay",
+      "directObserved": false
+    },
+    {
+      "name": "forced-relay",
+      "sampleBytes": 1048593,
+      "lengthAndSha256Matched": true,
+      "windowsObservationMs": 10092,
+      "windowsHeartbeats": 9,
+      "macHeartbeats": 9,
+      "bothComplete": true,
+      "routeBefore": "Relay",
+      "routeAfter": "Relay",
+      "directObserved": false
+    }
+  ],
+  "automaticDiagnostics": {
+    "bothQadIpv4Successful": true,
+    "bothPublicIpv4Candidates": true,
+    "publicIpv6Candidates": false,
+    "natInitiationRounds": 4,
+    "firstRoundCandidates": 0,
+    "laterRoundsCandidates": 2,
+    "validNatResponses": 0,
+    "windowsRoundTimesSeconds": [
+      1.121,
+      1.341,
+      6.353,
+      60.921
+    ],
+    "mappingVariesIpv4": null,
+    "macHostUnreachableDuringHotspotCase": false
+  },
+  "relayCounters": {
+    "scope": "Aggregate of both hotspot cases, not per case",
+    "relayserver_bytes_sent_total": 4350798,
+    "relayserver_bytes_recv_total": 4350798,
+    "relayserver_send_packets_dropped_total": 0,
+    "relayserver_other_packets_dropped_total": 0,
+    "relayserver_bytes_rx_ratelimited_total": 0
+  },
+  "officeControls": {
+    "plainUdpBothDirectionsPassed": true,
+    "preflightNativeDirectObserved": false,
+    "macLanProbeSendHostUnreachableObserved": true,
+    "subsequentNativeRelayAddressBootstrapReachedLanDirect": true,
+    "subsequentFullAddressBootstrapStayedRelay": true,
+    "oneSamplePerBootstrapVariant": true,
+    "bootstrapCausalityEstablished": false,
+    "macProbeListedAsFirewallAllowed": true,
+    "firewallConfigurationChanged": false,
+    "privilegedPacketCapturePerformed": false
+  },
+  "probeChanges": {
+    "captivePortalCheckDisabled": true,
+    "reason": "Default check targets public HTTP port 80 used by existing business; false captive indication from 404. QAD and strict HTTPS retained.",
+    "privateNoqNatTraversalTracingAdded": true,
+    "productLimitsAdded": false
+  },
+  "cleanup": {
+    "cloudTestListenersAbsent": true,
+    "cloudDirectoryRemoved": true,
+    "testSecurityGroupRemoved": true,
+    "originalSecurityGroupsRestored": true,
+    "cloudBusinessListenersAndPidsUnchanged": true,
+    "macProbeProcessesAbsent": true,
+    "macIsolatedDirectoryAndOwnedUploadsRemoved": true,
+    "macCentralGatewayPidUnchanged": true,
+    "existingMacToolchainPreserved": true,
+    "localProbeSeedsRemoved": true,
+    "businessEndToEndAcceptancePerformed": false
+  },
+  "conclusions": [
+    "This hotspot run did not validate independent network exits; user confirmed phone remained on office Wi-Fi.",
+    "Long observation and relay echo passed. Direct was not observed; short waiting alone does not explain this sample.",
+    "Same-exit NAT hairpin, hotspot forwarding, transport and host behavior remain possible; none is proven as root cause.",
+    "One public QAD target cannot classify mapping/filtering behavior; no blame assigned to company router.",
+    "Previous hotspot results retain their transfer evidence, but independent exits were not established and need revalidation."
+  ],
+  "next": "User offered cellular data; a fresh isolated round is being prepared. Verify distinct public exits before claiming cross-network acceptance."
+}

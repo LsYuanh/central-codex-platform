@@ -1,7 +1,7 @@
 {
   "schema": "yuan-zhou-peer-transport-wan/v1",
   "date": "2026-10-29",
-  "status": "cross-network-relay-passed-direct-not-observed-cleanup-complete",
+  "status": "hotspot-relay-passed-independent-exits-unverified-cleanup-complete",
   "scope": "Windows mobile hotspot to Mac office network, synthetic native probe traffic only",
   "network": {
     "operatorConfirmedMobileHotspot": true,
@@ -72,5 +72,10 @@
     "Investigate candidate addresses, UDP reachability, NAT mapping/filtering and direct establishment timing before changing the transport strategy",
     "Do not declare full phase-one success or integrate/release the product based only on successful relay traffic"
   ],
-  "privacy": "Credentials, IPs, endpoint identities, business domains and private paths omitted."
+  "privacy": "Credentials, IPs, endpoint identities, business domains and private paths omitted.",
+  "topologyQualification": {
+    "independentPublicExitsVerified": false,
+    "followupEvidence": "peer-transport-network-diagnostics-20261029.json",
+    "note": "Later sustained hotspot test observed the same public IPv4; user confirmed phone remained on company Wi-Fi. Transfer and relay evidence stand, but historical cross-network labeling is not established."
+  }
 }

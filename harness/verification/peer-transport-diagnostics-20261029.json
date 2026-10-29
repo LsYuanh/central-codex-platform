@@ -62,5 +62,7 @@
     "failedSystemdServices": 0,
     "macSshAvailable": true,
     "newDeploymentStarted": false
-  }
+  },
+  "followupEvidence": "peer-transport-network-diagnostics-20261029.json",
+  "followupNote": "Historical local-only record. Subsequent Mac/cloud isolated execution completed, but phone remained on office Wi-Fi: independent WAN exits not verified. See follow-up evidence."
 }
