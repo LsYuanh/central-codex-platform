@@ -90,6 +90,15 @@ async fn connect(
     server: &Endpoint,
     address: EndpointAddr,
 ) -> Result<(Connection, Connection)> {
+    connect_with_grace(client, server, address, DIRECT_GRACE).await
+}
+
+async fn connect_with_grace(
+    client: &Endpoint,
+    server: &Endpoint,
+    address: EndpointAddr,
+    direct_grace: Duration,
+) -> Result<(Connection, Connection)> {
     let accept = async {
         let incoming = server
             .accept()
@@ -99,7 +108,7 @@ async fn connect(
         authorize_peer(&connection, client.id())?;
         Ok::<_, anyhow::Error>(connection)
     };
-    let dial = connect_prefer_direct(client, address, server.id(), HANDSHAKE, DIRECT_GRACE);
+    let dial = connect_prefer_direct(client, address, server.id(), HANDSHAKE, direct_grace);
     tokio::try_join!(dial, accept)
 }
 
@@ -214,6 +223,49 @@ async fn direct_path_wins_with_relay_available() -> Result<()> {
         relay.server.shutdown().await?;
         round_trip(&outgoing, &incoming, 4097).await?;
         close_pair(client, server).await;
+        Ok::<_, anyhow::Error>(())
+    })
+    .await?
+}
+
+/// Match the WAN harness bootstrap: pairing supplies only identity and relay,
+/// not the peer's IP addresses. This checks candidate exchange on loopback;
+/// success here does not establish that either WAN NAT permits hole punching.
+#[tokio::test]
+async fn relay_only_address_bootstrap_can_reach_direct() -> Result<()> {
+    timeout(CASE_DEADLINE, async {
+        let relay = LocalRelay::start().await?;
+        let client = relay.endpoint(false, true).await?;
+        let server = relay.endpoint(false, true).await?;
+        timeout(HANDSHAKE, async {
+            tokio::join!(client.online(), server.online());
+        })
+        .await?;
+        let address = EndpointAddr::new(server.id()).with_relay_url(relay.url.clone());
+        assert_eq!(address.ip_addrs().count(), 0);
+        let started = std::time::Instant::now();
+        // Expiring the application grace period must not disable later direct paths.
+        // The initial route is diagnostic only: loopback may already be direct.
+        let (outgoing, incoming) =
+            connect_with_grace(&client, &server, address, Duration::ZERO).await?;
+        let initial_route = selected_route(&outgoing);
+        let mut paths = outgoing.paths_stream();
+        timeout(Duration::from_secs(10), async {
+            while selected_route(&outgoing) != Route::Direct {
+                paths.next().await.expect("connection path stream ended");
+            }
+        })
+        .await?;
+        let direct_after_ms = started.elapsed().as_millis();
+        let before = relay.server.metrics().server.bytes_sent.get();
+        round_trip(&outgoing, &incoming, SAMPLE_BYTES).await?;
+        let relay_bytes = relay.server.metrics().server.bytes_sent.get() - before;
+        assert!(relay_bytes < 64 * 1024);
+        eprintln!(
+            "RELAY_BOOTSTRAP_DIAGNOSTIC initial={initial_route:?} direct_after_ms={direct_after_ms} relay_payload_window_bytes={relay_bytes}"
+        );
+        close_pair(client, server).await;
+        relay.server.shutdown().await?;
         Ok::<_, anyhow::Error>(())
     })
     .await?

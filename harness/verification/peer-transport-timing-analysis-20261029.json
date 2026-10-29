@@ -1,0 +1,48 @@
+{
+  "schema": "yuan-zhou-peer-transport-timing-analysis/v1",
+  "date": "2026-10-29",
+  "status": "local-diagnostics-passed-wan-root-cause-unresolved",
+  "scope": "Static probe and pinned dependency review plus Windows loopback TLS/QUIC tests only",
+  "dependencyVersions": { "iroh": "1.4.1", "iroh-relay": "1.4.1" },
+  "bootstrapDiagnostic": {
+    "test": "relay_only_address_bootstrap_can_reach_direct",
+    "initialAddressIpCount": 0,
+    "directGraceMilliseconds": 0,
+    "initialRoute": "Relay",
+    "eventualRoute": "Direct",
+    "directObservedAfterConnectStartMilliseconds": 33,
+    "echoBytes": 8388625,
+    "echoLengthAndSha256Passed": true,
+    "relayBytesSentDuringPayloadWindow": 8914,
+    "localRelayQadEnabled": false,
+    "provesWanNatTraversal": false
+  },
+  "findings": [
+    "online() guarantees relay registration, not public UDP candidate readiness",
+    "Custom RelayUrl defaults QAD to UDP 7842 independently of HTTPS port",
+    "Minimal preset does not disable QUIC multipath or NAT candidate exchange",
+    "Application direct grace expiry preserves the connection and subsequent direct upgrade",
+    "WAN automatic-fallback probe closed roughly 4.6 seconds after handshake, without a sustained observation window",
+    "Two route snapshots, no tracing subscriber and discarded stderr cannot establish the WAN failure cause",
+    "The dependency's five-second retry scheduling is conditional, not an unconditional retry loop"
+  ],
+  "checks": {
+    "cargoFmt": "passed",
+    "cargoTestLocked": "passed",
+    "integrationTestsPassed": 8
+  },
+  "effects": {
+    "productionCodeChanged": false,
+    "probeBehaviorChanged": false,
+    "cloudOrMacAccessed": false,
+    "existingServicesChanged": false,
+    "systemFirewallChanged": false,
+    "temporaryCloudInfrastructureRedeployed": false,
+    "productLimitsAdded": false
+  },
+  "remaining": [
+    "Instrument QAD outcomes, candidate changes and connection/path timing in the isolated probe",
+    "Keep a single connection observable beyond its first transfer and record relay-to-direct transitions",
+    "Repeat a separately arranged cross-network test before attributing failure to NAT or UDP filtering"
+  ]
+}
