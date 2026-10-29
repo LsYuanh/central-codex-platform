@@ -3,7 +3,8 @@
 // public peer identities are exchanged; reports omit network addresses and keys.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -17,6 +18,14 @@ assert(Array.isArray(config.cases) && config.cases.length > 0);
 const results = [];
 
 async function runCase(test) {
+  const observeSeconds = test.observeSeconds ?? config.observeSeconds ?? 90;
+  const directGraceMs = test.directGraceMs ?? config.directGraceMs ?? 3000;
+  for (const value of [observeSeconds, directGraceMs]) assert(Number.isSafeInteger(value) && value >= 0);
+  const traceDirectory = config.traceDirectory ?? join(dirname(config.reportFile), 'private-traces');
+  await mkdir(traceDirectory, { recursive: true, mode: 0o700 });
+  // No identity, URL or user-supplied case name in filenames; native create_new
+  // refuses to overwrite an earlier diagnostic. Keep this directory untracked.
+  const traceFile = join(traceDirectory, `${Date.now()}-${process.pid}-${role}-${results.length}.log`);
   const env = { ...process.env };
   for (const name of Object.keys(env)) if (name.startsWith('PEER_PROBE_')) delete env[name];
   Object.assign(env, {
@@ -25,12 +34,27 @@ async function runCase(test) {
     PEER_PROBE_SECRET_FILE: config.secretFile,
     PEER_PROBE_ACCEPT_SECS: String(config.acceptSeconds ?? 1200),
     PEER_PROBE_BYTES: String(config.sampleBytes ?? 1048593),
+    PEER_PROBE_DIRECT_GRACE_MS: String(directGraceMs),
+    PEER_PROBE_OBSERVE_SECS: String(observeSeconds),
+    PEER_PROBE_TRACE_FILE: traceFile,
   });
   if (test.relayOnly) env.PEER_PROBE_RELAY_ONLY = '1';
   const child = spawn(config.executable, [role], { env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   let nativeResult, lines = 0, outputError = false;
-  // Native diagnostics can contain network addresses; don't copy them to a report.
-  child.stderr.resume();
+  const diagnostics = [];
+  // Only the native probe's structured, address-free channel enters reports.
+  // Library traces are written directly to the private file, never echoed here.
+  createInterface({ input: child.stderr }).on('line', line => {
+    if (!line.startsWith('PEER_DIAGNOSTIC ')) return;
+    try {
+      const event = JSON.parse(line.slice('PEER_DIAGNOSTIC '.length));
+      assert(typeof event.event === 'string' && Number.isFinite(event.atMs));
+      diagnostics.push(event);
+      if (['accept_waiting', 'dial_started'].includes(event.event)) {
+        console.log(JSON.stringify({ event: 'ready', role, case: test.name, nativeStage: event.event }));
+      }
+    } catch { outputError = true; child.kill(); }
+  });
   child.stdin.on('error', () => {});
   const completion = new Promise(resolve => {
     child.once('error', () => resolve({ error: 'PROBE_PROCESS_START_FAILED' }));
@@ -41,7 +65,6 @@ async function runCase(test) {
           assert.equal(value.id, config.identity, 'probe identity must match relay enrollment');
           // Start with only the relay address: iroh must discover any direct path.
           child.stdin.end(JSON.stringify({ id: config.peerIdentity, addrs: [{ Relay: config.relayUrl }] }) + '\n');
-          console.log(JSON.stringify({ event: 'ready', role, case: test.name }));
         } else {
           assert.equal(lines, 2);
           nativeResult = value;
@@ -51,35 +74,47 @@ async function runCase(test) {
         child.kill();
       }
     });
-    child.once('exit', code => {
+    // 'close' waits for stderr to drain, retaining diagnostics on failed probes.
+    child.once('close', code => {
       if (code !== 0 || !nativeResult || outputError) {
-        resolve({ error: 'PROBE_PROCESS_FAILED', exitCode: code });
+        resolve({ error: 'PROBE_PROCESS_FAILED', exitCode: code, complete: false, diagnostics });
         return;
       }
       const bytes = config.sampleBytes ?? 1048593;
-      const complete = role === 'dial'
+      const transferComplete = nativeResult.protocolVersion === 2 && nativeResult.transferComplete === true && (role === 'dial'
         ? nativeResult.bytes === bytes && /^[a-f0-9]{64}$/.test(nativeResult.sha256)
-        : nativeResult.bytesEchoed === bytes;
-      // The listener accepts before the dialer's direct grace period finishes;
-      // route assertions therefore use the dialer's transfer snapshots.
-      const routeMatches = role === 'listen' || !test.expectedRoute ||
-        (nativeResult.routeBefore === test.expectedRoute && nativeResult.routeAfter === test.expectedRoute);
-      resolve({ ...nativeResult, complete, routeMatches, passed: complete && routeMatches });
+        : nativeResult.bytesEchoed === bytes);
+      const observationComplete = nativeResult.observationComplete === true &&
+        (role === 'listen' || nativeResult.observationElapsedMs >= observeSeconds * 1000);
+      const complete = transferComplete && observationComplete;
+      const timeline = nativeResult.diagnostics ?? diagnostics;
+      const directObserved = timeline.some(event =>
+        (event.event === 'path_snapshot' && event.data.selected === 'Direct') ||
+        (event.event === 'path_event' && event.data.kind === 'selected' && event.data.route === 'Direct'));
+      // Judge direct discovery over the dialer's whole observed connection,
+      // allowing a successful later upgrade from an initial relay path.
+      const routeMatches = role === 'listen' || !test.expectedRoute || (test.expectedRoute === 'Direct'
+        ? directObserved
+        : !directObserved && nativeResult.routeBefore === 'Relay' && nativeResult.routeAfter === 'Relay');
+      resolve({ ...nativeResult, transferComplete, observationComplete, complete, directObserved,
+        routeMatches, directGraceMs, observeSeconds, privateTraceEnabled: true, passed: complete && routeMatches });
     });
   });
-  const timer = setTimeout(() => child.kill(), (config.acceptSeconds ?? 1200) * 1000 + 120_000);
+  const timer = setTimeout(() => child.kill(), (config.acceptSeconds ?? 1200) * 1000 +
+    directGraceMs + observeSeconds * 1000 + 180_000);
   try { return { name: test.name, relayOnly: !!test.relayOnly, ...await completion }; }
   finally { clearTimeout(timer); if (child.exitCode === null) child.kill(); }
 }
 
 for (const test of config.cases) {
   assert.equal(typeof test.name, 'string');
+  assert(!test.expectedRoute || ['Direct', 'Relay'].includes(test.expectedRoute));
   // A harness pause gives the operator time to collect relay counters between
   // cases. It does not pace or limit data within an established connection.
   if (results.length) await delay(role === 'dial' ? (config.interCaseDelayMs ?? 5000) : 1000);
   const result = await runCase(test);
   results.push(result);
-  await writeFile(config.reportFile, JSON.stringify({ schema: 'peer-transport-wan-probe/v1', role, scope: config.scope, passed: results.every(x => x.passed), results }, null, 2) + '\n');
+  await writeFile(config.reportFile, JSON.stringify({ schema: 'peer-transport-wan-probe/v2', role, scope: config.scope, passed: results.every(x => x.passed), results }, null, 2) + '\n');
   console.log(JSON.stringify({ event: 'result', role, result }));
   // A failed connection can desynchronize the two sequential runners; do not
   // silently replay an uncertain case or call it a later case's successful run.

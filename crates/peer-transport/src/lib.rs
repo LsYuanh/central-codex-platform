@@ -13,7 +13,7 @@ use iroh::{Endpoint, EndpointAddr, EndpointId, endpoint::Connection};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::time::{Instant, timeout};
 
-pub const PROBE_ALPN: &[u8] = b"yuan-zhou/peer-transport-probe/1";
+pub const PROBE_ALPN: &[u8] = b"yuan-zhou/peer-transport-probe/2";
 
 /// Adapt one authenticated QUIC stream for the existing TLS/HTTP/WebSocket stack.
 /// This carries bytes only: it never interprets or executes a device command.

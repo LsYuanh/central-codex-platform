@@ -5,16 +5,15 @@ use std::{net::Ipv4Addr, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
+use iroh::tls::CaTlsConfig;
 use iroh::{
-    Endpoint, EndpointAddr, RelayMode, SecretKey,
+    Endpoint, EndpointAddr, SecretKey,
     endpoint::{Connection, presets},
-    tls::CaTlsConfig,
 };
-use iroh_relay::server::{CertConfig, RelayConfig, Server, ServerConfig, TlsConfig};
 use peer_transport::{
     PROBE_ALPN, PeerStream, Route, authorize_peer, connect_prefer_direct, selected_route,
 };
-use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
+use rustls::pki_types::PrivatePkcs8KeyDer;
 use sha2::{Digest, Sha256};
 use tokio::time::timeout;
 
@@ -24,57 +23,10 @@ const DIRECT_GRACE: Duration = Duration::from_millis(500);
 const CASE_DEADLINE: Duration = Duration::from_secs(40);
 const SAMPLE_BYTES: u64 = 8 * 1024 * 1024 + 17;
 
-struct LocalRelay {
-    server: Server,
-    url: iroh::RelayUrl,
-    certificate: CertificateDer<'static>,
+mod support {
+    pub mod relay;
 }
-
-impl LocalRelay {
-    async fn start() -> Result<Self> {
-        let generated =
-            rcgen::generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()])?;
-        let certificate = generated.cert.der().clone();
-        let key = PrivatePkcs8KeyDer::from(generated.signing_key.serialize_der());
-        let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
-        ))
-        .with_safe_default_protocol_versions()?
-        .with_no_client_auth()
-        .with_single_cert(vec![certificate.clone()], key.into())?;
-        let mut relay = RelayConfig::new((Ipv4Addr::LOCALHOST, 0));
-        relay.tls = Some(TlsConfig::new(
-            (Ipv4Addr::LOCALHOST, 0),
-            CertConfig::Manual { server_config: tls },
-        ));
-        // No application throughput, total-byte or connection-count quota is configured.
-        assert!(relay.limits.client_rx.is_none());
-        let mut config = ServerConfig::default();
-        config.relay = Some(relay);
-        let server = Server::spawn(config).await?;
-        let url = format!("https://{}", server.https_addr().unwrap()).parse()?;
-        Ok(Self {
-            server,
-            url,
-            certificate,
-        })
-    }
-
-    async fn endpoint(&self, relay_only: bool, trust: bool) -> Result<Endpoint> {
-        let mut builder = Endpoint::builder(presets::Minimal)
-            .alpns(vec![PROBE_ALPN.to_vec()])
-            .clear_ip_transports()
-            .relay_mode(RelayMode::custom([self.url.clone()]));
-        if trust {
-            // Trust this temporary certificate explicitly: never disable TLS verification.
-            builder = builder.ca_tls_config(CaTlsConfig::custom_roots([self.certificate.clone()]));
-        }
-        if !relay_only {
-            builder = builder.bind_addr((Ipv4Addr::LOCALHOST, 0))?;
-        }
-        Ok(builder.bind().await?)
-    }
-}
+use support::relay::LocalRelay;
 
 async fn direct_endpoint() -> Result<Endpoint> {
     Ok(Endpoint::builder(presets::Minimal)

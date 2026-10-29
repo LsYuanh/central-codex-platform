@@ -7,8 +7,13 @@
 use std::{io::Write, time::Duration};
 
 use anyhow::{Result, bail, ensure};
-use iroh::{Endpoint, EndpointAddr, RelayMode, endpoint::presets, tls::CaTlsConfig};
-use peer_transport::{PROBE_ALPN, authorize_peer, connect_prefer_direct, selected_route};
+use futures_util::StreamExt;
+use iroh::{
+    Endpoint, EndpointAddr, RelayMode,
+    endpoint::{Connection, presets},
+    tls::CaTlsConfig,
+};
+use peer_transport::{PROBE_ALPN, Route, authorize_peer, selected_route};
 use rustls::pki_types::{CertificateDer, pem::PemObject};
 use sha2::{Digest, Sha256};
 use tokio::{
@@ -16,13 +21,42 @@ use tokio::{
     time::timeout,
 };
 
+#[path = "support/diagnostics.rs"]
+mod diagnostics;
+#[cfg(test)]
+#[path = "support/probe_tests.rs"]
+mod tests;
+use diagnostics::Diagnostics;
+
+struct ProbeConfig {
+    grace: Duration,
+    observe: Duration,
+    accept: Duration,
+    bytes: u64,
+}
+
+fn number(name: &str, default: u64) -> Result<u64> {
+    Ok(std::env::var(name)
+        .map(|value| value.parse())
+        .unwrap_or(Ok(default))?)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let trace_enabled = diagnostics::private_trace()?;
+    let diagnostics = Diagnostics::new();
     let args: Vec<String> = std::env::args().skip(1).collect();
     ensure!(
         args.len() == 1 && ["listen", "dial"].contains(&args[0].as_str()),
-        "usage: peer-probe listen|dial; optional PEER_PROBE_RELAY_URL, PEER_PROBE_CA_FILE, PEER_PROBE_SECRET_FILE, PEER_PROBE_ACCEPT_SECS, PEER_PROBE_RELAY_ONLY=1, PEER_PROBE_BYTES"
+        "usage: peer-probe listen|dial; optional PEER_PROBE_RELAY_URL, PEER_PROBE_CA_FILE, PEER_PROBE_SECRET_FILE, PEER_PROBE_ACCEPT_SECS, PEER_PROBE_RELAY_ONLY=1, PEER_PROBE_BYTES, PEER_PROBE_DIRECT_GRACE_MS, PEER_PROBE_OBSERVE_SECS, PEER_PROBE_TRACE_FILE"
     );
+    let config = ProbeConfig {
+        grace: Duration::from_millis(number("PEER_PROBE_DIRECT_GRACE_MS", 3000)?),
+        observe: Duration::from_secs(number("PEER_PROBE_OBSERVE_SECS", 90)?),
+        accept: Duration::from_secs(number("PEER_PROBE_ACCEPT_SECS", 60)?),
+        bytes: number("PEER_PROBE_BYTES", 8388625)?,
+    };
+    ensure!(config.bytes > 0, "probe sample must be non-empty");
     let mut builder = Endpoint::builder(presets::Minimal).alpns(vec![PROBE_ALPN.to_vec()]);
     if let Ok(path) = std::env::var("PEER_PROBE_SECRET_FILE") {
         // The harness creates a private 32-byte seed outside tracked source files.
@@ -53,14 +87,48 @@ async fn main() -> Result<()> {
         builder = builder.clear_ip_transports();
     }
     let endpoint = builder.bind().await?;
-    let result = Box::pin(run(&endpoint, &args[0], relay.is_some())).await;
+    diagnostics.event(
+        "bound",
+        serde_json::json!({"traceEnabled":trace_enabled,
+        "observationSeconds":config.observe.as_secs(),"directGraceMs":config.grace.as_millis()}),
+    );
+    let monitor = diagnostics.endpoint(&endpoint);
+    let result = Box::pin(run(
+        &endpoint,
+        &args[0],
+        relay.is_some(),
+        &config,
+        &diagnostics,
+    ))
+    .await;
+    diagnostics.event("final_counters", diagnostics::metrics(&endpoint));
+    drop(monitor);
+    match &result {
+        Ok(value) => {
+            let mut value = value.clone();
+            value["protocolVersion"] = 2.into();
+            value["diagnostics"] = diagnostics.snapshot();
+            println!("{value}");
+        }
+        Err(error) => {
+            diagnostics.event("failed", serde_json::json!({"code":"PROBE_FAILED"}));
+            tracing::error!(error = ?error, "probe failed");
+        }
+    }
     endpoint.close().await;
-    result
+    result.map(|_| ())
 }
 
-async fn run(endpoint: &Endpoint, role: &str, has_relay: bool) -> Result<()> {
+async fn run(
+    endpoint: &Endpoint,
+    role: &str,
+    has_relay: bool,
+    config: &ProbeConfig,
+    diagnostics: &Diagnostics,
+) -> Result<serde_json::Value> {
     if has_relay {
         timeout(Duration::from_secs(30), endpoint.online()).await?;
+        diagnostics.event("relay_online", serde_json::json!({}));
     }
     // Public addressing/identity only. Do not publish these LAN/WAN addresses in a report.
     println!("{}", serde_json::to_string(&endpoint.addr())?);
@@ -72,44 +140,110 @@ async fn run(endpoint: &Endpoint, role: &str, has_relay: bool) -> Result<()> {
         .await?;
     let peer: EndpointAddr = serde_json::from_str(input.trim())?;
     let connection = if role == "dial" {
-        connect_prefer_direct(
-            endpoint,
-            peer.clone(),
-            peer.id,
+        diagnostics.event("dial_started", serde_json::json!({}));
+        timeout(
             Duration::from_secs(30),
-            Duration::from_secs(3),
+            endpoint.connect(peer.clone(), PROBE_ALPN),
         )
-        .await?
+        .await??
     } else {
         // A longer harness wait permits the operator to change networks. It is
         // only an accept deadline, never a limit on an established transfer.
-        let accept_secs: u64 = std::env::var("PEER_PROBE_ACCEPT_SECS")
-            .unwrap_or_else(|_| "60".into())
-            .parse()?;
-        let incoming = timeout(Duration::from_secs(accept_secs), endpoint.accept())
+        diagnostics.event("accept_waiting", serde_json::json!({}));
+        let incoming = timeout(config.accept, endpoint.accept())
             .await?
             .ok_or_else(|| anyhow::anyhow!("listener closed"))?;
         let connection = timeout(Duration::from_secs(30), incoming).await??;
-        authorize_peer(&connection, peer.id)?;
         connection
     };
+    authorize_peer(&connection, peer.id)?;
+    diagnostics.event("handshake_complete", serde_json::json!({}));
+    let _monitor = diagnostics.connection(&connection);
+    if role == "dial" {
+        // Observe paths immediately after handshake, including during the grace period.
+        let deadline = tokio::time::Instant::now() + config.grace;
+        let mut paths = connection.paths_stream();
+        while selected_route(&connection) != Route::Direct {
+            tokio::select! {
+                _ = connection.closed() => bail!("PROBE_CONNECTION_CLOSED"),
+                _ = tokio::time::sleep_until(deadline) => break,
+                next = paths.next() => { ensure!(next.is_some(), "PROBE_CONNECTION_CLOSED"); }
+            }
+        }
+        ensure!(
+            selected_route(&connection) != Route::Unavailable,
+            "PROBE_PATH_UNAVAILABLE"
+        );
+        diagnostics.event(
+            "grace_complete",
+            serde_json::json!({"route":format!("{:?}",selected_route(&connection))}),
+        );
+    }
+    exchange(&connection, role, config, diagnostics).await
+}
+
+async fn exchange(
+    connection: &Connection,
+    role: &str,
+    config: &ProbeConfig,
+    diagnostics: &Diagnostics,
+) -> Result<serde_json::Value> {
     let before = format!("{:?}", selected_route(&connection));
     let started = std::time::Instant::now();
+    diagnostics.event("transfer_started", serde_json::json!({"route":before}));
     if role == "listen" {
-        let (mut send, mut recv) = connection.accept_bi().await?;
-        let count = tokio::io::copy(&mut recv, &mut send).await?;
-        send.finish()?;
-        // Wait for the client to acknowledge receipt by closing, not just queueing FIN.
-        timeout(Duration::from_secs(30), connection.closed()).await?;
-        println!(
-            "{}",
-            serde_json::json!({"role":role,"bytesEchoed":count,"routeBefore":before,"elapsedMs":started.elapsed().as_millis()})
+        let count = timeout(Duration::from_secs(120), async {
+            let (mut send, mut recv) = connection.accept_bi().await?;
+            let count = tokio::io::copy(&mut recv, &mut send).await?;
+            send.finish()?;
+            Ok::<_, anyhow::Error>(count)
+        })
+        .await??;
+        ensure!(count == config.bytes, "PROBE_LENGTH_MISMATCH");
+        diagnostics.event("transfer_complete", serde_json::json!({"bytes":count}));
+        // Separate control streams keep the same QUIC connection alive. A closed
+        // connection without the completion marker is failure, not successful observation.
+        let heartbeats = timeout(
+            config.observe + config.grace + Duration::from_secs(30),
+            async {
+                let mut heartbeats = 0u64;
+                loop {
+                    let (mut send, mut recv) = connection.accept_bi().await?;
+                    let mut message = [0u8; 8];
+                    recv.read_exact(&mut message).await?;
+                    ensure!(
+                        recv.read(&mut [0u8; 1]).await?.is_none(),
+                        "PROBE_CONTROL_INVALID"
+                    );
+                    let sequence = u64::from_be_bytes(message);
+                    ensure!(
+                        sequence == u64::MAX || sequence == heartbeats,
+                        "PROBE_CONTROL_SEQUENCE"
+                    );
+                    send.write_all(&message).await?;
+                    send.finish()?;
+                    if sequence == u64::MAX {
+                        break;
+                    }
+                    heartbeats += 1;
+                }
+                Ok::<_, anyhow::Error>(heartbeats)
+            },
+        )
+        .await??;
+        diagnostics.path_snapshot(connection);
+        let after = format!("{:?}", selected_route(connection));
+        timeout(Duration::from_secs(10), connection.closed()).await?;
+        diagnostics.event(
+            "observation_complete",
+            serde_json::json!({"heartbeats":heartbeats}),
         );
+        Ok(
+            serde_json::json!({"role":role,"bytesEchoed":count,"routeBefore":before,"routeAfter":after,
+            "heartbeats":heartbeats,"transferComplete":true,"observationComplete":true,"elapsedMs":started.elapsed().as_millis()}),
+        )
     } else {
-        let bytes: u64 = std::env::var("PEER_PROBE_BYTES")
-            .unwrap_or_else(|_| "8388625".into())
-            .parse()?;
-        ensure!(bytes > 0, "probe sample must be non-empty");
+        let bytes = config.bytes;
         let (mut send, mut recv) = connection.open_bi().await?;
         let writer = async {
             let buffer: Vec<u8> = (0..65536).map(|i| (i % 251) as u8).collect();
@@ -137,13 +271,58 @@ async fn run(endpoint: &Endpoint, role: &str, has_relay: bool) -> Result<()> {
             }
             Ok::<_, anyhow::Error>(hash.finalize())
         };
-        let (sent, received) = tokio::try_join!(writer, reader)?;
+        let (sent, received) = timeout(Duration::from_secs(120), async {
+            tokio::try_join!(writer, reader)
+        })
+        .await??;
         ensure!(sent == received, "PROBE_HASH_MISMATCH");
-        println!(
-            "{}",
-            serde_json::json!({"role":role,"bytes":bytes,"sha256":format!("{sent:x}"),"routeBefore":before,"routeAfter":format!("{:?}",selected_route(&connection)),"elapsedMs":started.elapsed().as_millis()})
+        let transfer_ms = started.elapsed().as_millis();
+        diagnostics.event(
+            "transfer_complete",
+            serde_json::json!({"bytes":bytes,"elapsedMs":transfer_ms}),
         );
+        let observation_started = tokio::time::Instant::now();
+        let deadline = observation_started + config.observe;
+        let mut heartbeats = 0u64;
+        while tokio::time::Instant::now() < deadline {
+            control_round_trip(connection, heartbeats).await?;
+            heartbeats += 1;
+            diagnostics.path_snapshot(connection);
+            tokio::time::sleep_until(
+                deadline.min(tokio::time::Instant::now() + Duration::from_secs(1)),
+            )
+            .await;
+        }
+        control_round_trip(connection, u64::MAX).await?;
+        diagnostics.path_snapshot(connection);
+        let observation_ms = observation_started.elapsed().as_millis();
+        diagnostics.event(
+            "observation_complete",
+            serde_json::json!({"heartbeats":heartbeats,"elapsedMs":observation_ms}),
+        );
+        let result = serde_json::json!({"role":role,"bytes":bytes,"sha256":format!("{sent:x}"),
+            "routeBefore":before,"routeAfter":format!("{:?}",selected_route(connection)),
+            "elapsedMs":started.elapsed().as_millis(),"transferElapsedMs":transfer_ms,
+            "observationElapsedMs":observation_ms,"heartbeats":heartbeats,
+            "transferComplete":true,"observationComplete":true});
         connection.close(0u32.into(), b"probe complete");
+        Ok(result)
     }
-    Ok(())
+}
+
+async fn control_round_trip(connection: &Connection, sequence: u64) -> Result<()> {
+    timeout(Duration::from_secs(10), async {
+        let (mut send, mut recv) = connection.open_bi().await?;
+        let message = sequence.to_be_bytes();
+        send.write_all(&message).await?;
+        send.finish()?;
+        let mut echoed = [0u8; 8];
+        recv.read_exact(&mut echoed).await?;
+        ensure!(
+            echoed == message && recv.read(&mut [0u8; 1]).await?.is_none(),
+            "PROBE_CONTROL_MISMATCH"
+        );
+        Ok::<_, anyhow::Error>(())
+    })
+    .await?
 }

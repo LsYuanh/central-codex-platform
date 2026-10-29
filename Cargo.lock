@@ -4404,6 +4404,8 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -1,0 +1,66 @@
+{
+  "schema": "yuan-zhou-peer-transport-diagnostics/v1",
+  "date": "2026-10-29",
+  "status": "diagnostic-probe-v2-implemented-local-verification-passed-wan-retest-pending",
+  "scope": "Probe-only diagnostics and sustained observation; no product integration or deployment",
+  "implementation": {
+    "probeProtocolVersion": 2,
+    "defaultDirectGraceMs": 3000,
+    "defaultPostTransferObservationSeconds": 90,
+    "structuredEventsExcludeAddressesAndIdentities": true,
+    "privateTracingEnabledByWanDriver": true,
+    "endpointQadReportsAndHolepunchCounters": true,
+    "continuousPathEvents": true,
+    "completionMarkerRequired": true,
+    "productLimitsAdded": false
+  },
+  "checks": {
+    "cargoFmt": "passed",
+    "cargoTestAllTargetsLocked": {
+      "passed": 11,
+      "ignoredAcceptanceRunSeparately": 1
+    },
+    "cargoBuildExamplesLocked": "passed",
+    "nodeSyntaxChecks": "passed",
+    "nativeWanDriverAcceptance": {
+      "scope": "Loopback TLS relay, actual Node driver and native probe processes",
+      "passed": true,
+      "automaticRouteBefore": "Relay",
+      "automaticRouteAfter": "Direct",
+      "forcedRelayRouteBefore": "Relay",
+      "forcedRelayRouteAfter": "Relay",
+      "sampleBytes": 4097,
+      "observeSeconds": 2,
+      "temporarySeedsRemaining": 0
+    },
+    "twoProcessLongObservation": {
+      "passed": true,
+      "scope": "Same Windows host, two native processes",
+      "sampleBytes": 8388625,
+      "lengthAndSha256Matched": true,
+      "observationElapsedMs": 90009,
+      "echoedHeartbeats": 89,
+      "routeBefore": "Direct",
+      "routeAfter": "Direct",
+      "privateTraceFilesNonempty": true
+    },
+    "qadPositiveCase": "Real loopback QUIC discovery with trusted test certificate; redacted report observed success",
+    "prematureCloseCase": "Echo completed but missing observation completion marker correctly returned failure"
+  },
+  "remaining": [
+    "Build and run v2 on Mac; v1 is intentionally wire-incompatible",
+    "Prepare a new isolated temporary WAN validation environment",
+    "Collect two-sided QAD, candidate, holepunch and path evidence on different network exits",
+    "Do not attribute previous direct failure to company router, mobile carrier or short timing without new evidence"
+  ],
+  "productionServicesChanged": false,
+  "routerOrFirewallConfigurationChanged": false,
+  "wanDirectVerified": false,
+  "readOnlyPrecheck": {
+    "cloudTestPortsFree": true,
+    "cloudBusinessPidsMatchEarlier": true,
+    "failedSystemdServices": 0,
+    "macSshAvailable": true,
+    "newDeploymentStarted": false
+  }
+}
