@@ -1,0 +1,65 @@
+{
+  "schema": "yuan-zhou-peer-transport-server-inspection/v1",
+  "date": "2026-10-29",
+  "status": "read-only-inspection-complete-deployment-pending",
+  "scope": "User-selected existing test ECS instance; identifiers, addresses and business names omitted",
+  "access": {
+    "cloudApiAuthenticated": true,
+    "cloudAssistantOnline": true,
+    "boundedReadOnlyCommandsSucceeded": true,
+    "sshAccessRequiredForInspection": false,
+    "credentialsRecordedInRepository": false
+  },
+  "resourceSnapshot": {
+    "vcpus": 2,
+    "configuredMemoryGiB": 8,
+    "availableMemoryMiB": 4850,
+    "systemDiskGiB": 120,
+    "availableFilesystemGiBRounded": 95,
+    "cpuIdleSamplePercent": [98, 99],
+    "loadAverage": [0.00, 0.01, 0.05],
+    "eipConfiguredBandwidthMbps": 20,
+    "eipBilling": "PayByTraffic",
+    "capacityOrPeakLoadValidated": false
+  },
+  "runtime": {
+    "os": "CentOS 7.9",
+    "kernelFamily": "3.10",
+    "architecture": "x86_64",
+    "glibc": "2.17",
+    "dockerFoundInPath": false,
+    "peerTransportBinaryCompatibilityValidated": false,
+    "existingWorkloads": ["Nginx multi-site web service", "Hosting control panel", "Three Java processes"],
+    "tcp80And443AlreadyOccupied": true,
+    "failedSystemdServicesObserved": 0,
+    "listenerPortsAndOwningPidsUnchangedBetweenSnapshots": true,
+    "businessHttpHealthOrEndToEndTestsPerformed": false
+  },
+  "network": {
+    "hostFirewalldActive": true,
+    "existingSecurityGroupSharedWithOtherInstances": true,
+    "candidateRelayTcpPort": 38443,
+    "candidateAddressDiscoveryUdpPort": 7842,
+    "candidatePortsListeningAtInspection": false,
+    "candidatePortsAllowedInCloudAndHostFirewall": false,
+    "rulesChanged": false
+  },
+  "changes": {
+    "softwareInstalled": false,
+    "applicationConfigurationChanged": false,
+    "servicesRestarted": false,
+    "relayDeployed": false,
+    "businessSecretsPrintedOrRecordedInRepository": false,
+    "productLimitsAdded": false
+  },
+  "diagnosticNote": "The first site-summary diagnostic failed on ASCII decoding of an existing UTF-8 configuration. Only the local diagnostic reader was corrected; the repeated read-only command succeeded. No business configuration was edited.",
+  "remaining": [
+    "Review independent process, directory, endpoint authentication and cleanup plan before deployment",
+    "Build and verify an executable compatible with the existing OS without upgrading system libraries",
+    "Use a test-only security group on the selected instance and narrowly add test host rules, preserving existing shared rules",
+    "Prepare a dedicated test certificate and explicit probe CA trust without changing business certificates or system trust",
+    "Recheck current resources and ports immediately before starting test services",
+    "Run cross-network direct and relay fallback probes with synthetic payloads; avoid saturation testing on the shared business host",
+    "Verify real Windows/Mac, path migration, gateway, model and Local Agent chains separately"
+  ]
+}
