@@ -261,7 +261,8 @@ try{
   const permissionContext=config.permissionMode?`\nThe exact pre-created proof.ps1 contents are:\n${proofScript}\nI explicitly authorize this script to create proof.txt${config.updatePreflight?' and update-finished.txt':''} in this isolated QA project. Those are the intended command effects. No other files may be modified.`:'';
   const turn=await request('conversation.turn.create',{threadId,model:config.model,effort:'low',...(personalSkill?{clientMessageId:randomUUID(),skills:[{id:personalSkill.id,revision:personalSkill.revision}]}:{}),input:[{type:'text',text:personalSkill?`$${personalSkill.name} Follow this selected personal skill exactly. Its resources are on the client. Run its proof script once as instructed and return the two markers.`:prompt+permissionContext}]});turnId=turn?.turn?.id;
   if(config.updatePreflight){
-    await until(()=>[...toolCalls.values()].some(c=>c.tool==='device_exec'&&c.done),90000,'QA_YIELDED_COMMAND_MISSING');
+    await until(()=>turnDone?.status==='failed'||[...toolCalls.values()].some(c=>c.tool==='device_exec'&&c.done),90000,'QA_YIELDED_COMMAND_MISSING');
+    check(turnDone?.status!=='failed','QA_MODEL_TURN_FAILED');
     const busy=await updateProbe();check(busy.status===409&&['active-turn','command-running','device-operation'].includes(busy.reason),'QA_UPDATE_RUNNING_NOT_BLOCKED');
     emit({phase:'update-running-blocked',reason:busy.reason});
   }

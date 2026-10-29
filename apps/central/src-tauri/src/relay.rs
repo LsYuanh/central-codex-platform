@@ -21,6 +21,73 @@ use std::{
 };
 
 const NAMESPACE: &str = "central-relay-v1";
+
+// Operator-only native provisioning, compiled into the Mac test binary only.
+// Reuse the production store while the formal service is stopped and locked;
+// never hand-write its selection, seed or private-record format.
+#[cfg(all(test, target_os = "macos", debug_assertions))]
+#[test]
+#[ignore = "requires explicit deployment authorization and a stopped formal service"]
+fn configure_formal_macos_relay() {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    assert_eq!(
+        std::env::var("CENTRAL_RELAY_DEPLOY_OPT_IN").as_deref(),
+        Ok("1")
+    );
+    let root = PathBuf::from(std::env::var_os("CENTRAL_MACOS_APP_DATA").unwrap());
+    assert!(root.is_absolute() && root.file_name().unwrap() == "com.yuanzhou.central");
+    assert_eq!(root.canonicalize().unwrap(), root);
+    let input = PathBuf::from(std::env::var_os("CENTRAL_RELAY_ACCESS_FILE").unwrap());
+    let output = PathBuf::from(std::env::var_os("CENTRAL_RELAY_TARGET_FILE").unwrap());
+    assert!(input.is_absolute() && output.is_absolute() && input.parent() == output.parent());
+    let meta = fs::symlink_metadata(&input).unwrap();
+    assert!(meta.is_file() && !meta.file_type().is_symlink() && meta.mode() & 0o777 == 0o600);
+    assert_eq!(meta.uid(), unsafe { libc::geteuid() });
+    let cfg = config::read(&root).unwrap().config.unwrap();
+    let _lock = store::lock_runtime_root(Path::new(&cfg.data_directory)).unwrap();
+    // An unrelated live gateway must also block provisioning; the new in-memory
+    // Service alone cannot attest to another process's ownership.
+    let _probe = std::net::TcpListener::bind(("0.0.0.0", cfg.listen.port as u16)).unwrap();
+    let private = zeroize::Zeroizing::new(fs::read(&input).unwrap());
+    let access: Access = serde_json::from_slice(&private).unwrap();
+    let manager = Manager::new();
+    assert_eq!(
+        manager
+            .save(&Service::new(), &root, Some(access))
+            .unwrap()
+            .state,
+        "waiting-service"
+    );
+    let record = load(&root).unwrap().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let target = runtime.block_on(async {
+        let host = Host::start(
+            &record.access,
+            record.seed,
+            SocketAddr::from(([127, 0, 0, 1], cfg.listen.port as u16)),
+        )
+        .await;
+        assert!(host.is_ok(), "RELAY_DEPLOY_PREFLIGHT_FAILED");
+        let host = host.unwrap();
+        let target = Target {
+            access: record.access.clone(),
+            central_id: host.central_id(),
+        };
+        drop(host);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        target
+    });
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(output)
+        .unwrap();
+    let bytes = zeroize::Zeroizing::new(serde_json::to_vec(&target).unwrap());
+    file.write_all(&bytes).unwrap();
+    file.sync_all().unwrap();
+    println!("FORMAL_RELAY_CONFIGURED_AND_PREFLIGHT_PASSED");
+}
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Record {

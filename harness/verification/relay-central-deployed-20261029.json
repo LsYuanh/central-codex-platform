@@ -1,0 +1,122 @@
+{
+  "date": "2026-10-29",
+  "scope": "User-authorized central App and persistent public relay deployment; client release excluded",
+  "central": {
+    "version": "0.1.10",
+    "build": "debug",
+    "signature": "ad-hoc",
+    "notarized": false,
+    "binary": {
+      "bytes": 90986544,
+      "sha256": "eb3ec048544b6fadbb9ade95886c8f54451bf2966f545a80134245e0d98c3e1b"
+    },
+    "baseRuntimePackageId": "macos-arm64-node24-qa1-74453261de9aa7ef",
+    "activeRuntimeVersion": "0.163.0",
+    "activeRuntimePackageSuffix": "cc7009ecae621f53",
+    "configRevision": 19,
+    "configurationAndSignedSelectionPreserved": true,
+    "installedBinaryVerified": true,
+    "modelStatus": "ready",
+    "activeTurnsAfterValidation": 0,
+    "appAutomaticallyOwnsRelayConnection": true,
+    "temporaryHostProbeRunning": false,
+    "oldAppAndFullProfileBackedUp": true,
+    "originalDataAndProxyPreserved": true
+  },
+  "publicRelay": {
+    "version": "1.4.1",
+    "officialArchiveSha256": "75254641e3fad7fcbac6dee4d485556fbe06ef708340a9d8810469270ba626b8",
+    "endpoint": "operator-private IPv4 address, HTTPS TCP 38443",
+    "qadEnabled": false,
+    "udpPortOpened": false,
+    "central4510Exposed": false,
+    "serviceUser": "yuanzhou-relay",
+    "systemdService": "yuanzhou-relay.service",
+    "enabled": true,
+    "active": true,
+    "restartOnFailure": true,
+    "dedicatedSecurityGroupAdded": true,
+    "originalGroupsPreserved": true,
+    "runtimeAndPermanentSinglePortFirewallRule": true,
+    "existingCloudBusinessListenersAndPidsUnchanged": true,
+    "authentication": "random shared admission token; existing inner WSS/device authentication retained",
+    "tls": "strict private CA and IP SAN validation; no system trust modification",
+    "rootPrivateKeyReadableByRelayUser": false,
+    "leafNotAfter": "2027-11-30T09:03:54Z",
+    "rootNotAfter": "2036-10-26T09:03:54Z",
+    "renewal": {
+      "timer": "yuanzhou-relay-renew.timer",
+      "enabled": true,
+      "schedule": "daily",
+      "thresholdDays": 30,
+      "newLeafValidityDays": 397,
+      "sameCaPreserved": true,
+      "onlyRelayRestartedOnRenewal": true,
+      "noRenewalNeededPathPassed": true,
+      "actualExpiryRenewalTested": false
+    },
+    "metrics": {
+      "relayserver_bytes_sent_total": 1010033,
+      "relayserver_bytes_recv_total": 1034522,
+      "relayserver_send_packets_dropped_total": 82,
+      "relayserver_bytes_rx_ratelimited_total": 0,
+      "relayserver_accepts_total": 38
+    }
+  },
+  "validation": {
+    "macUnitTests": {
+      "passed": 77,
+      "failed": 0,
+      "ignored": 9
+    },
+    "macNativeProvisionTest": {
+      "passed": 1
+    },
+    "centralTypeScriptCheckAndViteBuild": true,
+    "windowsCentralCargoCheck": true,
+    "cargoFmt": true,
+    "installerBashSyntax": true,
+    "packagerNodeSyntax": true,
+    "installedAdHocSignatureAndHash": true,
+    "publicTlsFromWindows": true,
+    "realModel": "gpt-6.1-sol",
+    "actualLocalAgent": true,
+    "modelReadCount": 2,
+    "modelExecCount": 1,
+    "randomProofVerified": true,
+    "historyResumed": true,
+    "permissionsPersisted": true,
+    "updateBusyAndReleaseVerified": true,
+    "deviceRevoked": true,
+    "agentExited": true,
+    "abruptAgentRestartMs": 32713
+  },
+  "observations": [
+    "First model validation failed before any tool call because the upstream response stream disconnected. Its device was revoked; a fresh independent QA session passed. No unknown command result was replayed.",
+    "Mac test TMPDIR default followed /var symlinks; using existing real /private/tmp passed all normal Mac tests without weakening product checks.",
+    "Default Windows Schannel curl could not establish revocation status for the private CA. Node HTTPS with explicit CA and the actual native Rust clients validated certificate and hostname successfully; TLS verification was not disabled.",
+    "Relay send-drop counter is nonzero during forced Agent restarts. Complete random proof passed; this is not a zero-packet-loss or long-term stability claim."
+  ],
+  "cleanup": {
+    "testDevicesRevoked": true,
+    "temporaryManagementSessionsLoggedOut": true,
+    "temporaryMacAndWindowsAccessCopiesRemoved": true,
+    "cloudStagingTokenRemoved": true,
+    "productionNativeStoreAndServerConfigRetained": true,
+    "rollbackBackupsRetained": true
+  },
+  "unchanged": {
+    "newBusinessLimits": false,
+    "clientChannelVersion": "0.3.3",
+    "clientInstallationsReplaced": false,
+    "clientUpdateManifestChanged": false,
+    "gitPushed": false,
+    "publicReleaseCreated": false
+  },
+  "remaining": [
+    "New relay-capable client packaging, deployment and full installed UI/updater acceptance",
+    "Long outages and sustained load across network conditions",
+    "Actual certificate expiration renewal and whole-server reboot acceptance",
+    "Full central UI interaction acceptance beyond native configuration and observed App-owned relay connection"
+  ]
+}

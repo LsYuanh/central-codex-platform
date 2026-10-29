@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "central-app"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "base64 0.22.1",
  "der 0.7.10",
