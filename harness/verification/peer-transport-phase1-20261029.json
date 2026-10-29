@@ -1,0 +1,58 @@
+{
+  "schema": "yuan-zhou-peer-transport-validation/v1",
+  "date": "2026-10-29",
+  "status": "local-validation-passed-wan-pending",
+  "scope": "Windows local isolation and two native probe processes",
+  "candidate": {
+    "iroh": "1.4.1",
+    "irohRelay": "1.4.1",
+    "rustc": "1.98.0",
+    "tlsVerificationDisabled": false,
+    "thirdPartyDefaultDiscoveryOrRelayEnabled": false,
+    "productIntegrationEnabled": false
+  },
+  "constraints": {
+    "preferDirect": true,
+    "relayFallback": true,
+    "newBusinessQuotas": false,
+    "commandOrModelReplayAdded": false,
+    "productionConfigurationChanged": false,
+    "publishedOrDeployed": false
+  },
+  "checks": [
+    { "command": "cargo test -p peer-transport --locked -- --test-threads=1", "passed": true, "tests": 7 },
+    { "command": "cargo build -p peer-transport --example peer-probe --locked", "passed": true },
+    { "command": "node tests/smoke/peer-transport-probe-smoke.mjs", "passed": true },
+    { "command": "node tests/smoke/repository-layout-smoke.mjs", "passed": true },
+    { "command": "cargo fmt --all -- --check", "passed": true },
+    { "command": "cargo check -p desktop-spike --locked", "passed": true },
+    { "command": "cargo check -p central-app -p local-agent --locked", "passed": true },
+    { "command": "cargo test -p platform-security --locked -- --test-threads=1", "passed": true, "tests": 27, "execution": "normal user permissions required for temporary Windows ACL and DPAPI fixtures" },
+    { "command": "git diff --check", "passed": true }
+  ],
+  "observations": {
+    "sampleBytes": 8388625,
+    "sampleIsProductLimit": false,
+    "sameHostTwoProcessSha256": "2da0fcd39ebe45648d6ce105b88b5d19396cbdd443b85508d806a64319d1c015",
+    "directWithRelayAvailable": "Selected path is direct; relay byte delta is below control-traffic test tolerance during bulk transfer; stopping relay does not interrupt established direct transfer",
+    "relayFallback": "IP transports disabled in fixture; selected path is relay and relay counter increases by at least both payload directions",
+    "identity": "Discovered identity mismatch and uninvited peer denied",
+    "relayTls": "Live TLS connection with the endpoint CA configuration reports UnknownIssuer; negative endpoint cannot come online",
+    "wss": "Real WSS over relayed QUIC stream echoes synthetic message and rejects wrong hostname with NotValidForName"
+  },
+  "resolvedDuringValidation": [
+    "wmi broad dependency ranges initially mixed windows 0.61 with windows-core 0.62; cargo update -p wmi resolved both to 0.62.2 without upgrading Tauri",
+    "Windows debug probe stack overflow fixed with heap buffers and pinned probe future",
+    "Sandbox denied child process creation and Windows ACL/DPAPI operations; approved normal-user reruns passed without weakening checks"
+  ],
+  "notValidated": [
+    "Public server access details pending from user; no public test server deployed",
+    "Cross-NAT, cross-carrier or mobile-network hole punching",
+    "Mac native build and older Windows compatibility",
+    "Live direct-to-relay and relay-to-direct migration during transfer",
+    "Packet-capture verification of deployed relay confidentiality",
+    "Public discovery and product pairing, key rotation and revocation integration",
+    "Real central gateway, model inference, Local Agent execution and updater download over this transport",
+    "Installed application lifecycle, UI, packaging or release"
+  ]
+}

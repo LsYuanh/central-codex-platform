@@ -8,6 +8,7 @@ members = [
   "crates/local-agent",
   "crates/platform-security",
   "crates/central-native-helper",
+  "crates/peer-transport",
 ]
 
 [workspace.package]
