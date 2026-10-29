@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-29",
+  "scope": "User-authorized Windows x64 and macOS ARM64 client release to existing central update channel",
+  "version": "0.3.4",
+  "source": {
+    "baseCommit": "c5d3391",
+    "version": "0.3.4",
+    "sourceArchiveSha256": "474947ccae6cbeb1e97f606fc205078499cc7953ca2569a8a1e2d92aeba96ddc",
+    "overlayArchiveSha256": "b9415faa5da79d0c1f4e4c320ca2a35147b794a46b36d3e076ee448461ffd0dd",
+    "overlayFiles": [
+      "apps/desktop/src-tauri/tauri.conf.json"
+    ],
+    "productionChanges": "client version 0.3.3 to 0.3.4"
+  },
+  "artifacts": [
+    {
+      "file": "0.3.4-windows-x86_64.exe",
+      "sha256": "db14efd18b9865129c124d23f484821823940ac28678978dd118a97d5f9e12ec",
+      "bytes": 15156088
+    },
+    {
+      "file": "0.3.4-darwin-aarch64.app.tar.gz",
+      "sha256": "a8a1b1145112c32670ee96084ea2b83111c4843f84180fbfd9fa4ceb3af26b8c",
+      "bytes": 21295387
+    }
+  ],
+  "macDmg": {
+    "sha256": "e4af7e2dfba516307904b4cbba2b0261b77a36a2bb3ea23d94706bc8667b5db1",
+    "bytes": 24107531
+  },
+  "payload": {
+    "version": "0.3.4",
+    "actualInstallerAgentMatchesRealModelQA": true,
+    "agentSha256": "ae044948288c76c141d625f8390cca13f438e45d806929a814100d815913a1f1",
+    "pdfiumMatched": true,
+    "fixedPublicKeySignaturesVerified": true
+  },
+  "checks": {
+    "typescript": true,
+    "viteBothPlatforms": true,
+    "windowsStaticCrtAndGuiSubsystem": true,
+    "macCodesignDeepStrict": true,
+    "macDmgVerified": true,
+    "updaterFixedPublicKeyBothPlatforms": true
+  },
+  "live": {
+    "model": "gpt-6.1-sol",
+    "transport": "public relay only",
+    "actualLocalAgent": true,
+    "externalProjectVerified": true,
+    "legacyWorkspaceVerified": false,
+    "workspaceReadVerified": true,
+    "modelToolReadVerified": true,
+    "modelToolExecVerified": true,
+    "randomProofVerified": true,
+    "turnCompleted": true,
+    "runtimeMarkerVerified": true,
+    "updateRunningBlocked": true,
+    "updateCompletedWithoutModelPollAllowed": true,
+    "updateLeaseReleased": true,
+    "installerStarted": false,
+    "permissionMode": "auto",
+    "permissionModePersisted": true,
+    "permissionSwitchVerified": true,
+    "manualApprovalCount": 0,
+    "defaultAutoVerified": true,
+    "resumeHistoryVerified": true,
+    "revoked": true,
+    "agentExited": true
+  },
+  "downloads": {
+    "centralLoopbackBothPlatforms": true,
+    "windowsLanBothPlatforms": true,
+    "relayNativeWindows": {
+      "bytes": 15156088,
+      "installerStarted": false,
+      "kind": "update-download",
+      "sha256": "db14efd18b9865129c124d23f484821823940ac28678978dd118a97d5f9e12ec",
+      "signatureVerified": true,
+      "version": "0.3.4"
+    },
+    "relayHttpsLeaseReleased": true
+  },
+  "deployment": {
+    "clientChannel": "0.3.4",
+    "centralApp": "0.1.10",
+    "centralRuntime": "0.163.0",
+    "serviceRestarted": false,
+    "relayRestarted": false,
+    "oldManifestAndPackagesRetained": true,
+    "existingInstalledClientsReplaced": false,
+    "githubAssetsPublished": false,
+    "gitPushed": false
+  },
+  "limits": [
+    "Installed desktop in-app download/install/restart UI flow not newly validated",
+    "macOS native UI and end-to-end relay model execution not newly validated",
+    "Windows OS publisher signature unavailable; macOS ad-hoc, not notarized",
+    "Long outages and sustained load not part of release validation"
+  ]
+}
