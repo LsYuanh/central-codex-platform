@@ -22,7 +22,7 @@ export function RelaySettings(){
   async function save(enabled:boolean){if(lock.current)return;
     if(enabled){try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/'||token.trim().length<32)throw Error();}catch{setError('请填写有效的 HTTPS 中继地址和接入密钥。');return;}}
     lock.current=true;setBusy(true);setError('');setNotice('');
-    try{const value=await nativeCall<Status>('central_relay_save',15000,{access:enabled?{url:url.trim(),token:token.trim(),caPem:ca.trim()}:null});if(mounted.current){setStatus(value);setToken('');setCa('');setNotice(enabled?'公网中继配置已保存，中央服务启动后自动连接。请生成新的配对码供外网客户端使用。':'公网中继已关闭，局域网连接保持可用。');}}
+    try{const value=await nativeCall<Status>('central_relay_save',15000,{access:enabled?{url:url.trim(),token:token.trim(),caPem:ca.trim()}:null});if(mounted.current){setStatus(value);setToken('');setCa('');setNotice(enabled?'公网中继配置已保存，中央服务启动后自动连接。已配对的新客户端连接后会自动同步，无需重新配对。':'公网中继已关闭，局域网连接保持可用。');}}
     catch(cause){if(mounted.current)setError(message(cause));}finally{lock.current=false;if(mounted.current)setBusy(false);}}
   return <section className="card relay-settings" aria-labelledby="relay-heading">
     <div className="section-title"><h2 id="relay-heading">公网中继</h2><button className="button secondary" disabled={!nativeAvailable||busy} onClick={()=>void refresh()}>刷新状态</button></div>

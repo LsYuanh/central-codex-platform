@@ -28,23 +28,30 @@ const DEVICE: &str =
 
 #[tokio::test]
 async fn pairing_storage_http_wss_and_revocation_keep_inner_tls() -> anyhow::Result<()> {
-    exercise(false).await
+    exercise(false, false).await
 }
 
 #[tokio::test]
 #[ignore = "requires RELAY_LOCAL_AGENT_EXE pointing to the freshly built Local Agent"]
 async fn real_agent_tools_and_restart_through_relay() -> anyhow::Result<()> {
-    exercise(true).await
+    exercise(true, false).await
 }
 
-async fn exercise(with_agent: bool) -> anyhow::Result<()> {
+#[tokio::test]
+async fn unified_pairing_upgrades_existing_identity_and_selects_lan_relay_lan() -> anyhow::Result<()>
+{
+    exercise(false, true).await
+}
+
+async fn exercise(with_agent: bool, automatic: bool) -> anyhow::Result<()> {
     let relay = fixture::LocalRelay::authenticated(TOKEN).await?;
     let access = Access {
         url: relay.url.to_string(),
         ca_pem: relay.certificate_pem.clone(),
         token: TOKEN.into(),
     };
-    let cert = rcgen::generate_simple_self_signed(vec!["central.example".into()])?;
+    let cert =
+        rcgen::generate_simple_self_signed(vec!["central.example".into(), "127.0.0.1".into()])?;
     let pem = cert.cert.pem();
     let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
         rustls::crypto::ring::default_provider(),
@@ -57,6 +64,26 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
     )?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
+    let lan = TcpListener::bind("127.0.0.1:0").await?;
+    let lan_address = lan.local_addr()?;
+    let lan_enabled = Arc::new(AtomicBool::new(true));
+    let enabled = lan_enabled.clone();
+    let forwarding = tokio::spawn(async move {
+        while let Ok((mut incoming, _)) = lan.accept().await {
+            if !enabled.load(Ordering::SeqCst) {
+                continue;
+            }
+            tokio::spawn(async move {
+                if let Ok(mut backend) = tokio::net::TcpStream::connect(address).await {
+                    let _ = tokio::io::copy_bidirectional(&mut incoming, &mut backend).await;
+                }
+            });
+        }
+    });
+    let connection = Arc::new(std::sync::Mutex::new(serde_json::Value::Null));
+    let shared_connection = connection.clone();
+    let pairs = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let server_pairs = pairs.clone();
     let revoked = Arc::new(AtomicBool::new(false));
     let state = revoked.clone();
     let (agents, mut incoming_agents) = tokio::sync::mpsc::unbounded_channel();
@@ -65,7 +92,7 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
         let mut tasks = JoinSet::new();
         loop {
             tokio::select! {
-                accepted=listener.accept()=>{let Ok((tcp,_))=accepted else {break};let accept=accept.clone();let state=state.clone();let agents=agents.clone();
+                accepted=listener.accept()=>{let Ok((tcp,_))=accepted else {break};let accept=accept.clone();let state=state.clone();let agents=agents.clone();let connection=shared_connection.clone();let pairs=server_pairs.clone();
                     tasks.spawn(async move{
                         let Ok(tls)=accept.accept(tcp).await else{return};let mut io=BufReader::new(tls);
                         let Ok(prefix)=io.fill_buf().await else{return};
@@ -87,9 +114,9 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
                         let mut body=vec![0;length];if io.read_exact(&mut body).await.is_err(){return}
                         let identity=json!({"authMode":"device-token-v1","deviceId":"test-device","deviceKey":"a".repeat(64),"user":{"id":"test-user","username":"test"}});
                         let response=if first.starts_with("POST /auth/device/pair "){
-                            let input:serde_json::Value=serde_json::from_slice(&body).unwrap();assert_eq!(input["code"],"p".repeat(40));
+                            pairs.fetch_add(1,Ordering::SeqCst);let input:serde_json::Value=serde_json::from_slice(&body).unwrap();assert_eq!(input["code"],"p".repeat(40));
                             let mut data=identity;data["deviceToken"]=DEVICE.into();json!({"ok":true,"data":data})
-                        }else if authorized&&!state.load(Ordering::SeqCst){json!({"ok":true,"data":identity})}else{json!({"ok":false,"error":"DEVICE_REVOKED"})};
+                        }else if first.starts_with("POST /transport/config ")&&authorized&&!state.load(Ordering::SeqCst){json!({"ok":true,"data":{"protocol":"yuan-connection/v1","deviceId":"test-device","deviceKey":"a".repeat(64),"userId":"test-user","relay":connection.lock().unwrap().clone()}})}else if authorized&&!state.load(Ordering::SeqCst){json!({"ok":true,"data":identity})}else{json!({"ok":false,"error":"DEVICE_REVOKED"})};
                         let body=response.to_string();let header=format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len());
                         let _=io.write_all(header.as_bytes()).await;let _=io.write_all(body.as_bytes()).await;let _=io.shutdown().await;
                     });
@@ -104,7 +131,12 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
         access,
         central_id: host.as_ref().unwrap().central_id(),
     };
-    let gateway = format!("wss://central.example:{}/ws", address.port());
+    *connection.lock().unwrap() = serde_json::to_value(&target)?;
+    let gateway = if automatic {
+        format!("wss://127.0.0.1:{}/ws", lan_address.port())
+    } else {
+        format!("wss://central.example:{}/ws", address.port())
+    };
     let mut bundle = Bundle::new(
         gateway.clone(),
         pem,
@@ -112,7 +144,9 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
         platform_security::now() + 240_000,
     )
     .map_err(anyhow::Error::msg)?;
-    bundle.relay = Some(target.clone());
+    if !automatic {
+        bundle.relay = Some(target.clone());
+    }
     let bundle = Bundle::decode(&bundle.encode().map_err(anyhow::Error::msg)?)
         .map_err(anyhow::Error::msg)?;
     let app_directory = tempfile::tempdir()?;
@@ -126,9 +160,30 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
     )
     .await?
     .map_err(anyhow::Error::msg)?;
-    assert_eq!(credential.public()["connectionMode"], "relay");
+    if automatic {
+        assert!(credential.relay.is_none());
+        assert!(
+            device_token::sync_connection(&app, namespace, &gateway, "")
+                .await
+                .map_err(anyhow::Error::msg)?
+        );
+        assert!(
+            !device_token::sync_connection(&app, namespace, &gateway, "")
+                .await
+                .map_err(anyhow::Error::msg)?
+        );
+    }
     let stored = device_token::load(&app, namespace, &gateway).map_err(anyhow::Error::msg)?;
     assert_eq!(stored.relay.as_ref().unwrap().central_id, target.central_id);
+    assert_eq!(stored.device_id, credential.device_id);
+    assert_eq!(stored.device_key, credential.device_key);
+    assert_eq!(stored.user.id, credential.user.id);
+    assert_eq!(stored.bearer(), credential.bearer());
+    assert_eq!(
+        pairs.load(Ordering::SeqCst),
+        1,
+        "routing upgrade must not pair again"
+    );
     let ca = device_token::bundled_ca_path(&app, namespace, &gateway)
         .map_err(anyhow::Error::msg)?
         .unwrap();
@@ -163,6 +218,121 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
         .await?;
     assert!(update.status().is_success());
     assert!(update.text().await?.contains("test-device"));
+    if automatic {
+        *connection.lock().unwrap() = json!({"invalid":"route"});
+        assert!(
+            device_token::sync_connection(&app, namespace, &gateway, ca)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            device_token::load(&app, namespace, &gateway)
+                .unwrap()
+                .bearer(),
+            stored.bearer()
+        );
+        assert_eq!(
+            device_token::load(&app, namespace, &gateway)
+                .unwrap()
+                .relay
+                .as_ref()
+                .unwrap()
+                .central_id,
+            target.central_id
+        );
+        *connection.lock().unwrap() = serde_json::Value::Null;
+        assert!(
+            device_token::sync_connection(&app, namespace, &gateway, ca)
+                .await
+                .unwrap()
+        );
+        let lan_only = device_token::load(&app, namespace, &gateway).unwrap();
+        assert!(lan_only.relay.is_none());
+        assert_eq!(lan_only.device_id, stored.device_id);
+        *connection.lock().unwrap() = serde_json::to_value(&target)?;
+        assert!(
+            device_token::sync_connection(&app, namespace, &gateway, ca)
+                .await
+                .unwrap()
+        );
+        // Reuse the same HTTP adapter across networks, as the updater does.
+        let persistent = stored
+            .http(&gateway, ca)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        for (available, expected) in [(true, "lan"), (false, "relay"), (true, "lan")] {
+            lan_enabled.store(available, Ordering::SeqCst);
+            let response = persistent
+                .get(platform_security::origin(&gateway).unwrap())
+                .bearer_auth(stored.bearer())
+                .send()
+                .await?;
+            assert!(response.status().is_success());
+            assert!(response.text().await?.contains("test-device"));
+            let mut connection = stored
+                .socket(&gateway, ca)
+                .await
+                .map_err(anyhow::Error::msg)?;
+            assert_eq!(stored.public()["connectionMode"], expected);
+            connection
+                .send(Message::Text("same-existing-conversation".into()))
+                .await?;
+            assert_eq!(
+                connection.next().await.unwrap()?.into_text()?,
+                "same-existing-conversation"
+            );
+            assert_eq!(
+                device_token::status(&app, namespace, &gateway, ca).await["status"],
+                "active"
+            );
+            connection.close(None).await?;
+            let route = platform_security::relay::HttpRoute::automatic(
+                &gateway,
+                stored.relay.as_ref(),
+                platform_security::central_tls_config(ca).map_err(anyhow::Error::msg)?,
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            assert!(route.proxy_url().is_some());
+        }
+        // LAN must remain independent of relay availability/credentials.
+        let mut unavailable = Bundle::new(
+            gateway.clone(),
+            bundle.ca_pem.clone(),
+            "p".repeat(40),
+            platform_security::now() + 240_000,
+        )
+        .map_err(anyhow::Error::msg)?;
+        let mut denied = target.clone();
+        denied.access.token = "incorrect-relay-token-0123456789abcdef".into();
+        unavailable.relay = Some(denied);
+        // Use the already-paired identity for this route check; no extra pairing.
+        let tls = platform_security::central_tls_config(ca).map_err(anyhow::Error::msg)?;
+        let route = platform_security::relay::HttpRoute::automatic(
+            &gateway,
+            unavailable.relay.as_ref(),
+            tls,
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        let client = platform_security::relay::HttpClient::automatic(
+            &gateway,
+            unavailable.relay.as_ref(),
+            platform_security::central_tls_config(ca).map_err(anyhow::Error::msg)?,
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        assert!(
+            client
+                .get(platform_security::origin(&gateway).unwrap())
+                .bearer_auth(stored.bearer())
+                .send()
+                .await?
+                .status()
+                .is_success()
+        );
+        drop(route);
+    }
     let mut ws = stored
         .socket(&gateway, ca)
         .await
@@ -288,7 +458,14 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
         child.wait().await?;
     }
     // Original hostname validation survives both the relay and local CONNECT adapter.
-    let wrong = gateway.replace("central.example", "wrong.example");
+    let wrong = gateway.replace(
+        if automatic {
+            "127.0.0.1"
+        } else {
+            "central.example"
+        },
+        "wrong.example",
+    );
     assert!(stored.socket(&wrong, ca).await.is_err());
     let wrong_http = stored.http(&wrong, ca).await.map_err(anyhow::Error::msg)?;
     assert!(
@@ -311,6 +488,7 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
     assert!(device_token::load(&app, namespace, &gateway).is_err());
     drop(host);
     server.abort();
+    forwarding.abort();
     relay.server.shutdown().await?;
     Ok(())
 }

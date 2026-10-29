@@ -178,18 +178,14 @@ impl Manager {
             .configuration
             .lock()
             .map_err(|_| failure("RELAY_STATE_FAILED"))?;
-        if selection(root)?.record.is_none() {
-            return Ok(None);
-        }
-        let r = self
-            .runtime
-            .lock()
-            .map_err(|_| failure("RELAY_STATE_FAILED"))?;
-        if r.instance.as_deref() != Some(instance) || r.status.state != "connected" {
-            return Err(failure("RELAY_NOT_READY"));
-        }
-        Ok(r.target.clone())
+        let _ = instance;
+        // Pairing remains usable on LAN while the relay is temporarily offline.
+        Ok(load(root)?.map(|r| Target {
+            access: r.access.clone(),
+            central_id: peer_transport::relay::central_id(r.seed),
+        }))
     }
+
     pub fn save(&self, service: &Service, root: &Path, access: Option<Access>) -> Result<Status> {
         let _gate = service.mutation()?;
         // Private-store handles exclude concurrent writers. Serialize monitor reads
@@ -297,12 +293,35 @@ pub async fn monitor(manager: Weak<Manager>, service: Weak<Service>, root: PathB
     let mut host: Option<Host> = None;
     let mut instance = None;
     let mut next = Instant::now();
+    let mut published_instance: Option<String> = None;
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let (Some(manager), Some(service)) = (manager.upgrade(), service.upgrade()) else {
             break;
         };
         let snap = service.snapshot();
+        if snap.state != State::Running {
+            published_instance = None;
+        }
+        if snap.state == State::Running
+            && snap.connection_updates_supported
+            && published_instance != snap.instance_id
+        {
+            if let Some(id) = snap.instance_id.clone() {
+                if let Ok(target) = manager.target(&root, &id) {
+                    let service = service.clone();
+                    let sent_id = id.clone();
+                    if tokio::task::spawn_blocking(move || {
+                        service.update_connection(&sent_id, target.as_ref())
+                    })
+                    .await
+                    .is_ok_and(|r| r.is_ok())
+                    {
+                        published_instance = Some(id);
+                    }
+                }
+            }
+        }
         if snap.state != State::Running || snap.instance_id != instance {
             if host.take().is_some() {
                 if let Ok(mut r) = manager.runtime.lock() {

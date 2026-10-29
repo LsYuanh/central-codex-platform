@@ -60,7 +60,7 @@ export const peopleLogout = async (expectedInstanceId: string) => readPeopleStat
 // authorize refresh + users + devices are serialized native HTTP calls (15s
 // each), so a read-only inventory may need more time than a single mutation.
 export const peopleList = async (expectedInstanceId: string) => readPeopleInventory(await nativeCall<unknown>('central_people_list', 50000, { expectedInstanceId }), expectedInstanceId);
-export async function peopleMutation(command: Mutation, expectedInstanceId: string, requestId: string, target: { username?: string; userId?: string; deviceId?: string; lanOnly?: boolean }): Promise<MutationResult> {
+export async function peopleMutation(command: Mutation, expectedInstanceId: string, requestId: string, target: { username?: string; userId?: string; deviceId?: string }): Promise<MutationResult> {
   return readMutationResult(await nativeCall<unknown>(`central_people_${command}`, 40000, { expectedInstanceId, requestId, ...target }), expectedInstanceId, requestId);
 }
 export function peopleCode(cause: unknown): string {

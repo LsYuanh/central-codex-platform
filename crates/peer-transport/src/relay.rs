@@ -18,6 +18,9 @@ use tokio::{
 use zeroize::Zeroize;
 
 pub const ALPN: &[u8] = b"yuan-zhou/gateway-tunnel/1";
+pub fn central_id(seed: [u8; 32]) -> String {
+    SecretKey::from_bytes(&seed).public().to_string()
+}
 pub fn new_seed() -> [u8; 32] {
     SecretKey::generate().to_bytes()
 }

@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-29",
+  "scope": "Unified pairing, LAN-first authenticated transport, relay fallback and preservation of the current device identity",
+  "sourceImplemented": true,
+  "published": false,
+  "formalCentralReplaced": false,
+  "cloudConfigurationChanged": false,
+  "installedClientReplaced": false,
+  "currentPublishedClient": "0.3.4",
+  "checks": {
+    "desktopTypeScriptAndVite": "passed",
+    "centralTypeScriptAndVite": "passed",
+    "gatewayTypeScript": "passed",
+    "cargoFmtAndCheck": "passed",
+    "rustUnitAndTransportTests": {
+      "passed": 157,
+      "failed": 0,
+      "ignored": 16,
+      "note": "The ignored real-Agent relay test was explicitly run separately and passed. Other ignored operator-specific tests were not claimed as passed."
+    },
+    "realAgentAuthenticatedRelayToolsAndReconnect": "passed",
+    "realAgentBusyGuardGracefulDrainAndHalfOpenRecovery": "passed",
+    "gatewayTransportAdmissionAndHistory": {"passed": true, "checks": 15, "modelAndAgent": "protocol fixtures"},
+    "ownedNativeServiceControl": {
+      "passed": true,
+      "checks": [
+        "connection capability handshake and owned-stdin delivery",
+        "configuration unavailable before native delivery",
+        "anonymous and session credentials rejected; paired device allowed",
+        "relay enabled and disabled preserve device/user identity",
+        "wrong-instance rejection, controller EOF and clean shutdown"
+      ],
+      "realModel": false
+    },
+    "nativeDesktopUi": {
+      "passed": true,
+      "isolatedAppIdentity": true,
+      "freshNativeBuild": true,
+      "actualExistingCentral": true,
+      "relayConfiguredButLanSelected": true,
+      "sameDeviceAfterMonitor": true,
+      "existingCentralDoesNotSupportNewConfigurationEndpoint": true
+    },
+    "nativeCentralUiConfigurationAndPersistence": "passed with isolated application identity; no gateway started",
+    "deviceBrokerSmoke": "passed against an ephemeral loopback gateway with the fresh Agent",
+    "pairingUiStateRegression": "passed",
+    "actualCentralModel": {
+      "passed": true,
+      "model": "gpt-6.1-sol",
+      "freshNativeTransportAndAgent": true,
+      "randomClientFileProof": true,
+      "clientPowerShell": true,
+      "persistedCredentialReconnect": true,
+      "historyResume": true,
+      "permissionPersistence": true,
+      "updateBusyGuardAndLeaseRelease": true,
+      "temporaryDeviceRevoked": true,
+      "temporaryManagementSessionCleaned": true,
+      "newCentralGatewayDeployed": false
+    }
+  },
+  "transportRegression": [
+    "LAN -> authenticated relay -> LAN uses one unchanged device token, user ID, device ID and device key",
+    "existing LAN credential receives relay configuration without another pair request",
+    "same HTTP adapter selects its route for each new CONNECT",
+    "malformed synchronized relay configuration does not overwrite the credential",
+    "configuration disable and re-enable preserve the device identity",
+    "LAN remains usable with unavailable relay admission",
+    "inner TLS rejects a wrong server name",
+    "shared update/transport lease prevents concurrent preparations and active-turn/command handover",
+    "half-open Agent socket reconnects without replaying commands"
+  ],
+  "commands": [
+    "npm run check --workspace @central-codex-spike/desktop",
+    "npm run build --workspace @central-codex-spike/desktop",
+    "npm run check --workspace @central-codex-spike/central",
+    "npm run build --workspace @central-codex-spike/central",
+    "npm run build --workspace @central-codex-spike/central-gateway",
+    "cargo fmt --all -- --check",
+    "cargo check -p desktop-spike -p central-app -p local-agent --locked",
+    "cargo test -p desktop-spike -p central-app -p local-agent -p platform-security --lib --bins --test relay_transport --locked",
+    "cargo test -p platform-security --test relay_transport --locked -- --ignored (RELAY_LOCAL_AGENT_EXE set to the fresh test binary)",
+    "node tests/smoke/client-update-session-smoke.mjs",
+    "node tests/smoke/worker-routing-smoke.mjs --transport",
+    "node tests/smoke/central-service-host-smoke.mjs --candidate <isolated freshly staged gateway>",
+    "node tests/smoke/relay-native-ui.mjs (isolated fresh central QA binary)",
+    "node tests/smoke/platform-pairing-ui-smoke.ts",
+    "node tests/smoke/device-broker-smoke.mjs (ephemeral loopback gateway and fresh Agent)"
+  ],
+  "verificationNotes": [
+    "The first device:smoke invocation had no test gateway at its default loopback port; it was rerun successfully against an isolated ephemeral gateway without touching formal services.",
+    "Native UI evidence and detailed logs remain in ignored local verification directories; no private addresses, device tokens, pairing codes or user files are included here.",
+    "The final manual-configuration/transport mutex serialization and bounded full outbound-queue close refinements were checked after the native UI run.",
+    "Existing pairing inheritance is tested in the actual private credential store; actual history resume is independently tested against the existing formal central, not inferred from a socket echo."
+  ],
+  "remaining": [
+    "Mac ARM64 compilation and native acceptance for this source change",
+    "physical mobile-data network switch and complete native idle relay-to-LAN handover",
+    "deployment of the new central App and gateway, followed by existing installed-device configuration synchronization",
+    "complete installed-client upgrade and long-duration network-flap acceptance"
+  ],
+  "releaseRequirement": "A later explicit release must update the central App, gateway runtime and desktop client. Preserve current pairing; first synchronization needs at least one previously configured reachable route."
+}

@@ -1094,13 +1094,20 @@ const httpHandler = async (request: IncomingMessage, response: ServerResponse) =
   if(nativeService?.updateBlocked&&request.url!=="/healthz"){writeJson(response,503,{ok:false,error:'CENTRAL_UPDATING'});return;}
   const url = new URL(request.url ?? "/", `http://${listenHost}:${listenPort}`);
   if(auditFailed&&url.pathname!=="/healthz"){writeJson(response,503,{ok:false,error:"AUDIT_STORAGE_UNAVAILABLE"});return;}
-  if(url.pathname.startsWith("/client-updates/")) {
+  if(url.pathname.startsWith("/client-updates/") || url.pathname.startsWith("/transport/")) {
     try {
       if(!auth)throw Error("AUTH_REQUIRED");
       const principal=auth.bearer(request.headers.authorization);
       if(!principal.deviceId || principal.authMode!=="device-token-v1")throw Error("AUTH_REQUIRED");
       const device=principal.deviceId;
-      if(url.pathname==="/client-updates/prepare" && request.method==="POST") {
+      if(url.pathname==="/transport/config" && request.method==="POST") {
+        response.setHeader("Cache-Control","no-store");
+        if(!nativeService || nativeService.connection===undefined){writeJson(response,503,{ok:false,error:"CONNECTION_CONFIG_UNAVAILABLE"});return;}
+        writeJson(response,200,{ok:true,data:{protocol:"yuan-connection/v1",deviceId:device,deviceKey:principal.deviceKey,userId:principal.userId,relay:nativeService.connection}});return;
+      }
+      // Both operations share the same admission lease, so an install and a
+      // route switch cannot race each other or a newly submitted device task.
+      if((url.pathname==="/client-updates/prepare"||url.pathname==="/transport/prepare") && request.method==="POST") {
         if(clientUpdates.locked(device))throw new UpdateDeviceBusy("install-lease");
         const before=clientUpdateBusyReason(device);
         if(before)throw new UpdateDeviceBusy(before);
@@ -1113,7 +1120,7 @@ const httpHandler = async (request: IncomingMessage, response: ServerResponse) =
         const version=String(request.headers["x-update-version"]??"");
         writeJson(response,200,clientUpdates.prepare(device,randomUUID(),busy,/^\d+\.\d+\.\d+$/.test(version)?version:undefined)); return;
       }
-      if(url.pathname==="/client-updates/release" && request.method==="POST") {
+      if((url.pathname==="/client-updates/release"||url.pathname==="/transport/release") && request.method==="POST") {
         clientUpdates.release(device,String(request.headers["x-update-lease"]??""));
         writeJson(response,200,{released:true}); return;
       }
@@ -1121,6 +1128,7 @@ const httpHandler = async (request: IncomingMessage, response: ServerResponse) =
         clientUpdates.resume(device,String(request.headers["x-client-version"]??""));
         writeJson(response,200,{resumed:!clientUpdates.locked(device)});return;
       }
+      if(url.pathname.startsWith("/transport/")){writeJson(response,404,{ok:false,error:"NOT_FOUND"});return;}
       void clientUpdates.serve(request,response,url); return;
     } catch(error) {writeJson(response,error instanceof UpdateDeviceBusy?409:401,error instanceof UpdateDeviceBusy?{error:"UPDATE_DEVICE_BUSY",reason:error.reason}:{error:"AUTH_REQUIRED"});return;}
   }

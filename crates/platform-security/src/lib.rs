@@ -117,7 +117,7 @@ pub(crate) async fn post_client(
     body: Value,
     access: Option<&str>,
 ) -> Result<Value, String> {
-    if !route.starts_with("/auth/") {
+    if !route.starts_with("/auth/") && route != "/transport/config" {
         return Err("不支持的平台接口".into());
     }
     let mut request = client
@@ -334,8 +334,9 @@ pub(crate) async fn socket_routed(
         Some(config) => config,
         None => transport::config(ca_bytes(ca)?.as_deref())?,
     };
+    let use_relay = relay.is_some() && !relay::lan_available(url, config.clone()).await;
     let connector = Connector::Rustls(std::sync::Arc::new(config));
-    let stream = relay::NetworkStream::connect(url, relay).await?;
+    let stream = relay::NetworkStream::connect(url, if use_relay { relay } else { None }).await?;
     let (socket, _) = tokio::time::timeout(
         Duration::from_secs(15),
         client_async_tls_with_config(
@@ -373,6 +374,7 @@ pub(crate) async fn socket_routed(
         }
         transport::error_code(&error).to_string()
     })?;
+    relay::record_socket_mode(url, use_relay);
     Ok(socket)
 }
 pub async fn agent_socket(namespace: &str, gateway: &str, ca: &str) -> Result<Socket, String> {

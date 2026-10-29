@@ -196,6 +196,16 @@ fn start(config: &DesktopConfig) -> Result<AgentProcess, String> {
 
 impl DesktopRuntime {
     pub async fn stop_for_update(&self, expected: &DesktopConfig) -> Result<(), String> {
+        self.stop_for_restart(expected, false).await
+    }
+    pub async fn stop_for_transport(&self, expected: &DesktopConfig) -> Result<(), String> {
+        self.stop_for_restart(expected, true).await
+    }
+    async fn stop_for_restart(
+        &self,
+        expected: &DesktopConfig,
+        transport: bool,
+    ) -> Result<(), String> {
         let mut inner = self
             .0
             .try_write()
@@ -206,7 +216,14 @@ impl DesktopRuntime {
         if let Some(process) = inner.process.as_ref() {
             tokio::time::timeout(
                 Duration::from_secs(5),
-                process.ipc.request("runtime/prepare_restart", json!({})),
+                process.ipc.request(
+                    if transport {
+                        "runtime/prepare_transport_restart"
+                    } else {
+                        "runtime/prepare_restart"
+                    },
+                    json!({}),
+                ),
             )
             .await
             .map_err(|_| "Local Agent 状态核对超时")??;
@@ -217,8 +234,17 @@ impl DesktopRuntime {
 
     pub async fn restore_after_update(&self) -> Result<(), String> {
         let mut inner = self.0.write().await;
-        inner.process = Some(start(&inner.effective)?);
-        Ok(())
+        match start(&inner.effective) {
+            Ok(process) => {
+                inner.process = Some(process);
+                inner.error = None;
+                Ok(())
+            }
+            Err(error) => {
+                inner.error = Some(error.clone());
+                Err(error)
+            }
+        }
     }
 
     pub fn new(path: PathBuf, suggested_workspace: PathBuf) -> Self {

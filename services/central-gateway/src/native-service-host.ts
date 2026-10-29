@@ -9,11 +9,14 @@ import type {PlatformAuth} from './platform-auth.js';
 import type {ModelCredentialBrokerOptions} from './model-credential-broker.js';
 import {ServiceMetricsEmitter,type ServiceMetrics} from './service-metrics.js';
 import {validateModelProxy,type ModelProxy} from './model-proxy.js';
+import {validateRelayTarget,type RelayTarget} from './connection-config.js';
 
 const protocol='central-service-host/v1';
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const fields=(v:Record<string,unknown>,names:string[])=>Object.keys(v).every(key=>names.includes(key));
 export class NativeServiceHost {
+  // Undefined means not yet delivered by the native owner, null means LAN only.
+  connection:RelayTarget|null|undefined;
   readonly config:CentralConfig;
   readonly modelProxy:ModelProxy;
   readonly tls:{cert:string;key:string};
@@ -80,7 +83,8 @@ export class NativeServiceHost {
     const frame=JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event,...(event==='ready'?{listening:true}:{}),...(code?{code}:{})})+'\n';
     const capability=event==='ready'?JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'accountUpdatesReady'})+'\n':'';
     const updates=event==='ready'?JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'runtimeUpdatesReady'})+'\n':'';
-    return new Promise<void>((done,reject)=>process.stdout.write(frame+capability+updates,error=>error?reject(Error('SERVICE_CONTROLLER_CLOSED')):done()));
+    const connection=event==='ready'?JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'connectionUpdatesReady'})+'\n':'';
+    return new Promise<void>((done,reject)=>process.stdout.write(frame+capability+updates+connection,error=>error?reject(Error('SERVICE_CONTROLLER_CLOSED')):done()));
   }
   startMetrics(read:()=>ServiceMetrics){
     if(this.stopRequested||this.metricsStopped||this.metricsEmitter)return;
@@ -117,6 +121,12 @@ export class NativeServiceHost {
   stop(){this.stopRequested=true;this.stopMetrics();this.stopHandler?.();}
   accept(value:unknown){
     if(!record(value)||value.method!=='central/service'||value.protocol!==protocol||value.instanceId!==this.instanceId)throw Error('SERVICE_CONTROL_INVALID');
+    if(value.command==='connection/update'){
+      if(this.stopRequested||!fields(value,['method','protocol','instanceId','command','updateId','relay'])||typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId))throw Error('SERVICE_CONNECTION_INVALID');
+      this.connection=validateRelayTarget(value.relay);
+      process.stdout.write(JSON.stringify({method:'central/service',protocol,instanceId:this.instanceId,event:'accountUpdated',updateId:value.updateId})+'\n');
+      return;
+    }
     if(value.command==='stop/idle'){
       if(!fields(value,['method','protocol','instanceId','command','updateId'])||typeof value.updateId!=='string'||!/^[a-f0-9]{32}$/.test(value.updateId))throw Error('SERVICE_CONTROL_INVALID');
       const accepted=!this.stopRequested&&(this.idleStopHandler?.()??false);
@@ -154,7 +164,7 @@ export class NativeServiceHost {
     if(!fields(value,['method','protocol','instanceId','command'])||value.command!=='stop')throw Error('SERVICE_CONTROL_INVALID');
     this.stop();
   }
-  clear(){this.stopMetrics();this.tls.key='';this.account={};}
+  clear(){this.stopMetrics();this.tls.key='';this.account={};this.connection=undefined;}
 }
 
 export async function readNativeServiceHost():Promise<NativeServiceHost|undefined>{

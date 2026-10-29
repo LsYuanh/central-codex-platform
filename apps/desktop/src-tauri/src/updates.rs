@@ -98,6 +98,12 @@ struct PendingUpdate {
     bytes: Option<Vec<u8>>,
 }
 impl UpdateState {
+    pub(crate) fn transport_guard(&self) -> Result<impl Drop + Send + '_, String> {
+        self.ensure_idle()?;
+        self.inner
+            .try_lock()
+            .map_err(|_| "UPDATE_IN_PROGRESS".into())
+    }
     pub fn ensure_idle(&self) -> Result<(), String> {
         if self.installing.load(Ordering::SeqCst) {
             Err("正在安装更新，请等待客户端重启".into())
@@ -175,8 +181,12 @@ pub async fn desktop_update_check(
     let ca = platform.ca(&config.gateway_url)?;
     // Construct the TLS builder before entering the plugin callback so errors remain explicit.
     let tls = platform_security::central_tls_config(&ca)?;
-    let route =
-        platform_security::relay::HttpRoute::new(&config.gateway_url, c.relay.as_ref()).await?;
+    let route = platform_security::relay::HttpRoute::automatic(
+        &config.gateway_url,
+        c.relay.as_ref(),
+        tls.clone(),
+    )
+    .await?;
     let proxy = route
         .proxy_url()
         .map(reqwest::Proxy::https)

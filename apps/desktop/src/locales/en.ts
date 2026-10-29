@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Source-language keys keep translations reviewable next to the UI. Do not translate user content.
 export const en = {
+  "对话连接尚未建立": "Chat connection not established",
+  "连接策略": "Connection policy",
+  "局域网优先，公网中继兜底": "Prefer LAN, fall back to public relay",
+  "局域网连接；公网配置将在中央启用后自动同步": "LAN connection; relay settings sync automatically when enabled centrally",
   "重试安装": "Retry installation",
   "操作权限": "Operation permissions",
   "请求批准": "Ask for approval",

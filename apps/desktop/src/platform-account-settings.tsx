@@ -74,7 +74,8 @@ export function PlatformAccountSettings({gateway,disabled,onIdentity,onBoundary,
     {(!ready||!state.valid)&&<p className="pairing-description">{!ready?reading?t("正在读取本机配对状态…"):t("暂时无法确认配对状态，请刷新重试。"):state.notice}</p>}
     <div id="pairing-connection-details" hidden={!detailsOpen}>
     <dl className="pairing-info">
-      {account.paired&&<div><dt>{t("连接方式")}</dt><dd>{account.connectionMode==='relay'?t("公网中继转发"):t("局域网连接")}</dd></div>}
+      {account.paired&&<div><dt>{t("连接方式")}</dt><dd>{account.remoteAvailable===false?t("正在重连…"):account.connectionMode==='relay'?t("公网中继转发"):account.connectionMode==='lan'?t("局域网连接"):t("对话连接尚未建立")}</dd></div>}
+      <div><dt>{t("连接策略")}</dt><dd>{account.relayAvailable?t("局域网优先，公网中继兜底"):t("局域网连接；公网配置将在中央启用后自动同步")}</dd></div>
       <div><dt>{t("处理分工")}</dt><dd>{t("中央网关负责对话与任务处理；本机设备负责文件与命令执行。")}</dd></div>
       {account.user&&<div><dt>{t("关联用户")}</dt><dd>{account.user.username||account.user.id}</dd></div>}
       <div><dt>{t("中央地址")}</dt><dd>{gateway.startsWith("wss://")?<code>{gateway}</code>:t("配对后自动设置")}</dd></div>

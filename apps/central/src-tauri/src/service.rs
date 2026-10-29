@@ -163,6 +163,18 @@ fn needs_admin(config: &CentralConfig) -> Result<bool> {
 }
 
 impl Service {
+    pub fn update_connection(
+        &self,
+        instance: &str,
+        target: Option<&peer_transport::relay::Target>,
+    ) -> Result<()> {
+        let bytes = Zeroizing::new(
+            serde_json::to_vec(&target).map_err(|_| failure("RELAY_CONFIG_INVALID"))?,
+        );
+        self.process
+            .update_connection(instance, &bytes)
+            .map_err(failure)
+    }
     pub fn new() -> Self {
         Self {
             updates: runtime_updates::Updater::new(),

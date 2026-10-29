@@ -137,12 +137,13 @@ async fn main() -> AgentResult<()> {
         .unwrap()
         .set_identity(config.device_id.clone(), config.device_key.clone());
     let activity = Arc::new(runtime::Activity::default());
+    let transport = Arc::new(runtime::TransportDrain::default());
     if config.attachment_stdio {
-        start_attachment_stdio(files.clone(), activity.clone());
+        start_attachment_stdio(files.clone(), activity.clone(), transport.clone());
     }
 
     loop {
-        match run_connection(&config, &files, &activity).await {
+        match run_connection(&config, &files, &activity, &transport).await {
             Ok(()) => eprintln!("Gateway connection closed; retrying"),
             Err(error) if platform_security::device_token::is_terminal(&error.to_string()) => {
                 return Err(error);
@@ -236,6 +237,7 @@ async fn run_connection(
     config: &Config,
     files: &Arc<Mutex<attachments::Attachments>>,
     activity: &Arc<runtime::Activity>,
+    transport: &Arc<runtime::TransportDrain>,
 ) -> AgentResult<()> {
     let socket = if config.gateway_url.starts_with("wss://") {
         platform_security::device_token::agent_socket(
@@ -262,11 +264,23 @@ async fn run_connection(
     };
     let (mut socket_writer, mut reader) = socket.split();
     let (outbound, mut outbound_rx) = mpsc::unbounded_channel::<Value>();
+    let mut drain = transport.begin();
+    let (close_sender, mut close_receiver) = tokio::sync::oneshot::channel::<()>();
+    let mut close_sender = Some(close_sender);
+    let mut drained = None;
     let mut writer = tokio::spawn(async move {
-        while let Some(value) = outbound_rx.recv().await {
-            socket_writer
-                .send(Message::Text(value.to_string().into()))
-                .await?;
+        let mut ping = time::interval(Duration::from_secs(10));
+        loop {
+            tokio::select! {
+                _ = &mut close_receiver => { socket_writer.send(Message::Close(None)).await?; break; }
+                _ = ping.tick() => {
+                    if !matches!(time::timeout(Duration::from_secs(5), socket_writer.send(Message::Ping(Vec::new().into()))).await, Ok(Ok(()))) { break; }
+                }
+                value = outbound_rx.recv() => match value {
+                    Some(value) => socket_writer.send(Message::Text(value.to_string().into())).await?,
+                    None => break,
+                }
+            }
         }
         Ok::<(), tokio_tungstenite::tungstenite::Error>(())
     });
@@ -290,13 +304,25 @@ async fn run_connection(
     outbound.send(hello).map_err(|_| "AgentRPC writer closed")?;
 
     let mut heartbeat = time::interval(Duration::from_secs(10));
+    let mut last_pong = time::Instant::now();
     heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let cancellations = Arc::new(Mutex::new(HashMap::<String, watch::Sender<bool>>::new()));
     let sessions = Arc::new(process_sessions::Sessions::default());
     let mut tasks = JoinSet::new();
     let connection_result: AgentResult<()> = loop {
         tokio::select! {
+            Ok(reply) = &mut drain => {
+                if let Some(sender) = close_sender.take() { let _ = sender.send(()); }
+                let closed = time::timeout(Duration::from_secs(3), async {
+                    loop { match reader.next().await { None | Some(Err(_)) | Some(Ok(Message::Close(_))) => break, _ => {} } }
+                }).await.is_ok();
+                if closed { drained = Some(reply); }
+                break Ok(());
+            }
             _ = heartbeat.tick() => {
+                // A removed network can leave TCP half-open. Reconnect with the
+                // same credential; never replay commands from the old socket.
+                if last_pong.elapsed() > Duration::from_secs(30) { break Err("CENTRAL_CONNECTION_TIMEOUT".into()); }
                 files.lock().unwrap().expire();
                 let busy = !cancellations.lock().unwrap().is_empty();
                 let message = versioned_message("agent.heartbeat", json!({ "state": if busy { "busy" } else { "idle" } }), None, None, None);
@@ -307,6 +333,7 @@ async fn run_connection(
                     break Ok(());
                 };
                 let incoming = match incoming { Ok(value) => value, Err(error) => break Err(error.into()) };
+                if matches!(incoming, Message::Pong(_)) { last_pong = time::Instant::now(); continue; }
                 if let Message::Close(frame) = &incoming {
                     if let Some(frame) = frame {
                         let reason = frame.reason.as_str();
@@ -419,6 +446,10 @@ async fn run_connection(
     drop(outbound);
     if !writer.is_finished() {
         writer.abort();
+    }
+    transport.clear();
+    if let Some(reply) = drained {
+        let _ = reply.send(());
     }
     connection_result
 }
@@ -594,6 +625,7 @@ async fn handle_request(
 fn start_attachment_stdio(
     files: Arc<Mutex<attachments::Attachments>>,
     activity: Arc<runtime::Activity>,
+    transport: Arc<runtime::TransportDrain>,
 ) {
     std::thread::spawn(move || {
         use std::io::{BufRead, Read, Write};
@@ -613,6 +645,11 @@ fn start_attachment_stdio(
             let response = match serde_json::from_slice::<Value>(&line) {
                 Ok(v) => match (|| {
                     let method = v["method"].as_str().unwrap_or("");
+                    if method == "runtime/prepare_transport_restart" {
+                        activity.pause(|| files.lock().unwrap().has_transfers())?;
+                        transport.request()?;
+                        return Ok(json!({"ready":true}));
+                    }
                     if method == "runtime/prepare_restart" {
                         activity.pause(|| files.lock().unwrap().has_transfers())?;
                         return Ok(json!({"ready":true}));

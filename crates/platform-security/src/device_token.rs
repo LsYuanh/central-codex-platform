@@ -50,12 +50,7 @@ impl Credential {
             Some(pem) => crate::transport::config(Some(pem.as_bytes()))?,
             None => crate::central_tls_config(ca)?,
         };
-        crate::relay::HttpClient::new(
-            gateway,
-            self.relay.as_ref(),
-            crate::transport::http_builder(config),
-        )
-        .await
+        crate::relay::HttpClient::automatic(gateway, self.relay.as_ref(), config).await
     }
     pub async fn post(
         &self,
@@ -81,7 +76,7 @@ impl Credential {
         &self.device_token
     }
     pub fn public(&self) -> Value {
-        json!({"authMode":AUTH_MODE,"paired":true,"loggedIn":true,"user":{"id":self.user.id,"username":self.user.username},"deviceId":self.device_id,"deviceKey":self.device_key,"connectionMode":if self.relay.is_some(){"relay"}else{"lan"}})
+        json!({"authMode":AUTH_MODE,"paired":true,"loggedIn":true,"user":{"id":self.user.id,"username":self.user.username},"deviceId":self.device_id,"deviceKey":self.device_key,"connectionMode":crate::relay::socket_mode(&self.origin),"relayAvailable":self.relay.is_some()})
     }
 }
 pub fn is_terminal(error: &str) -> bool {
@@ -319,9 +314,7 @@ async fn pair_inner(
         Some(pem) => crate::transport::config(Some(pem.as_bytes()))?,
         None => crate::central_tls_config(ca)?,
     };
-    let client =
-        crate::relay::HttpClient::new(gateway, relay, crate::transport::http_builder(config))
-            .await?;
+    let client = crate::relay::HttpClient::automatic(gateway, relay, config).await?;
     let value = crate::post_client(
         client.clone(),
         gateway,
@@ -429,6 +422,47 @@ pub fn bundled_ca_path(
     }
     Ok(Some(path))
 }
+/// Update only routing data through the existing authenticated central connection.
+/// Never consume a pairing code or replace the installation/device identity.
+/// Callers serialize this with pairing/disconnect operations in the desktop owner.
+pub async fn sync_connection(
+    app: &Path,
+    namespace: &str,
+    gateway: &str,
+    ca: &str,
+) -> Result<bool, String> {
+    let c = load(app, namespace, gateway)?;
+    let remote = c.post(gateway, ca, "/transport/config", json!({})).await?;
+    if remote["protocol"] != "yuan-connection/v1"
+        || remote["deviceId"] != c.device_id
+        || remote["deviceKey"] != c.device_key
+        || remote["userId"] != c.user.id
+        || remote.get("relay").is_none()
+    {
+        return Err("CENTRAL_IDENTITY_MISMATCH".into());
+    }
+    let relay: Option<crate::relay::Target> =
+        serde_json::from_value(remote["relay"].clone()).map_err(|_| CORRUPT)?;
+    if let Some(target) = &relay {
+        target.validate().map_err(|_| CORRUPT)?;
+    }
+    let mut current = load(app, namespace, gateway)?;
+    if current.device_id != c.device_id
+        || current.device_key != c.device_key
+        || current.bearer() != c.bearer()
+    {
+        return Err("CENTRAL_IDENTITY_MISMATCH".into());
+    }
+    if serde_json::to_value(&current.relay).map_err(|_| CORRUPT)?
+        == serde_json::to_value(&relay).map_err(|_| CORRUPT)?
+    {
+        return Ok(false);
+    }
+    current.relay = relay;
+    store(app, namespace, gateway, &current)?;
+    Ok(true)
+}
+
 pub async fn status(app: &Path, namespace: &str, gateway: &str, ca: &str) -> Value {
     let c = match load(app, namespace, gateway) {
         Ok(c) => c,

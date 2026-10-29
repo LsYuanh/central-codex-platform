@@ -692,15 +692,11 @@ async fn central_people_pair_code(
     expected_instance_id: String,
     request_id: String,
     user_id: String,
-    lan_only: Option<bool>,
 ) -> config::Result<people::MutationResult> {
     let root = config_root(&app)?;
-    let relay_target = if lan_only == Some(true) {
-        None
-    } else {
-        app.state::<Arc<relay::Manager>>()
-            .target(&root, &expected_instance_id)?
-    };
+    let relay_target = app
+        .state::<Arc<relay::Manager>>()
+        .target(&root, &expected_instance_id)?;
     let controller = state.inner().clone();
     let manager = people.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {

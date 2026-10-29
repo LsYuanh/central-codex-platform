@@ -12,7 +12,8 @@ import net from 'node:net';
 import {WebSocket} from 'ws';
 import {PlatformAuth} from '../../services/central-gateway/dist/platform-auth.js';
 
-const testClientUpdates=process.argv.includes('--client-updates');
+const testTransport=process.argv.includes('--transport');
+const testClientUpdates=process.argv.includes('--client-updates')||testTransport;
 const testDeviceReview=process.argv.includes('--device-approval')||testClientUpdates;
 let adminToken;
 const root=await mkdtemp(join(tmpdir(),'worker-routing-'));
@@ -100,8 +101,8 @@ async function tokenDevice(login){
   await until(()=>ready,'token Agent ready');
  };await paired.connect();return paired;
 }
-function updateRequest(device,path='prepare',lease){return new Promise((resolve,reject)=>{
- const request=https.request(base+'/client-updates/'+path,{method:'POST',ca,headers:{Authorization:'Bearer '+device.deviceToken,'x-update-version':'0.3.2',...(lease?{'x-update-lease':lease}:{})}},response=>{
+function updateRequest(device,path='prepare',lease,prefix=testTransport?'transport':'client-updates'){return new Promise((resolve,reject)=>{
+ const request=https.request(base+'/'+prefix+'/'+path,{method:'POST',ca,headers:{Authorization:'Bearer '+device.deviceToken,'x-update-version':'0.3.2',...(lease?{'x-update-lease':lease}:{})}},response=>{
   let raw='';response.on('data',d=>raw+=d);response.on('end',()=>{try{resolve({status:response.statusCode,body:JSON.parse(raw)});}catch(e){reject(e);}});
  });request.on('error',reject);request.end();
 });}
@@ -264,7 +265,7 @@ try{
      await blocked('active-turn');da.onPoll=undefined;
      await emit(0,[{method:'turn/completed',params:{threadId,turn:{id:'update-race',status:'completed'}}}]);
      await until(async()=>{try{await a.request('conversation.permissions.set',{threadId,permissionMode:'full'});return true;}catch{return false;}},'completed turn releases its Worker slot');
-     const raced=await Promise.all([updateRequest(da),updateRequest(da)]);
+     const raced=await Promise.all([updateRequest(da),updateRequest(da,'prepare',undefined,'client-updates')]);
      assert.deepEqual(raced.map(r=>r.status).sort(),[200,409]);
      await updateRequest(da,'release',raced.find(r=>r.status===200).body.token);
      await allowed();da.mode='plain';

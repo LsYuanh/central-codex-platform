@@ -116,9 +116,12 @@ async fn desktop_config(
 #[tauri::command]
 async fn apply_desktop_config(
     updates: tauri::State<'_, updates::UpdateState>,
+    platform: tauri::State<'_, platform::PlatformState>,
     state: tauri::State<'_, DesktopRuntime>,
     config: DesktopConfig,
 ) -> Result<runtime::ConfigView, String> {
+    // Serialize manual configuration with pairing and automatic transport handover.
+    let _connection = platform.guard.lock().await;
     updates.ensure_idle()?;
     state.apply(config).await
 }
@@ -309,6 +312,7 @@ fn main() {
                 suggested_workspace,
             ));
             tray::setup(app)?;
+            tauri::async_runtime::spawn(platform::monitor_connection(app.handle().clone()));
             Ok(())
         })
         .on_page_load(|webview, payload| {

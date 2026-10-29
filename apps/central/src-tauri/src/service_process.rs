@@ -93,6 +93,7 @@ pub enum State {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub connection_updates_supported: bool,
     pub runtime_updates_supported: bool,
     pub account_updates_supported: bool,
     pub state: State,
@@ -145,6 +146,41 @@ impl Default for ServiceProcess {
 }
 
 impl ServiceProcess {
+    pub fn update_connection(&self, instance: &str, payload: &[u8]) -> Result<(), &'static str> {
+        let state = self.snapshot();
+        if state.state != State::Running || state.instance_id.as_deref() != Some(instance) {
+            return Err("SERVICE_INSTANCE_MISMATCH");
+        }
+        if !state.connection_updates_supported {
+            return Err("SERVICE_CONNECTION_UPDATE_UNSUPPORTED");
+        }
+        if payload.len() > 96 * 1024 {
+            return Err("SERVICE_CONNECTION_INVALID");
+        }
+        let id = native::random_id()?;
+        let prefix = format!(
+            "{{\"method\":\"central/service\",\"protocol\":\"{PROTOCOL}\",\"instanceId\":\"{instance}\",\"command\":\"connection/update\",\"updateId\":\"{id}\",\"relay\":"
+        );
+        // Reserve before copying secrets so reallocation cannot leave an old
+        // plaintext admission token outside the Zeroizing buffer.
+        let mut frame = Zeroizing::new(Vec::with_capacity(prefix.len() + payload.len() + 2));
+        frame.extend_from_slice(prefix.as_bytes());
+        frame.extend_from_slice(payload);
+        frame.extend_from_slice(b"}\n");
+        let (send, receive) = mpsc::channel();
+        self.commands
+            .send(Command::Account(
+                state.generation,
+                id,
+                frame,
+                Duration::from_secs(8),
+                send,
+            ))
+            .map_err(|_| "SERVICE_ACTOR_UNAVAILABLE")?;
+        receive
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "SERVICE_CONNECTION_TIMEOUT")?
+    }
     pub fn verify_runtime(&self, accept: bool) -> Result<(), &'static str> {
         let state = self.snapshot();
         if state.state != State::Running {
@@ -236,6 +272,7 @@ impl ServiceProcess {
     pub fn new() -> Self {
         let state = Arc::new(Mutex::new(Snapshot {
             account_updates_supported: false,
+            connection_updates_supported: false,
             state: State::Stopped,
             generation: 0,
             sequence: 0,
@@ -272,6 +309,7 @@ impl ServiceProcess {
             .ok_or("SERVICE_GENERATION_LIMIT")?;
         state.state = State::Starting;
         state.account_updates_supported = false;
+        state.connection_updates_supported = false;
         state.runtime_updates_supported = false;
         state.instance_id = Some(instance_id.clone());
         state.cleanup_verified = false;
@@ -417,6 +455,7 @@ fn stop_frame(instance_id: &str) -> Zeroizing<Vec<u8>> {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
+    ConnectionUpdatesReady,
     RuntimeUpdatesReady,
     AccountUpdatesReady,
     Ready,
@@ -443,6 +482,7 @@ fn control_event(line: &[u8], instance_id: &str) -> Option<Event> {
         "stopped" => Some(Event::Stopped),
         // Node's arbitrary failure text/code is deliberately not propagated.
         "failed" => Some(Event::Failed),
+        "connectionUpdatesReady" => Some(Event::ConnectionUpdatesReady),
         "accountUpdatesReady" => Some(Event::AccountUpdatesReady),
         "runtimeUpdatesReady" => Some(Event::RuntimeUpdatesReady),
         "accountUpdated" => value
@@ -632,6 +672,9 @@ fn supervise(
                     match event {
                         Event::RuntimeUpdatesReady if ready => {
                             update(state, generation, |s| s.runtime_updates_supported = true);
+                        }
+                        Event::ConnectionUpdatesReady if ready => {
+                            update(state, generation, |s| s.connection_updates_supported = true);
                         }
                         Event::AccountUpdatesReady if ready => {
                             update(state, generation, |s| s.account_updates_supported = true);

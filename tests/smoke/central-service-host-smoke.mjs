@@ -113,7 +113,8 @@ export async function smokeNativeService(candidate) {
         try{const frame=JSON.parse(line);if(frame.method==='central/service'&&frame.protocol===protocol&&frame.instanceId===instanceId){
           if(frame.event==='metrics'){
             try{validateServiceMetrics(frame.metrics);assert(Number.isSafeInteger(frame.sequence)&&frame.sequence>0);frames.push({event:'metrics',sequence:frame.sequence,metrics:frame.metrics});}catch{invalidMetrics=true;}
-          }else if(['ready','stopped','failed'].includes(frame.event))frames.push({event:frame.event,listening:frame.listening===true,...(typeof frame.code==='string'&&/^SERVICE_[A-Z0-9_]+$/.test(frame.code)?{code:frame.code}:{})});
+          }else if(['connectionUpdatesReady','accountUpdated'].includes(frame.event))frames.push({event:frame.event,updateId:frame.updateId});
+          else if(['ready','stopped','failed'].includes(frame.event))frames.push({event:frame.event,listening:frame.listening===true,...(typeof frame.code==='string'&&/^SERVICE_[A-Z0-9_]+$/.test(frame.code)?{code:frame.code}:{})});
         }}catch{/* Ordinary gateway diagnostics are never retained or displayed. */}
       }
     });
@@ -136,6 +137,24 @@ export async function smokeNativeService(candidate) {
     const login=await request(port,'/auth/login',admin);assert.equal(login.status,200,'QA_ADMIN_LOGIN_FAILED');assert(login.value.ok===true&&typeof login.value.data?.accessToken==='string','QA_ADMIN_LOGIN_FAILED');
     const access=await request(port,'/model-access',undefined,login.value.data.accessToken);assert.equal(access.status,200,'QA_MODEL_ACCESS_FAILED');assert.equal(access.value.modelAccess?.status,'ready','QA_MODEL_ACCESS_NOT_READY');
     const workers=await request(port,'/workers',undefined,login.value.data.accessToken);assert(Array.isArray(workers.value.workers)&&workers.value.workers.length===0,'QA_UNEXPECTED_WORKER');
+    assert(frames.some(f=>f.event==='connectionUpdatesReady'),'QA_CONNECTION_CAPABILITY_MISSING');
+    const sessionToken=login.value.data.accessToken;
+    const me=await request(port,'/auth/me',{},sessionToken);
+    const code=await request(port,'/auth/admin/pair-code',{userId:me.value.data.user.id},sessionToken);
+    const paired=await request(port,'/auth/device/pair',{code:code.value.data.code,name:'transport config fixture'});
+    assert.equal(paired.status,200);const device=paired.value.data;
+    assert.equal((await request(port,'/transport/config',{})).status,401);
+    assert.equal((await request(port,'/transport/config',{},sessionToken)).status,401);
+    assert.equal((await request(port,'/transport/config',{},device.deviceToken)).status,503);
+    const relay={centralId:'a'.repeat(64),access:{url:'https://relay.example/',token:'synthetic-route-token-0123456789abcdef',caPem:''}};
+    for(const target of [relay,null]){
+      const updateId=randomBytes(16).toString('hex');
+      child.stdin.write(JSON.stringify({method:'central/service',protocol,instanceId,command:'connection/update',updateId,relay:target})+'\n');
+      const deadline=Date.now()+5000;while(!frames.some(f=>f.event==='accountUpdated'&&f.updateId===updateId)&&Date.now()<deadline)await pause(20);
+      assert(frames.some(f=>f.event==='accountUpdated'&&f.updateId===updateId));
+      const current=await request(port,'/transport/config',{},device.deviceToken);assert.equal(current.status,200);
+      assert.deepEqual(current.value.data,{protocol:'yuan-connection/v1',deviceId:device.deviceId,deviceKey:device.deviceKey,userId:device.user.id,relay:target});
+    }
     await privateDiskCheck();
     if(mode==='wrong-instance')child.stdin.write(JSON.stringify({method:'central/service',protocol,instanceId:'0'.repeat(32),command:'stop'})+'\n');
     else if(mode==='eof')child.stdin.end();
@@ -153,7 +172,7 @@ export async function smokeNativeService(candidate) {
     await runCase('stop',true);checks.push('synthetic-memory-bootstrap-https-health-admin-login-model-status-and-owned-stop');
     await runCase('wrong-instance',false);checks.push('restart-with-persisted-admin-and-wrong-instance-control-rejection');
     await runCase('eof',false);checks.push('controller-eof-stops-service-with-receipt-exit-and-port-close');
-    checks.push('no-account-token-tls-or-admin-password-plaintext-in-run-directory','zero-workers-and-no-model-requests','owned-metrics-after-ready-monotonic-per-instance-and-no-frame-after-stopped');
+    checks.push('device-only-connection-config-unavailable-until-owned-native-control-delivery','relay-enabled-and-disabled-configuration-preserve-paired-device-identity','no-account-token-tls-or-admin-password-plaintext-in-run-directory','zero-workers-and-no-model-requests','owned-metrics-after-ready-monotonic-per-instance-and-no-frame-after-stopped');
     const result={passed:true,scope:'native-service-host-synthetic-bootstrap-and-lifecycle',packageId:path.basename(candidate),realCredentialsUsed:false,realModelVerified:false,productionQualified:false,formal4510Modified:false,checks,runs};
     writeFileSync(path.join(fixture,'result.json'),JSON.stringify(result,null,2));
     return {...result,resultFile:path.join(fixture,'result.json')};

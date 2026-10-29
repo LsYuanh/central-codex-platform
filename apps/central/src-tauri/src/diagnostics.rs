@@ -228,6 +228,7 @@ mod tests {
         Snapshot {
             runtime_updates_supported: false,
             account_updates_supported: false,
+            connection_updates_supported: false,
             state: State::Running,
             generation: 2,
             sequence: 3,

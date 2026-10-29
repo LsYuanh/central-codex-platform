@@ -12,6 +12,31 @@ struct State {
     paused_until: Option<Instant>,
 }
 pub struct Operation<'a>(&'a Activity);
+/// Private parent IPC can drain an idle socket before replacing the Agent.
+/// Closing the WSS explicitly avoids waiting for a dead relay connection to expire.
+#[derive(Default)]
+pub struct TransportDrain(Mutex<Option<tokio::sync::oneshot::Sender<std::sync::mpsc::Sender<()>>>>);
+impl TransportDrain {
+    pub fn begin(&self) -> tokio::sync::oneshot::Receiver<std::sync::mpsc::Sender<()>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        *self.0.lock().unwrap() = Some(tx);
+        rx
+    }
+    pub fn clear(&self) {
+        self.0.lock().unwrap().take();
+    }
+    pub fn request(&self) -> Result<(), String> {
+        let Some(sender) = self.0.lock().unwrap().take() else {
+            return Ok(());
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        if sender.send(tx).is_err() {
+            return Ok(());
+        }
+        rx.recv_timeout(Duration::from_secs(4))
+            .map_err(|_| "AGENT_TRANSPORT_DRAIN_TIMEOUT".into())
+    }
+}
 impl Activity {
     pub fn enter(&self) -> Result<Operation<'_>, String> {
         let mut state = self.0.lock().unwrap();

@@ -3,11 +3,53 @@
 use peer_transport::relay::Client;
 pub use peer_transport::relay::{Access, Target};
 use std::{
+    collections::HashMap,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Mutex, OnceLock},
     task::{Context, Poll},
     time::Duration,
 };
+
+// Route observations contain no credentials. Only established UI sockets publish
+// their mode; an HTTP probe must not relabel an existing chat connection.
+static SOCKET_ROUTES: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+pub fn socket_mode(gateway: &str) -> Option<&'static str> {
+    let gateway = gateway.replacen("https://", "wss://", 1);
+    SOCKET_ROUTES
+        .get()?
+        .lock()
+        .ok()?
+        .get(&crate::origin(&gateway).ok()?)
+        .copied()
+}
+pub(crate) fn record_socket_mode(gateway: &str, relay: bool) {
+    if let (Ok(origin), Ok(mut modes)) = (
+        crate::origin(gateway),
+        SOCKET_ROUTES.get_or_init(Default::default).lock(),
+    ) {
+        modes.insert(origin, if relay { "relay" } else { "lan" });
+    }
+}
+
+/// Check the paired TLS identity before selecting a LAN route. No bearer token,
+/// pairing code or application request is sent to a coincidentally matching IP.
+pub async fn lan_available(gateway: &str, tls: rustls::ClientConfig) -> bool {
+    let probe = async {
+        let url = url::Url::parse(gateway).map_err(|_| ())?;
+        let host = url.host_str().ok_or(())?;
+        let tcp = TcpStream::connect((host, url.port_or_known_default().ok_or(())?))
+            .await
+            .map_err(|_| ())?;
+        let name = rustls::pki_types::ServerName::try_from(host.to_owned()).map_err(|_| ())?;
+        let mut stream = tokio_rustls::TlsConnector::from(Arc::new(tls))
+            .connect(name, tcp)
+            .await
+            .map_err(|_| ())?;
+        let _ = stream.shutdown().await;
+        Ok::<_, ()>(())
+    };
+    matches!(timeout(Duration::from_secs(2), probe).await, Ok(Ok(())))
+}
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf, copy_bidirectional},
     net::{TcpListener, TcpStream},
@@ -94,7 +136,21 @@ impl Drop for HttpRoute {
     }
 }
 impl HttpRoute {
+    pub async fn automatic(
+        gateway: &str,
+        target: Option<&Target>,
+        tls: rustls::ClientConfig,
+    ) -> Result<Self, String> {
+        Self::adapter(gateway, target, Some(tls)).await
+    }
     pub async fn new(gateway: &str, target: Option<&Target>) -> Result<Self, String> {
+        Self::adapter(gateway, target, None).await
+    }
+    async fn adapter(
+        gateway: &str,
+        target: Option<&Target>,
+        tls: Option<rustls::ClientConfig>,
+    ) -> Result<Self, String> {
         let Some(target) = target else {
             return Ok(Self {
                 proxy: None,
@@ -108,11 +164,10 @@ impl HttpRoute {
             host,
             u.port_or_known_default().ok_or("RELAY_CONFIG_INVALID")?
         );
-        let client = Arc::new(
-            Client::new(target)
-                .await
-                .map_err(|_| "RELAY_CONFIG_INVALID")?,
-        );
+        target.validate().map_err(|_| "RELAY_CONFIG_INVALID")?;
+        let target = target.clone();
+        let gateway = gateway.to_owned();
+        let client = Arc::new(tokio::sync::OnceCell::<Client>::new());
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .map_err(|_| "RELAY_LOCAL_BIND_FAILED")?;
@@ -128,7 +183,7 @@ impl HttpRoute {
                 tokio::select! {
                     accepted=listener.accept()=>{
                         let Ok((mut tcp,_))=accepted else {break};
-                        let client=client.clone();let authority=authority.clone();
+                        let client=client.clone();let authority=authority.clone();let target=target.clone();let tls=tls.clone();let gateway=gateway.clone();
                         tasks.spawn(async move {
                             let established=timeout(Duration::from_secs(25),async {
                                 let mut header=Vec::new();
@@ -138,7 +193,15 @@ impl HttpRoute {
                                 }
                                 let first=std::str::from_utf8(&header).map_err(|_|())?.split("\r\n").next().ok_or(())?;
                                 if first!=format!("CONNECT {authority} HTTP/1.1") {return Err(())}
-                                let peer=client.stream().await.map_err(|_|())?;
+                                // Select for every new CONNECT, including a download
+                                // started after the update check on another network.
+                                let direct = match tls { Some(tls) => lan_available(&gateway, tls).await, None => false };
+                                let peer: Box<dyn Io> = if direct {
+                                    Box::new(NetworkStream::connect(&gateway, None).await.map_err(|_|())?)
+                                } else {
+                                    let relay=client.get_or_try_init(|| async { Client::new(&target).await.map_err(|_|()) }).await?;
+                                    Box::new(relay.stream().await.map_err(|_|())?)
+                                };
                                 tcp.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await.map_err(|_|())?;
                                 Ok(peer)
                             }).await;
@@ -180,6 +243,21 @@ impl std::ops::Deref for HttpClient {
     }
 }
 impl HttpClient {
+    pub async fn automatic(
+        gateway: &str,
+        target: Option<&Target>,
+        tls: rustls::ClientConfig,
+    ) -> Result<Self, String> {
+        let route = HttpRoute::automatic(gateway, target, tls.clone()).await?;
+        let client = route
+            .configure(crate::transport::http_builder(tls))?
+            .build()
+            .map_err(|_| "CENTRAL_TLS_INIT_FAILED")?;
+        Ok(Self {
+            client,
+            _route: route,
+        })
+    }
     pub async fn new(
         gateway: &str,
         target: Option<&Target>,

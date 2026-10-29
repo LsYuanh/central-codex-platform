@@ -36,7 +36,7 @@ export function centralTransportNotice(value: unknown): string | undefined {
   return code ? `${t(notices[code])}（${code}）` : undefined;
 }
 
-export type DeviceAccount={authMode:string;loggedIn:boolean;paired:boolean;user?:{id:string;username?:string}|null;deviceId?:string;deviceKey?:string;storageError?:string;authorizationError?:string;remoteAvailable?:boolean;connectionError?:string;gatewayUrl?:string;connectionMode?:'lan'|'relay'};
+export type DeviceAccount={authMode:string;loggedIn:boolean;paired:boolean;user?:{id:string;username?:string}|null;deviceId?:string;deviceKey?:string;storageError?:string;authorizationError?:string;remoteAvailable?:boolean;connectionError?:string;gatewayUrl?:string;connectionMode?:'lan'|'relay'|null;relayAvailable?:boolean};
 const errors:Record<string,MessageKey>={
   PAIR_BUNDLE_INVALID: "一体配对码不完整或格式错误，请重新复制完整内容。",
   PAIR_BUNDLE_EXPIRED: "一体配对码已过期，请管理员重新生成。",

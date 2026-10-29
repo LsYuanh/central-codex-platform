@@ -43,6 +43,7 @@ struct NativeSocket {
     page: u64,
     sender: mpsc::Sender<Option<String>>,
     task: tokio::task::JoinHandle<()>,
+    events: Channel<Value>,
 }
 impl PlatformState {
     pub fn new(namespace: String, directory: PathBuf) -> Self {
@@ -118,8 +119,18 @@ impl PlatformState {
             .map(|(_, socket)| socket)
             .collect::<Vec<_>>();
         for socket in sockets {
-            socket.task.abort();
-            let _ = socket.task.await;
+            let _ = socket.events.send(close_event(None));
+            // A stalled network may have filled the outbound queue. The bounded
+            // task wait below must still be able to close that socket.
+            let _ = socket.sender.try_send(None);
+            let mut task = socket.task;
+            if tokio::time::timeout(std::time::Duration::from_secs(3), &mut task)
+                .await
+                .is_err()
+            {
+                task.abort();
+                let _ = task.await;
+            }
         }
     }
 }
@@ -203,13 +214,19 @@ pub async fn platform_account(
             file.persist(target).map_err(|_| "证书配置保存失败")?;
             Ok(json!({"saved":true}))
         }
-        "status" => Ok(platform_security::device_token::status(
-            &state.directory,
-            &state.namespace,
-            &gateway,
-            &ca,
-        )
-        .await),
+        "status" => {
+            let mut status = platform_security::device_token::status(
+                &state.directory,
+                &state.namespace,
+                &gateway,
+                &ca,
+            )
+            .await;
+            if state.sockets.lock().await.is_empty() {
+                status["connectionMode"] = Value::Null;
+            }
+            Ok(status)
+        }
         "pair" => {
             state.close_sockets().await;
             runtime.0.write().await.process.take();
@@ -271,12 +288,20 @@ pub async fn platform_ws_open(
         .send(json!({"type":"open"}))
         .map_err(|_| "CENTRAL_PAGE_CHANGED")?;
     let task_connection_id = connection_id.clone();
+    let events = on_event.clone();
     let task = tokio::spawn(async move {
         let (mut sink, mut source) = socket.split();
         let mut close_code = None;
+        let mut ping = tokio::time::interval(std::time::Duration::from_secs(10));
+        let mut last_pong = tokio::time::Instant::now();
         loop {
             tokio::select! {
+                _=ping.tick()=>{
+                    if last_pong.elapsed()>std::time::Duration::from_secs(30) { break; }
+                    if !matches!(tokio::time::timeout(std::time::Duration::from_secs(5),sink.send(Message::Ping(Vec::new().into()))).await,Ok(Ok(()))) {break;}
+                },
                 item=source.next()=>match item{
+                    Some(Ok(Message::Pong(_)))=>{last_pong=tokio::time::Instant::now();},
                     Some(Ok(Message::Text(text)))=>{if on_event.send(json!({"type":"message","data":text.as_str()})).is_err(){break;}},
                     Some(Ok(Message::Ping(bytes)))=>{if sink.send(Message::Pong(bytes)).await.is_err(){break;}},
                     Some(Ok(Message::Close(frame)))=>{
@@ -305,9 +330,110 @@ pub async fn platform_ws_open(
             page,
             sender: tx,
             task,
+            events,
         },
     );
     Ok(())
+}
+
+/// The desktop owner coordinates UI and Agent handover. A central admission
+/// lease plus the Agent's local activity guard closes both sides of the race.
+pub async fn monitor_connection(app: tauri::AppHandle) {
+    let mut recover_config = None;
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        let platform = app.state::<PlatformState>();
+        let Ok(_account) = platform.guard.try_lock() else {
+            continue;
+        };
+        let updates = app.state::<crate::updates::UpdateState>();
+        let Ok(_update) = updates.transport_guard() else {
+            continue;
+        };
+        let runtime = app.state::<crate::runtime::DesktopRuntime>();
+        let view = runtime.view().await;
+        if recover_config.as_ref() == Some(&view.effective) && !view.running {
+            if runtime.restore_after_update().await.is_ok() {
+                recover_config = None;
+            }
+            continue;
+        }
+        recover_config = None;
+        if view.needs_setup || !view.running {
+            continue;
+        }
+        let config = view.effective;
+        let Ok(ca) = platform.ca(&config.gateway_url) else {
+            continue;
+        };
+        // Old gateways may not yet support configuration synchronization. Keep
+        // the exact existing credential and working connection in that case.
+        let _ = platform_security::device_token::sync_connection(
+            &platform.directory,
+            &platform.namespace,
+            &config.gateway_url,
+            &ca,
+        )
+        .await;
+        if platform.sockets.lock().await.is_empty()
+            || platform_security::relay::socket_mode(&config.gateway_url) != Some("relay")
+        {
+            continue;
+        }
+        let Ok(tls) = platform_security::central_tls_config(&ca) else {
+            continue;
+        };
+        if !platform_security::relay::lan_available(&config.gateway_url, tls).await {
+            continue;
+        }
+        let Ok(c) = platform_security::device_token::load(
+            &platform.directory,
+            &platform.namespace,
+            &config.gateway_url,
+        ) else {
+            continue;
+        };
+        if c.device_id != config.device_id || c.user.id != config.user_id {
+            continue;
+        }
+        let Ok(client) = c.http(&config.gateway_url, &ca).await else {
+            continue;
+        };
+        let Ok(origin) = platform_security::origin(&config.gateway_url) else {
+            continue;
+        };
+        let Ok(response) = client
+            .post(format!("{origin}/transport/prepare"))
+            .bearer_auth(c.bearer())
+            .send()
+            .await
+        else {
+            continue;
+        };
+        if !response.status().is_success() {
+            continue;
+        }
+        let Ok(lease) = response.json::<Value>().await else {
+            continue;
+        };
+        let Some(token) = lease["token"].as_str().filter(|s| s.len() == 36) else {
+            continue;
+        };
+        if runtime.stop_for_transport(&config).await.is_ok() {
+            platform.close_sockets().await;
+            // The unchanged saved config and credential restart the same Agent
+            // identity. New connections independently verify the LAN endpoint.
+            if runtime.restore_after_update().await.is_err() {
+                recover_config = Some(config.clone());
+            }
+        }
+        let _ = client
+            .post(format!("{origin}/transport/release"))
+            .bearer_auth(c.bearer())
+            .header("x-update-lease", token)
+            .send()
+            .await;
+    }
 }
 
 #[cfg(test)]
@@ -327,6 +453,7 @@ mod tests {
                     page: old_page,
                     sender,
                     task: tokio::spawn(std::future::pending()),
+                    events: Channel::new(|_| Ok(())),
                 },
             );
         }
@@ -342,6 +469,7 @@ mod tests {
                 page,
                 sender,
                 task: tokio::spawn(std::future::pending()),
+                events: Channel::new(|_| Ok(())),
             },
         );
         // A delayed page-load cleanup must not remove a new page's connection.
