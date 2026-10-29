@@ -1,0 +1,73 @@
+{
+  "schema": "yuan-zhou-peer-transport-wan/v1",
+  "date": "2026-10-29",
+  "status": "cross-network-relay-passed-direct-not-observed-mac-cleanup-pending",
+  "scope": "Windows mobile hotspot to Mac office network, synthetic native probe traffic only",
+  "network": {
+    "operatorConfirmedMobileHotspot": true,
+    "windowsWifiUp": true,
+    "windowsOfficeEthernetDisconnected": true,
+    "macStayedOnOfficeNetwork": true,
+    "initialExpiredListenerAttemptExcluded": true
+  },
+  "cases": [
+    {
+      "name": "direct-preferred-with-automatic-fallback",
+      "transferPassed": true,
+      "directExpectationPassed": false,
+      "directGraceSeconds": 3,
+      "routeBefore": "Relay",
+      "routeAfter": "Relay",
+      "bytes": 1048593,
+      "elapsedTransferMs": 1644,
+      "sha256": "43ceff76a892de2dd957c2bded5ab87c08ecd22265e1b398a06708b98fa66203",
+      "relayBytesSentDelta": 2168090,
+      "relayBytesReceivedDelta": 2168090,
+      "relayDroppedPacketsDelta": 0,
+      "relayRateLimitedBytesDelta": 0
+    },
+    {
+      "name": "forced-relay",
+      "transferPassed": true,
+      "routeExpectationPassed": true,
+      "routeBefore": "Relay",
+      "routeAfter": "Relay",
+      "bytes": 1048593,
+      "elapsedTransferMs": 3350,
+      "sha256": "43ceff76a892de2dd957c2bded5ab87c08ecd22265e1b398a06708b98fa66203",
+      "relayBytesSentDelta": 2169735,
+      "relayBytesReceivedDelta": 2169735,
+      "relayDroppedPacketsDelta": 0,
+      "relayRateLimitedBytesDelta": 0
+    }
+  ],
+  "interpretation": {
+    "crossNetworkEncryptedRoundTripPassed": true,
+    "automaticRelayFallbackPassed": true,
+    "crossNetworkDirectValidated": false,
+    "directFailureCauseEstablished": false,
+    "notAProofThatThisNetworkCanNeverConnectDirectly": true,
+    "longerGraceOrPathDiagnosticsTested": false,
+    "productionIntegrationValidated": false,
+    "newProductLimitsAdded": false
+  },
+  "cleanup": {
+    "temporaryRelayStopped": true,
+    "testServerListenersAbsent": true,
+    "temporaryHostRulesRemoved": true,
+    "temporarySecurityGroupDetachedAndDeleted": true,
+    "securityGroupMembershipsMatchOriginal": true,
+    "testServerDirectoryAndKeysRemoved": true,
+    "originalBusinessListenersAndPidsUnchanged": true,
+    "failedSystemdServicesObservedAfterCleanup": 0,
+    "macReportRetrieved": false,
+    "macProbeDirectoryAndSeedRemoved": false,
+    "windowsProbeSeedsRemoved": true
+  },
+  "remaining": [
+    "Wait for Windows to return to the office LAN, retrieve the Mac report, confirm probe exit and remove the isolated Mac directory and private test seeds",
+    "Investigate candidate addresses, UDP reachability, NAT mapping/filtering and direct establishment timing before changing the transport strategy",
+    "Do not declare full phase-one success or integrate/release the product based only on successful relay traffic"
+  ],
+  "privacy": "Credentials, IPs, endpoint identities, business domains and private paths omitted."
+}
