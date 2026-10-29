@@ -52,6 +52,118 @@ struct Bootstrap {
     namespace: String,
 }
 
+// QA download only: use the updater's reqwest version and pinned release key.
+// The package stays in memory; this helper never installs or launches it.
+async fn download_update(bootstrap: &Bootstrap) -> Result<Value, &'static str> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    use sha2::{Digest, Sha256};
+    let credential = platform_security::device_token::load(
+        &bootstrap.token_root,
+        &bootstrap.namespace,
+        &bootstrap.gateway,
+    )
+    .map_err(|_| "QA_HELPER_CREDENTIAL_FAILED")?;
+    let route =
+        platform_security::relay::HttpRoute::new(&bootstrap.gateway, credential.relay.as_ref())
+            .await
+            .map_err(|_| "QA_HELPER_HTTP_FAILED")?;
+    let mut builder = reqwest_updater::Client::builder()
+        .no_proxy()
+        .https_only(true)
+        .redirect(reqwest_updater::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(600))
+        .use_preconfigured_tls(
+            platform_security::central_tls_config(&bootstrap.ca_path)
+                .map_err(|_| "QA_HELPER_CA_FAILED")?,
+        );
+    if let Some(proxy) = route.proxy_url() {
+        builder = builder
+            .proxy(reqwest_updater::Proxy::https(proxy).map_err(|_| "QA_HELPER_HTTP_FAILED")?);
+    }
+    let client = builder.build().map_err(|_| "QA_HELPER_HTTP_FAILED")?;
+    let origin =
+        platform_security::origin(&bootstrap.gateway).map_err(|_| "QA_HELPER_TARGET_INVALID")?;
+    let manifest = client
+        .get(format!("{origin}/client-updates/latest.json"))
+        .bearer_auth(credential.bearer())
+        .send()
+        .await
+        .map_err(|_| "QA_UPDATE_MANIFEST_FAILED")?
+        .error_for_status()
+        .map_err(|_| "QA_UPDATE_MANIFEST_FAILED")?
+        .bytes()
+        .await
+        .map_err(|_| "QA_UPDATE_MANIFEST_FAILED")?;
+    let manifest: Value =
+        serde_json::from_slice(&manifest).map_err(|_| "QA_UPDATE_MANIFEST_INVALID")?;
+    let artifact = &manifest["platforms"]["windows-x86_64"];
+    let url = url::Url::parse(
+        artifact["url"]
+            .as_str()
+            .ok_or("QA_UPDATE_MANIFEST_INVALID")?,
+    )
+    .map_err(|_| "QA_UPDATE_MANIFEST_INVALID")?;
+    let expected = url::Url::parse(&origin).map_err(|_| "QA_HELPER_TARGET_INVALID")?;
+    if url.origin() != expected.origin()
+        || url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !url.path().starts_with("/client-updates/files/")
+    {
+        return Err("QA_UPDATE_TARGET_INVALID");
+    }
+    let response = client
+        .get(url)
+        .bearer_auth(credential.bearer())
+        .send()
+        .await
+        .map_err(|_| "QA_UPDATE_DOWNLOAD_FAILED")?
+        .error_for_status()
+        .map_err(|_| "QA_UPDATE_DOWNLOAD_FAILED")?;
+    let expected_length = response
+        .content_length()
+        .ok_or("QA_UPDATE_LENGTH_MISSING")?;
+    emit(json!({"kind":"update-download-progress","total":expected_length}))?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|_| "QA_UPDATE_DOWNLOAD_FAILED")?;
+    if bytes.len() as u64 != expected_length {
+        return Err("QA_UPDATE_LENGTH_MISMATCH");
+    }
+    let config: Value = serde_json::from_str(include_str!(
+        "../../../apps/desktop/src-tauri/tauri.conf.json"
+    ))
+    .map_err(|_| "QA_UPDATE_KEY_INVALID")?;
+    let decode = |s: &str| {
+        STANDARD
+            .decode(s.trim())
+            .ok()
+            .and_then(|v| String::from_utf8(v).ok())
+            .ok_or("QA_UPDATE_SIGNATURE_INVALID")
+    };
+    let key = minisign_verify::PublicKey::decode(&decode(
+        config["plugins"]["updater"]["pubkey"]
+            .as_str()
+            .ok_or("QA_UPDATE_KEY_INVALID")?,
+    )?)
+    .map_err(|_| "QA_UPDATE_KEY_INVALID")?;
+    let signature = minisign_verify::Signature::decode(&decode(
+        artifact["signature"]
+            .as_str()
+            .ok_or("QA_UPDATE_SIGNATURE_INVALID")?,
+    )?)
+    .map_err(|_| "QA_UPDATE_SIGNATURE_INVALID")?;
+    key.verify(&bytes, &signature, true)
+        .map_err(|_| "QA_UPDATE_SIGNATURE_INVALID")?;
+    Ok(
+        json!({"kind":"update-download","version":manifest["version"],"bytes":bytes.len(),
+        "sha256":format!("{:x}",Sha256::digest(&bytes)),"signatureVerified":true,"installerStarted":false}),
+    )
+}
+
 async fn run() -> Result<(), &'static str> {
     let (sender, mut input) = tokio::sync::mpsc::channel(8);
     // A normal thread avoids a Tokio blocking stdin read keeping the runtime alive.
@@ -146,6 +258,8 @@ async fn run() -> Result<(), &'static str> {
                 if value.get("kind").and_then(Value::as_str)==Some("send"){
                     let message=value.get("message").ok_or("QA_HELPER_INPUT_INVALID")?;
                     socket.send(Message::Text(message.to_string().into())).await.map_err(|_|"QA_HELPER_SOCKET_FAILED")?;
+                }else if value.get("kind").and_then(Value::as_str)==Some("update-download"){
+                    emit(download_update(&bootstrap).await?)?;
                 }else if value.get("kind").and_then(Value::as_str)==Some("update-probe"){
                     // Probe only this paired device. Keep credentials and leases
                     // inside the native helper; never run an installer here.

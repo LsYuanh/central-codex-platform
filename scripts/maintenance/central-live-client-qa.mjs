@@ -32,7 +32,7 @@ process.stdin.on('data',chunk=>{
 });
 process.stdin.on('end',()=>{controllerEnded=true;fail('QA_CONTROLLER_CLOSED');bootstrapReject(Error('QA_CONTROLLER_CLOSED'));});
 process.stdin.on('error',()=>fail('QA_CONTROLLER_FAILED'));
-const watchdog=setTimeout(()=>fail('QA_TOTAL_TIMEOUT'),255000);
+const watchdog=setTimeout(()=>fail('QA_TOTAL_TIMEOUT'),315000);
 async function until(predicate,ms,code){const deadline=Date.now()+ms;while(!predicate()){if(failure)throw Error(failure);if(Date.now()>=deadline)throw Error(code);await delay(25);}if(failure)throw Error(failure);}
 function regular(filename){check(typeof filename==='string'&&path.isAbsolute(filename)&&!filename.split(/[\\/]/).some(p=>p==='..'),'QA_PATH_INVALID');const stat=lstatSync(filename);check(stat.isFile()&&!stat.isSymbolicLink(),'QA_BINARY_INVALID');return realpathSync(filename);}
 function writeHelper(message){check(helper&&!helper.stdin.destroyed,'QA_UI_UNAVAILABLE');const bytes=Buffer.from(JSON.stringify(message)+'\n');helper.stdin.write(bytes,()=>bytes.fill(0));}
@@ -181,9 +181,12 @@ try{
     ({child:agent,exit:agentExit}=launch(config.agentBinary,['--workspace-root',workspace,'--gateway-url',agentUrl.toString()],{cwd:workspace,env:{...env,YUAN_PLATFORM_NAMESPACE:namespace,YUAN_PLATFORM_CA:config.caPath,YUAN_PLATFORM_DATA_DIR:tokenRoot}}));
     agent.stdout.on('data',()=>{});agentDiagnostic='';agentTerminal=false;
     agent.stderr.on('data',chunk=>{agentDiagnostic=(agentDiagnostic+chunk.toString('utf8')).slice(-8192);if(/(?:^|\r?\n)Error: "?DEVICE_REVOKED"?\r?(?:\n|$)/.test(agentDiagnostic))agentTerminal=true;});
-    let reconnected=false;const end=Date.now()+20000;
-    while(!reconnected&&Date.now()<end){try{const read=await request('device.workspace.read_text',{path:directPath},2000);reconnected=read?.ok===true&&read.result?.content===inputMarker;}catch{}if(!reconnected)await delay(200);}
-    check(reconnected,'QA_REAL_AGENT_RECONNECT_FAILED');emit({phase:'reconnected',deviceId,persistedCredentialVerified:true});
+    // TerminateProcess cannot send a QUIC close. Observe the existing transport
+    // idle timeout before deciding reconnect failed; never replay an exec here.
+    let reconnected=false,lastCode;const reconnectStarted=Date.now(),end=reconnectStarted+60000;
+    while(!reconnected&&Date.now()<end){try{const read=await request('device.workspace.read_text',{path:directPath},2000);reconnected=read?.ok===true&&read.result?.content===inputMarker;lastCode=String(read?.errorCode??read?.error??'').match(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/)?.[0];}catch{}if(!reconnected)await delay(200);}
+    if(!reconnected)emit({phase:'reconnect-diagnostic',lastCode,agentExitCode:agent.exitCode,agentErrors:[...new Set(agentDiagnostic.match(/\b(?:RELAY|DEVICE|CENTRAL|AUTH)_[A-Z_]+\b/g)??[])]});
+    check(reconnected,'QA_REAL_AGENT_RECONNECT_FAILED');emit({phase:'reconnected',deviceId,persistedCredentialVerified:true,elapsedMs:Date.now()-reconnectStarted});
   }
   if(config.legacyWorkspace){
     writeFileSync(path.join(root,'outside.txt'),'outside-sentinel',{flag:'wx'});

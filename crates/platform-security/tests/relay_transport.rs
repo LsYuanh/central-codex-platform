@@ -115,23 +115,26 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
     bundle.relay = Some(target.clone());
     let bundle = Bundle::decode(&bundle.encode().map_err(anyhow::Error::msg)?)
         .map_err(anyhow::Error::msg)?;
-    let app = tempfile::tempdir()?;
+    let app_directory = tempfile::tempdir()?;
+    // macOS /var is a symlink. Give the credential store the real test directory,
+    // retaining its production rule against symlinked credential ancestors.
+    let app = app_directory.path().canonicalize()?;
     let namespace = "com.yuanzhou.relay-test";
     let credential = timeout(
         Duration::from_secs(30),
-        device_token::pair_bundle(app.path(), namespace, &bundle, "test"),
+        device_token::pair_bundle(&app, namespace, &bundle, "test"),
     )
     .await?
     .map_err(anyhow::Error::msg)?;
     assert_eq!(credential.public()["connectionMode"], "relay");
-    let stored = device_token::load(app.path(), namespace, &gateway).map_err(anyhow::Error::msg)?;
+    let stored = device_token::load(&app, namespace, &gateway).map_err(anyhow::Error::msg)?;
     assert_eq!(stored.relay.as_ref().unwrap().central_id, target.central_id);
-    let ca = device_token::bundled_ca_path(app.path(), namespace, &gateway)
+    let ca = device_token::bundled_ca_path(&app, namespace, &gateway)
         .map_err(anyhow::Error::msg)?
         .unwrap();
     let ca = ca.to_str().unwrap();
     assert_eq!(
-        device_token::status(app.path(), namespace, &gateway, ca).await["status"],
+        device_token::status(&app, namespace, &gateway, ca).await["status"],
         "active"
     );
     // The updater uses reqwest 0.13, while pairing uses 0.12. Exercise both against
@@ -185,7 +188,7 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
             &format!("{}/agent?deviceId=test-device", gateway),
         ]);
         command
-            .env("YUAN_PLATFORM_DATA_DIR", app.path())
+            .env("YUAN_PLATFORM_DATA_DIR", &app)
             .env("YUAN_PLATFORM_NAMESPACE", namespace)
             .env("YUAN_PLATFORM_CA", ca);
         command
@@ -297,15 +300,15 @@ async fn exercise(with_agent: bool) -> anyhow::Result<()> {
     );
     revoked.store(true, Ordering::SeqCst);
     assert_eq!(
-        device_token::status(app.path(), namespace, &gateway, ca).await["status"],
+        device_token::status(&app, namespace, &gateway, ca).await["status"],
         "revoked"
     );
     assert!(matches!(stored.socket(&gateway,ca).await,Err(e)if e=="DEVICE_REVOKED"));
-    let disconnected = device_token::disconnect(app.path(), namespace, &gateway, ca)
+    let disconnected = device_token::disconnect(&app, namespace, &gateway, ca)
         .await
         .map_err(anyhow::Error::msg)?;
     assert_eq!(disconnected["localRemoved"], true);
-    assert!(device_token::load(app.path(), namespace, &gateway).is_err());
+    assert!(device_token::load(&app, namespace, &gateway).is_err());
     drop(host);
     server.abort();
     relay.server.shutdown().await?;

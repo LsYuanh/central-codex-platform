@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-29",
+  "scope": "relay-only product transport via isolated public relay and existing real central gateway",
+  "productSourceBase": "8af0505",
+  "releaseStatus": "unreleased",
+  "newBusinessLimits": false,
+  "topology": {
+    "windowsAndMacOnOfficeNetwork": true,
+    "ipTransportsDisabled": true,
+    "publicRelayBytesObserved": true,
+    "independentNetworkExitsTestedThisRun": false,
+    "central4510PubliclyExposed": false,
+    "sshOnlyForOperatorSetupPairingAndRevocation": true,
+    "model": "gpt-6.1-sol",
+    "existingCentralNotRestarted": true,
+    "macHost": "explicit QA binary reusing product Host; not App-managed service"
+  },
+  "passed": [
+    "Mac ARM64 central App debug build",
+    "Mac central App, desktop and Local Agent cargo check",
+    "Mac TLS/relay pairing, Unix private credential and rejection tests: 2 passed, real Agent test ignored",
+    "Mac native guardian graceful, controller EOF, force and abrupt-controller-death process-tree cleanup",
+    "Final native download QA helper cargo check on Mac",
+    "Windows product relay tests including actual Agent and Host restart: 3 passed",
+    "Real central model through native product pairing and both WSS paths",
+    "Actual client files and PowerShell, random proof, history, permissions and revocation",
+    "Busy update preparation refused; completed command allows lease preparation and release",
+    "Complete existing Windows update download through reqwest 0.13, pinned signature and hash verification",
+    "Same native process and UI WebSocket survive isolated public relay restart; HTTPS lease succeeds afterwards",
+    "Final cargo fmt --all -- --check, both QA examples cargo check --locked, three Node syntax checks and git diff --check"
+  ],
+  "realModel": {
+    "turnCompleted": true,
+    "actualLocalAgent": true,
+    "readCount": 2,
+    "execCount": 1,
+    "randomProofVerified": true,
+    "resumeHistoryVerified": true,
+    "permissionMode": "auto",
+    "deviceRevoked": true,
+    "agentExited": true,
+    "localTokenRemoved": true,
+    "abruptAgentRestartObservedMs": 30509
+  },
+  "maintenance": {
+    "signedDownload": {
+      "bytes": 11386856,
+      "installerStarted": false,
+      "kind": "update-download",
+      "sha256": "bf1d6c313782d4117d11ccfc54dbfbd5f88862d4795a108ad18ab65bc109dfd7",
+      "signatureVerified": true,
+      "version": "0.3.3"
+    },
+    "sameNativeProcessAndWebSocketAfterRelayRestart": true,
+    "httpsAfterRelayRestart": true,
+    "restartRecoveryMs": 1084,
+    "installerStarted": false,
+    "configuredRelayOutageSeconds": 5,
+    "recoveryTimingStarts": "after cloud restart operation and TLS health check completed",
+    "downloadIsExisting033PackageNotNewRelayBuild": true,
+    "deviceRevoked": true,
+    "downloadHashMatchesPublished033Record": true
+  },
+  "relayMetrics": [
+    {
+      "snapshot": "metrics-before-first-restart.txt",
+      "metrics": {
+        "relayserver_bytes_sent_total": 12979192,
+        "relayserver_bytes_recv_total": 13011814,
+        "relayserver_send_packets_dropped_total": 110,
+        "relayserver_other_packets_dropped_total": 0,
+        "relayserver_bytes_rx_ratelimited_total": 0,
+        "relayserver_accepts_total": 47
+      }
+    },
+    {
+      "snapshot": "metrics-before-restart.txt",
+      "metrics": {
+        "relayserver_bytes_sent_total": 11867396,
+        "relayserver_bytes_recv_total": 11895416,
+        "relayserver_send_packets_dropped_total": 13,
+        "relayserver_other_packets_dropped_total": 0,
+        "relayserver_bytes_rx_ratelimited_total": 0,
+        "relayserver_accepts_total": 4
+      }
+    },
+    {
+      "snapshot": "metrics-final.txt",
+      "metrics": {
+        "relayserver_bytes_sent_total": 30932,
+        "relayserver_bytes_recv_total": 31239,
+        "relayserver_send_packets_dropped_total": 10,
+        "relayserver_other_packets_dropped_total": 0,
+        "relayserver_bytes_rx_ratelimited_total": 0,
+        "relayserver_accepts_total": 3
+      }
+    }
+  ],
+  "metricsCaveat": "Snapshots span forced process exits and relay restarts. Send-drop counters are nonzero; their causes were not individually established. Successful full-package signatures and random proofs establish delivered content, not zero packet loss or a long-term reliability guarantee.",
+  "corrections": [
+    "Mac fixture canonicalizes its own temporary directory; production symlink rejection remains unchanged",
+    "A 20-second forced-Agent-restart test window missed recovery at 30.509 seconds; QA observes up to 60 seconds, retaining product transport behavior",
+    "Transient systemd relay unit disappears after stop; operator restart now recreates only the owned unit",
+    "Final Mac helper check requires existing CommandLineTools DEVELOPER_DIR due unrelated installed Xcode plugin mismatch; system selection unchanged"
+  ],
+  "cleanup": {
+    "allTestDevicesRevoked": true,
+    "windowsQaProcessesExited": true,
+    "windowsTokenFilesRemoved": true,
+    "temporaryAdmissionTokenAndSeedRemoved": true,
+    "macHostAndOwnedDirectoryRemoved": true,
+    "macQaSessionRemoved": true,
+    "cloudRelayAndOwnedDirectoryRemoved": true,
+    "temporaryFirewallPortRemoved": true,
+    "temporarySecurityGroupRemoved": true,
+    "originalSecurityGroupsRestored": true,
+    "originalCloudListenersAndPidsUnchanged": true,
+    "originalCentralPidUnchanged": true,
+    "originalApplicationsAndUpdateManifestUnchanged": true
+  },
+  "remaining": [
+    "New installed desktop UI and full updater install through relay",
+    "Mac central App UI with managed service automatically owning relay across lifecycle transitions",
+    "Long outages, multiple client network conditions and sustained-load acceptance",
+    "Explicit packaging/deployment request before replacing installed clients or formal central services"
+  ]
+}

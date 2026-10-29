@@ -31,6 +31,7 @@ libc = "0.2"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
 [dev-dependencies]
+minisign-verify = "0.2.5"
 reqwest-updater = { package = "reqwest", version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }
 iroh = { version = "=1.4.1", default-features = false, features = ["tls-ring"] }
 iroh-relay = { version = "=1.4.1", default-features = false, features = ["server", "tls-ring"] }

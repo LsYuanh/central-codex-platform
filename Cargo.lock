@@ -4613,6 +4613,7 @@ dependencies = [
  "iroh-relay",
  "keyring",
  "libc",
+ "minisign-verify",
  "peer-transport",
  "rand 0.8.8",
  "rcgen",
