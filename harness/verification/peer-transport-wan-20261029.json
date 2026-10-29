@@ -1,7 +1,7 @@
 {
   "schema": "yuan-zhou-peer-transport-wan/v1",
   "date": "2026-10-29",
-  "status": "cross-network-relay-passed-direct-not-observed-mac-cleanup-pending",
+  "status": "cross-network-relay-passed-direct-not-observed-cleanup-complete",
   "scope": "Windows mobile hotspot to Mac office network, synthetic native probe traffic only",
   "network": {
     "operatorConfirmedMobileHotspot": true,
@@ -60,12 +60,15 @@
     "testServerDirectoryAndKeysRemoved": true,
     "originalBusinessListenersAndPidsUnchanged": true,
     "failedSystemdServicesObservedAfterCleanup": 0,
-    "macReportRetrieved": false,
-    "macProbeDirectoryAndSeedRemoved": false,
+    "macReportRetrieved": true,
+    "twoEndpointReportsMatched": true,
+    "macProbeProcessesAbsent": true,
+    "macProbeDirectoryAndSeedRemoved": true,
+    "macProbeSourceArchiveRemoved": true,
+    "existingMacToolchainPreserved": true,
     "windowsProbeSeedsRemoved": true
   },
   "remaining": [
-    "Wait for Windows to return to the office LAN, retrieve the Mac report, confirm probe exit and remove the isolated Mac directory and private test seeds",
     "Investigate candidate addresses, UDP reachability, NAT mapping/filtering and direct establishment timing before changing the transport strategy",
     "Do not declare full phase-one success or integrate/release the product based only on successful relay traffic"
   ],
