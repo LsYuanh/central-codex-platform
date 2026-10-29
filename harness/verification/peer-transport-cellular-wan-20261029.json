@@ -1,0 +1,135 @@
+{
+  "schema": "yuan-zhou-peer-transport-cellular-wan/v1",
+  "date": "2026-10-29",
+  "status": "independent-exits-verified-relay-passed-direct-not-observed-cleanup-complete",
+  "scope": "Windows mobile-data hotspot to Mac office; isolated native v2 synthetic probe only",
+  "topology": {
+    "phoneWifiOffAndMobileDataOnConfirmedByUser": true,
+    "windowsWifiUp": true,
+    "windowsOfficeEthernetDisconnected": true,
+    "macStayedOnOfficeNetwork": true,
+    "distinctQadPublicIpv4": true,
+    "windowsRestoredOfficeNetworkAfterTest": true
+  },
+  "cases": [
+    {
+      "name": "direct-preferred-90s",
+      "bytes": 1048593,
+      "sha256": "43ceff76a892de2dd957c2bded5ab87c08ecd22265e1b398a06708b98fa66203",
+      "lengthAndSha256Matched": true,
+      "bothTransferAndObservationComplete": true,
+      "observationElapsedMs": 90188,
+      "windowsHeartbeats": 80,
+      "macHeartbeats": 80,
+      "routeBefore": "Relay",
+      "routeAfter": "Relay",
+      "macRouteBefore": "Relay",
+      "macRouteAfter": "Relay",
+      "directObserved": false,
+      "expectedRoutePassed": false
+    },
+    {
+      "name": "forced-relay",
+      "bytes": 1048593,
+      "sha256": "43ceff76a892de2dd957c2bded5ab87c08ecd22265e1b398a06708b98fa66203",
+      "lengthAndSha256Matched": true,
+      "bothTransferAndObservationComplete": true,
+      "observationElapsedMs": 10139,
+      "windowsHeartbeats": 10,
+      "macHeartbeats": 10,
+      "routeBefore": "Relay",
+      "routeAfter": "Relay",
+      "macRouteBefore": "Relay",
+      "macRouteAfter": "Relay",
+      "directObserved": false,
+      "expectedRoutePassed": true
+    }
+  ],
+  "automaticDiagnostics": {
+    "bothQadIpv4Successful": true,
+    "bothPublicIpv4Candidates": true,
+    "windowsIpv4Candidates": 2,
+    "macIpv4Candidates": 2,
+    "windowsLocalIpv6Candidates": 2,
+    "macIpv6Candidates": 0,
+    "publicIpv6QadCandidates": false,
+    "mappingVariesIpv4": null,
+    "natInitiationRounds": 4,
+    "initiationTimesSeconds": [
+      0.716,
+      0.802,
+      5.819,
+      60.63
+    ],
+    "firstRoundToProbe": 0,
+    "laterRoundsToProbe": 2,
+    "validNatResponsesObserved": 0,
+    "directPathsOpened": 0,
+    "windowsQadSendError": {
+      "osCode": 10040,
+      "datagramBytes": 1389,
+      "occurrences": 1,
+      "qadStillSucceeded": true,
+      "causalityEstablished": false
+    },
+    "macSendError": {
+      "kind": "HostUnreachable",
+      "destinationFamily": "IPv6",
+      "datagramBytes": 35,
+      "occurrences": 2,
+      "explainsIpv4Failure": false,
+      "causalityEstablished": false
+    }
+  },
+  "relayCounters": {
+    "scope": "Combined automatic and forced-relay cases; no per-case intermediate snapshot",
+    "relayserver_bytes_sent_total": 4350119,
+    "relayserver_bytes_recv_total": 4350170,
+    "relayserver_send_packets_dropped_total": 1,
+    "relayserver_other_packets_dropped_total": 0,
+    "relayserver_bytes_rx_ratelimited_total": 0,
+    "note": "One relay send packet dropped (51-byte receive/send difference). Cause not established; both application echoes and completion markers succeeded."
+  },
+  "preflight": {
+    "bothNativeBuildsPassed": true,
+    "uninvitedKeyExplicitlyDenied": true,
+    "shortOfficeEchoPassed": true,
+    "shortOfficeDirectObserved": false,
+    "officialRelayArchiveSha256": "75254641e3fad7fcbac6dee4d485556fbe06ef708340a9d8810469270ba626b8"
+  },
+  "cleanup": {
+    "cloudServiceAndDirectoryRemoved": true,
+    "cloudTemporaryPortRulesRemoved": true,
+    "cloudTestListenersAbsent": true,
+    "cloudBusinessListenersAndPidsUnchanged": true,
+    "testGroupAbsent": true,
+    "originalGroupsPreserved": true,
+    "groupMembershipsMatchOriginal": true,
+    "probeProcessesAbsent": true,
+    "isolatedDirectoryRemoved": true,
+    "uploadedHelpersRemoved": true,
+    "centralGatewayPidUnchanged": true,
+    "existingToolchainPreserved": true,
+    "localPrivateSeedsRemaining": 0,
+    "windowsProbeProcessesAbsent": true,
+    "businessEndToEndAcceptancePerformed": false
+  },
+  "checks": {
+    "cargoFmt": "passed",
+    "cargoTestAllTargetsLocked": {
+      "passed": 11,
+      "ignored": 1,
+      "ignoredAcceptancePreviouslyRun": true
+    },
+    "nodeSyntaxChecks": "passed",
+    "gitDiffCheck": "passed"
+  },
+  "conclusions": [
+    "Distinct public IPv4 exits are verified in this run; prior Wi-Fi-backed hotspot runs do not establish that.",
+    "Public IPv4 QAD and candidate exchange work. Four initiation rounds including the 60-second retry produced no valid direct response.",
+    "Automatic relay fallback and sustained application echo passed; direct WAN acceptance remains open.",
+    "No single root cause identified. Company-side NAT/filtering, mobile-side NAT/filtering, and host transport behavior are not distinguished.",
+    "The QAD send-size error and IPv6 route errors are diagnostic leads, not proof of why IPv4 hole punching failed."
+  ],
+  "next": "Compare NAT mappings from the same UDP socket to multiple controlled public destinations, then use targeted packet evidence to distinguish mapping, filtering and host behavior. No product restrictions or production deployment added."
+}
