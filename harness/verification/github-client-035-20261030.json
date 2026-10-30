@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-30",
+  "scope": "User-authorized complete GitHub 0.3.5 client release and source push",
+  "releaseUrl": "https://github.com/LsYuanh/central-codex-platform/releases/tag/v0.3.5",
+  "releaseId": 428602422,
+  "tag": "v0.3.5",
+  "tagCommit": "ec55b4f6b8d2c6a3d6c9ed5a25e8955f1c196512",
+  "sourceBranches": [
+    "main",
+    "codex/runtime-hosted-mac-trial"
+  ],
+  "latest": true,
+  "platforms": [
+    "windows-x86_64",
+    "darwin-aarch64",
+    "darwin-x86_64"
+  ],
+  "fixedPublicKeySignaturesVerified": true,
+  "assets": [
+    {
+      "file": "SHA256SUMS.txt",
+      "bytes": 804,
+      "sha256": "3a2aa41e3d97d84d809fdb2d186849ad56854e51312bdfbe16b02f1954cee343",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-aarch64.app.tar.gz",
+      "bytes": 21389048,
+      "sha256": "d3efcd8c62086035418f710cce3a4fae0acb4fb5614dda532cfa5a48530a5f82",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-aarch64.app.tar.gz.sig",
+      "bytes": 424,
+      "sha256": "496ecf304ed6a46fd457d85b36517c0f3d434530122599c1c7b8453536d0f573",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-macos-aarch64.dmg",
+      "bytes": 24208032,
+      "sha256": "90206e656bae08e54e3ce4c1821da8de9dd6018cdc89789953205bdc2a6502e3",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-macos-x64.dmg",
+      "bytes": 25862038,
+      "sha256": "5953994bdcdc2962bc2a94dbc3f23c677d9f335af81776d4ab587505214289d0",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-windows-x64-setup.exe",
+      "bytes": 15232291,
+      "sha256": "9d43ab8d787c0dd8b5b12933d6edbb60a2028d71e5d7d615b794bef13fd3ea55",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-windows-x64-setup.exe.sig",
+      "bytes": 416,
+      "sha256": "1dc1a9047da1a843cb6112e9870e5a469e42178d12aa8d57fd26aca1b10b90df",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-x64.app.tar.gz",
+      "bytes": 22826909,
+      "sha256": "684b474596b9bc6e8ade80c4928d5da64a937f8a98ce81ec04639eda30c47e80",
+      "publicDownloadVerified": true
+    },
+    {
+      "file": "yuanzhou-0.3.5-x64.app.tar.gz.sig",
+      "bytes": 420,
+      "sha256": "2b7f1e3c7a59b647ee27495af2b069f6c3f38dc54c67e48cddbc91ee8822e7fb",
+      "publicDownloadVerified": true
+    }
+  ],
+  "intelArchive": "Same previously tested signed Intel App, archived without rebuilding",
+  "centralUpdateChannelChanged": false,
+  "servicesDeployed": false,
+  "sourceAudit": "Publishable branches/tags heuristic scan reviewed; new key/token-looking matches were synthetic fixtures; no guarantee of exhaustive secret detection",
+  "acceptanceLimits": [
+    "Intel Ventura hardware not verified",
+    "Complete in-app install/restart not newly verified",
+    "OS publisher signing and Apple notarization remain unavailable"
+  ]
+}
