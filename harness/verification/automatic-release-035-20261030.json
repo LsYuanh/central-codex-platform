@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-30",
+  "status": "deployed-and-published",
+  "scope": "Local complete central App and existing authenticated client update channel; no GitHub writes",
+  "sourceBase": "5fab948",
+  "desktopVersion": "0.3.5",
+  "central": {
+    "appVersion": "0.1.11",
+    "runtimeVersion": "0.163.0",
+    "runtimeCommit": "83086188ae0614bd882818ff1aa23f3194962012",
+    "packageId": "macos-arm64-node24-qa1-d7a74accfe611c8f",
+    "files": 876,
+    "manifest": {
+      "path": "manifest.json",
+      "bytes": 178114,
+      "sha256": "d7a74accfe611c8fc90afb11c7cc60fda2d9f9f0e5c8620aa1ef3b3d58d1e483"
+    },
+    "dmg": {
+      "bytes": 218058459,
+      "sha256": "c3613d001bc9f165773b72e3af62b140b9768b02bb457f429a2db296d379b2c1"
+    },
+    "updateSequenceFloor": 1793325525763,
+    "revision": 22,
+    "healthVerified": true,
+    "modelAccountStatus": "ready",
+    "previousSignedSelectionPreserved": true,
+    "otherConfigurationAndRelayPreserved": true,
+    "vpnAndCodexConfigurationUnchanged": true,
+    "fullAppAndProfileBackedUp": true,
+    "build": "debug",
+    "signature": "ad-hoc",
+    "notarized": false
+  },
+  "clients": {
+    "platforms": [
+      {
+        "file": "0.3.5-windows-x86_64.exe",
+        "sha256": "9d43ab8d787c0dd8b5b12933d6edbb60a2028d71e5d7d615b794bef13fd3ea55",
+        "bytes": 15232291
+      },
+      {
+        "file": "0.3.5-darwin-aarch64.app.tar.gz",
+        "sha256": "d3efcd8c62086035418f710cce3a4fae0acb4fb5614dda532cfa5a48530a5f82",
+        "bytes": 21389048
+      }
+    ],
+    "fixedPublicKeySignaturesVerified": true,
+    "centralAndLanAuthenticatedFullDownloads": true,
+    "publicRelayWindowsFullDownloadAndSignature": true,
+    "installedClientReplaced": false,
+    "installerStarted": false,
+    "agentSha256": "7af521b583c619e7acaef48085673c56d870a33d8cb8fce9b670191de369923d"
+  },
+  "acceptance": {
+    "windowsUpdater": {
+      "passed": 12,
+      "ignored": 2
+    },
+    "windowsModelProxy": {
+      "passed": 6
+    },
+    "macUpdater": {
+      "passed": 12,
+      "ignored": 2
+    },
+    "macPackage": {
+      "passed": 7,
+      "ignored": 1
+    },
+    "macModelProxy": {
+      "passed": 6
+    },
+    "syntheticProxyConnectTls": true,
+    "syntheticNativeGateway": true,
+    "legacyLanPairAcrossFormalDeployment": {
+      "passed": true,
+      "actualNativeIpc": true,
+      "actualCentral": true,
+      "legacyLanPairAutomaticallyAcquiredRelay": true,
+      "sameDeviceAfterMonitor": true,
+      "oldCentralBeforeDeployment": true
+    },
+    "realModel": "gpt-6.1-sol",
+    "realInstalledPayloadAgentReadExecHistoryPermissionsAndUpdateLease": true,
+    "testDevicesRevoked": true,
+    "centralFormalUsersAndHistoryPreserved": true
+  },
+  "incidents": {
+    "initialModelCalls": "Two pre-deployment model calls failed upstream before tools ran; final independent model acceptance passed.",
+    "initialSwitch": "Unsupported <local> system proxy exception prevented startup; restored previous App using current proxy process override, then rebuilt and redeployed native/gateway compatibility fix. Final App uses normal system proxy discovery."
+  },
+  "pending": [
+    "Physical mobile-data network transition and idle automatic return to LAN",
+    "Full installed-client in-app update and restart",
+    "Mac native model and long-running network fluctuation"
+  ],
+  "github": {
+    "pushed": false,
+    "releasesCreated": false,
+    "workflowsDispatched": false
+  },
+  "cloud": {
+    "servicesChanged": false,
+    "portsChanged": false
+  },
+  "sourceProvenance": {
+    "macModifiedProductionInputsMatchLocalSource": 14,
+    "preexistingDesktopPackagerChangePreserved": true,
+    "windowsPackageBuiltWithExistingPackagerDefaultTarget": true
+  }
+}

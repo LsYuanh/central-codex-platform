@@ -17,8 +17,10 @@ import {ModelTransport,bypassModelProxy,validateModelProxy} from '../../services
 const check=(name)=>console.log('PASS '+name);
 const listen=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const close=server=>new Promise(resolve=>server.close(resolve));
-for(const value of [{httpsProxy:'socks5://localhost:1'},{httpsProxy:'http://localhost:1/private'},{httpsProxy:'http://localhost:1?secret=x'},{noProxy:'<local>'},{NODE_OPTIONS:'untrusted'}])assert.throws(()=>validateModelProxy(value),/MODEL_PROXY_CONFIG_INVALID/);
+for(const value of [{httpsProxy:'socks5://localhost:1'},{httpsProxy:'http://localhost:1/private'},{httpsProxy:'http://localhost:1?secret=x'},{noProxy:'<unknown>'},{NODE_OPTIONS:'untrusted'}])assert.throws(()=>validateModelProxy(value),/MODEL_PROXY_CONFIG_INVALID/);
 for(const [host,rule,expected] of [['127.0.0.2','127.0.0.0/8',true],['[::1]','::1',true],['[::2]','::1',false],['foo.example.test','.example.test',true],['other.test','example.test',false],['example.test','*',true]])assert.equal(bypassModelProxy(new URL('https://'+host),rule),expected);
+assert.doesNotThrow(()=>validateModelProxy({noProxy:'<local>,127.0.0.0/8'}));
+for(const [host,expected] of [['intranet',true],['localhost',true],['host.example',false],['127.0.0.1',false],['[::1]',false]])assert.equal(bypassModelProxy(new URL('https://'+host),'<local>'),expected);
 check('strict bootstrap proxy DTO and domain/IP/CIDR bypass rules');
 
 const algorithm={name:'ECDSA',namedCurve:'P-256',hash:'SHA-256'};
@@ -56,7 +58,7 @@ const token='e30.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3
 const config={version:1,users:{fixture:{providerId:'chat',enabled:true}},providers:{chat:{id:'chat',kind:'chatgpt',credentialFile:join(root,'credential.memory')}}};
 const audit=[];
 try{
-  broker=await ModelCredentialBroker.start({configFile:join(root,'bindings.memory'),memorySource:{readConfig:()=>config,readCredential:()=>({tokens:{access_token:token,account_id:'fixture-account'}})},proxy:{httpsProxy:proxyUrl},audit:e=>audit.push(e)});
+  broker=await ModelCredentialBroker.start({configFile:join(root,'bindings.memory'),memorySource:{readConfig:()=>config,readCredential:()=>({tokens:{access_token:token,account_id:'fixture-account'}})},proxy:{httpsProxy:proxyUrl,noProxy:'<local>'},audit:e=>audit.push(e)});
   const lease=broker.createLease('fixture');
   const request=(body={},path='/v1/responses')=>fetch(broker.url+path,{method:'POST',headers:{authorization:'Bearer '+lease.token,'content-type':'application/json'},body:JSON.stringify(body)});
   let response=await request({stream:true});assert.equal(response.status,200);assert.match(await response.text(),/response.completed/);

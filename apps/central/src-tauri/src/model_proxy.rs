@@ -67,7 +67,7 @@ impl ModelProxy {
         if self
             .no_proxy
             .as_ref()
-            .is_some_and(|s| s.len() > 16384 || s.chars().any(char::is_control) || s.contains('<'))
+            .is_some_and(|s| s.len() > 16384 || s.chars().any(char::is_control))
         {
             return Err(failure("MODEL_PROXY_SYSTEM_UNSUPPORTED"));
         }
@@ -78,7 +78,10 @@ impl ModelProxy {
                 .map(str::trim)
                 .map(|s| s.strip_prefix("*.").unwrap_or(s))
                 .collect();
-            if rules.iter().any(|s| *s != "*" && s.contains('*')) {
+            if rules.iter().any(|s| {
+                (*s != "*" && s.contains('*'))
+                    || (s.contains(['<', '>']) && !s.eq_ignore_ascii_case("<local>"))
+            }) {
                 return Err(failure("MODEL_PROXY_SYSTEM_UNSUPPORTED"));
             }
             *bypass = rules.join(",");
@@ -103,9 +106,30 @@ impl ModelProxy {
     ) -> Result<reqwest::blocking::ClientBuilder> {
         // Explicit settings avoid reqwest independently discovering a different proxy.
         let mut builder = builder.no_proxy();
-        let bypass = reqwest::NoProxy::from_string(self.no_proxy.as_deref().unwrap_or(""));
+        let rules = self.no_proxy.as_deref().unwrap_or("");
+        let simple_hosts = rules
+            .split(',')
+            .any(|r| r.trim().eq_ignore_ascii_case("<local>"));
+        let regular = rules
+            .split(',')
+            .filter(|r| !r.trim().eq_ignore_ascii_case("<local>"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let bypass = reqwest::NoProxy::from_string(&regular);
         for (is_https, address) in [(false, &self.http_proxy), (true, &self.https_proxy)] {
             if let Some(address) = address {
+                if simple_hosts {
+                    // <local> means unqualified hostnames, not all local domains
+                    // or all IPs. Keep reqwest's other domain/CIDR rules intact.
+                    let address = address.clone();
+                    let proxy = reqwest::Proxy::custom(move |url| {
+                        let scheme = if is_https { "https" } else { "http" };
+                        (url.scheme() == scheme && !url.host_str().is_some_and(simple_hostname))
+                            .then(|| address.clone())
+                    });
+                    builder = builder.proxy(proxy.no_proxy(bypass.clone()));
+                    continue;
+                }
                 let proxy = if is_https {
                     reqwest::Proxy::https(address)
                 } else {
@@ -117,6 +141,15 @@ impl ModelProxy {
         }
         Ok(builder)
     }
+}
+
+fn simple_hostname(host: &str) -> bool {
+    !host.is_empty()
+        && !host.contains('.')
+        && host
+            .trim_matches(['[', ']'])
+            .parse::<std::net::IpAddr>()
+            .is_err()
 }
 
 fn resolve_with(
@@ -472,6 +505,46 @@ mod tests {
             parse_macos(&scoped).unwrap().https_proxy,
             result.https_proxy
         );
+    }
+    #[test]
+    fn local_exception_preserves_simple_host_semantics() {
+        let settings = parse_macos("<dictionary> {\n HTTPEnable : 1\n HTTPProxy : 127.0.0.1\n HTTPPort : 1\n ExceptionsList : <array> {\n 0 : <local>\n }\n}").unwrap();
+        assert_eq!(settings.no_proxy.as_deref(), Some("<local>"));
+        assert!(simple_hostname("localhost"));
+        assert!(simple_hostname("intranet"));
+        assert!(!simple_hostname("host.example"));
+        assert!(!simple_hostname("127.0.0.1"));
+        assert!(!simple_hostname("[::1]"));
+        use std::{io::Write, net::TcpListener, time::Duration};
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut bytes = [0; 1024];
+            stream.read(&mut bytes).unwrap();
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .unwrap();
+        });
+        let client = settings
+            .client(reqwest::blocking::Client::builder())
+            .unwrap()
+            .timeout(Duration::from_secs(3))
+            .build()
+            .unwrap();
+        assert_eq!(
+            client
+                .get(format!("http://localhost:{port}/"))
+                .send()
+                .unwrap()
+                .text()
+                .unwrap(),
+            "ok"
+        );
+        server.join().unwrap();
     }
     #[test]
     fn windows_static_proxy_and_invalid_transports() {

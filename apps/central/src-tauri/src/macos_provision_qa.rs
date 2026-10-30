@@ -18,6 +18,9 @@ fn switch_formal_macos_runtime() {
     assert!(root.is_absolute() && resources.is_absolute());
     assert_eq!(root.file_name().unwrap(), "com.yuanzhou.central");
     if std::env::var("CENTRAL_MACOS_RELEASE_PREFLIGHT").as_deref() == Ok("1") {
+        // Check the same read-only proxy resolver used at startup before the
+        // operator stops a healthy service for a package switch.
+        crate::model_proxy::resolve().expect("supported current model proxy settings");
         let package = std::env::var("CENTRAL_MACOS_PACKAGE_ID").unwrap();
         let _verified = crate::runtime_package::prepare_service(&resources, &package)
             .expect("verified pinned service package");

@@ -661,7 +661,17 @@ pub(crate) fn prune(app_data: &Path, selected: &Selection) -> Result<()> {
 
 // A signed rebuild may keep the upstream version while changing gateway/Harness
 // behavior. Its monotonic sequence, rather than only SemVer, identifies it.
-fn newer_release(d: &Descriptor, current: &str, sequence: Option<u64>) -> Result<bool> {
+fn newer_release(
+    d: &Descriptor,
+    current: &str,
+    sequence: Option<u64>,
+    baseline_floor: u64,
+) -> Result<bool> {
+    // A freshly bundled gateway can be newer than the public signed channel,
+    // even when both reuse the same upstream App Server version.
+    if d.sequence <= baseline_floor {
+        return Ok(false);
+    }
     let incoming = version(&d.version).ok_or("UPDATE_DESCRIPTOR_INVALID")?;
     let installed = version(current).ok_or("UPDATE_DESCRIPTOR_INVALID")?;
     if incoming < installed {
@@ -728,19 +738,32 @@ mod tests {
     fn signed_rebuilds_update_without_allowing_replay_or_downgrade() {
         let mut d = descriptor();
         d.sequence = 20;
-        assert_eq!(newer_release(&d, "0.156.1", Some(19)), Ok(true));
-        assert_eq!(newer_release(&d, "0.156.1", Some(20)), Ok(false));
+        assert_eq!(newer_release(&d, "0.156.1", Some(19), 0), Ok(true));
+        assert_eq!(newer_release(&d, "0.156.1", Some(20), 0), Ok(false));
         assert_eq!(
-            newer_release(&d, "0.156.1", Some(21)),
+            newer_release(&d, "0.156.1", Some(21), 0),
             Err("UPDATE_REPLAY_DENIED")
         );
         assert_eq!(
-            newer_release(&d, "0.155.0", Some(21)),
+            newer_release(&d, "0.155.0", Some(21), 0),
             Err("UPDATE_REPLAY_DENIED")
         );
-        assert_eq!(newer_release(&d, "0.157.0", Some(19)), Ok(false));
-        assert_eq!(newer_release(&d, "0.155.0", Some(19)), Ok(true));
-        assert_eq!(newer_release(&d, "0.156.1", None), Ok(true));
+        assert_eq!(newer_release(&d, "0.157.0", Some(19), 0), Ok(false));
+        assert_eq!(newer_release(&d, "0.155.0", Some(19), 0), Ok(true));
+        assert_eq!(newer_release(&d, "0.156.1", None, 0), Ok(true));
+    }
+    #[test]
+    fn complete_app_keeps_new_gateway_until_a_newer_signed_build() {
+        let mut d = descriptor();
+        d.sequence = 20;
+        assert_eq!(newer_release(&d, "0.156.1", None, 21), Ok(false));
+        assert_eq!(newer_release(&d, "0.156.1", None, 20), Ok(false));
+        assert_eq!(newer_release(&d, "0.156.1", None, 19), Ok(true));
+        assert_eq!(
+            newer_release(&d, "0.156.1", Some(21), 19),
+            Err("UPDATE_REPLAY_DENIED")
+        );
+        assert_eq!(newer_release(&d, "0.157.0", None, 19), Ok(false));
     }
     #[test]
     fn proxy_host_rejects_legacy_updates_but_can_read_old_journals() {
@@ -1082,7 +1105,11 @@ impl Updater {
             .as_ref()
             .map(|s| authenticate(&s.active).map(|d| d.sequence))
             .transpose()?;
-        if !newer_release(&d, &current_version, current_sequence)? {
+        let baseline_floor = baseline
+            .as_deref()
+            .map(runtime_package::service_update_sequence_floor)
+            .unwrap_or(0);
+        if !newer_release(&d, &current_version, current_sequence, baseline_floor)? {
             self.set(
                 if version(latest) > version(&current_version) {
                     "waiting-for-package"

@@ -42,6 +42,10 @@ const pin={id:staged.packageId,label:'macOS 中央服务 · Apple Silicon 测试
 const catalogPath=path.join(root,'harness/central-service-catalog.json');
 const catalog=JSON.parse(await readFile(catalogPath,'utf8'));
 const previous=catalog.packages.find(p=>p.id===pin.id);
+// Complete local releases must not be replaced by an older signed gateway
+// that happens to reuse the same upstream version. Existing pins stay immutable.
+if(!previous)pin.updateSequenceFloor=Date.now();
+else if(previous.updateSequenceFloor!==undefined)pin.updateSequenceFloor=previous.updateSequenceFloor;
 if(previous&&JSON.stringify(previous)!==JSON.stringify(pin))throw Error('EXISTING_PIN_MISMATCH');
 if(!previous){catalog.packages.push(pin);await writeFile(catalogPath,JSON.stringify(catalog,null,2)+'\n');}
 await inspectPinnedService(staged.destination,pin);

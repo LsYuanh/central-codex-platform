@@ -114,6 +114,15 @@ pub(crate) fn service_version(id: &str) -> Option<String> {
         .map(|p| p.version)
 }
 
+pub(crate) fn service_update_sequence_floor(id: &str) -> u64 {
+    service_catalog()
+        .packages
+        .into_iter()
+        .find(|p| p.id == id)
+        .map(|p| p.update_sequence_floor)
+        .unwrap_or(0)
+}
+
 fn relative_path(value: &str) -> bool {
     !value.is_empty()
         && !value.contains(['\\', ':'])
@@ -303,6 +312,9 @@ struct ServicePackage {
     id: String,
     label: String,
     version: String,
+    // Compiled into a complete App release, never read from mutable resources.
+    #[serde(default)]
+    update_sequence_floor: u64,
     platform: String,
     architecture: String,
     marker: String,

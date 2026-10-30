@@ -16,7 +16,7 @@ export function validateModelProxy(value:unknown):ModelProxy {
     let url:URL;try{url=new URL(v[key]);}catch{return fail();}
     if(!['http:','https:'].includes(url.protocol)||!url.hostname||url.pathname!=='/'||url.search||url.hash)return fail();
   }
-  if(v.noProxy!==undefined&&(typeof v.noProxy!=='string'||v.noProxy.length>16384||/[\x00-\x1f\x7f<>]/.test(v.noProxy)))return fail();
+  if(v.noProxy!==undefined&&(typeof v.noProxy!=='string'||v.noProxy.length>16384||/[\x00-\x1f\x7f]/.test(v.noProxy)||v.noProxy.split(',').some(r=>/[<>]/.test(r)&&r.trim().toLowerCase()!=='<local>')))return fail();
   return {...v} as ModelProxy;
 }
 
@@ -26,6 +26,8 @@ export function bypassModelProxy(url:URL, noProxy:string|undefined):boolean {
   return (noProxy??'').split(',').some(raw=>{
     const rule=raw.trim().toLowerCase();
     if(!rule)return false;
+    // Match the native client's system-proxy exception for unqualified names.
+    if(rule==='<local>')return !host.includes('.')&&!isIP(host);
     if(rule==='*')return true;
     const [address,prefix]=rule.split('/');
     if(prefix!==undefined){
