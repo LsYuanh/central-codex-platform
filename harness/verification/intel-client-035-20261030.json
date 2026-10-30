@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-30",
+  "scope": "User-requested manual Intel Mac installer for Ventura; no channel publication or service deployment",
+  "version": "0.3.5",
+  "source": {
+    "baseCommit": "82e6020",
+    "archiveSha256": "f8762e84bfdf6d11952f6a10c7efd0f1cc60fd649c5673465dab9ce509e49797",
+    "overlaySha256": "8beda447219101a4190f4d84dd8e20f31740ae10937323b2a086538e8f4b20b0",
+    "overlayFiles": ["scripts/release/package-desktop.mjs", "tests/smoke/desktop-package-target.test.mjs"]
+  },
+  "build": {
+    "host": "aarch64-apple-darwin",
+    "hostMacOS": "26.3.1",
+    "target": "x86_64-apple-darwin",
+    "rust": "1.98.0",
+    "node": "24.20.0",
+    "minimumMacOS": "13.0",
+    "typescript": true,
+    "vite": true,
+    "agentRelease": true,
+    "desktopRelease": true,
+    "windowsRegressionPassed": 8,
+    "windowsMacOnlySkipped": 1,
+    "macTargetRegressionPassed": 2
+  },
+  "binaries": [
+    {"path": "Contents/MacOS/desktop-spike", "architecture": "x86_64", "minimumMacOS": "13.0", "sha256": "4420bd0ec5258042f2224f5d49083089fc0de62b86bd47c4425afe46dc7484ca"},
+    {"path": "Contents/MacOS/local-agent", "architecture": "x86_64", "minimumMacOS": "13.0", "sha256": "b323e7659fc5a70bb85c8f464107ac2330e694da42cc2fcef776e4eb2d35fb59"},
+    {"path": "Contents/Resources/libpdfium.dylib", "architecture": "x86_64", "minimumMacOS": "12.0", "sha256": "6324cc7c8c2c0d4ed956baf7efd2194c4ab3809542b5566198a17b3848bd18d0"}
+  ],
+  "artifact": {
+    "file": "yuanzhou-0.3.5-macos-x64.dmg",
+    "bytes": 25862038,
+    "sha256": "5953994bdcdc2962bc2a94dbc3f23c677d9f335af81776d4ab587505214289d0",
+    "adHocStrictSignature": true,
+    "dmgIntegrity": true,
+    "mountedPayloadMatchesTestedApp": true,
+    "localDownloadHashMatches": true,
+    "developerIdSigned": false,
+    "notarized": false
+  },
+  "rosettaSmoke": {
+    "packagedAgent": true,
+    "pdfPages": 2,
+    "office": ["docx", "xlsx", "pptx"],
+    "tallImage": [771, 8660],
+    "fileWriteAndPagination": true,
+    "commandStdinCancellationAndFullLog": true,
+    "appStarted": true,
+    "appWindowCreated": [1200, 760],
+    "testProcessesExited": true
+  },
+  "notVerified": ["Intel hardware running Ventura", "full UI and pairing lifecycle", "real central model with this Intel package", "automatic update install"],
+  "publication": {"centralUpdateChannel": false, "github": false, "servicesChanged": false}
+}
